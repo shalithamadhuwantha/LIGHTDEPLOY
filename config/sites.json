@@ -1,0 +1,31 @@
+{
+    "sites": {
+        "site-a": {
+            "name": "Website A (Node/Build)",
+            "domain": "site-a.example.com",
+            "script": "/opt/lightdeploy/scripts/site-a.sh",
+            "rollback_script": "/opt/lightdeploy/scripts/site-a-rollback.sh",
+            "health_check": "https://httpbin.org/status/200",
+            "health_check_enabled": true,
+            "enabled": true
+        },
+        "site-b": {
+            "name": "Website B (PHP Laravel/Composer)",
+            "domain": "site-b.example.com",
+            "script": "/opt/lightdeploy/scripts/site-b.sh",
+            "rollback_script": null,
+            "health_check": "https://httpbin.org/status/200",
+            "health_check_enabled": true,
+            "enabled": true
+        },
+        "site-c": {
+            "name": "Website C (Static HTML / Sync)",
+            "domain": "site-c.example.com",
+            "script": "/opt/lightdeploy/scripts/site-c.sh",
+            "rollback_script": null,
+            "health_check": null,
+            "health_check_enabled": false,
+            "enabled": true
+        }
+    }
+}

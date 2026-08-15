@@ -1,0 +1,19 @@
+{
+    "users": {
+        "admin": {
+            "name": "System Administrator",
+            "password_hash": "$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi",
+            "role": "admin"
+        },
+        "deployer": {
+            "name": "Release Operator",
+            "password_hash": "$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi",
+            "role": "deployer"
+        },
+        "viewer": {
+            "name": "Auditor / Viewer",
+            "password_hash": "$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi",
+            "role": "viewer"
+        }
+    }
+}
