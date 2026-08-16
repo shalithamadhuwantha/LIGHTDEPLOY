@@ -1662,6 +1662,31 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    // Global Modal Escape key listener and Window helpers
+    window.closeAddDbModal = function() {
+        const modal = document.getElementById('addDbModal');
+        if (modal) {
+            modal.classList.add('hidden');
+            modal.style.setProperty('display', 'none', 'important');
+        }
+    };
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            document.querySelectorAll('.modal-overlay:not(.hidden)').forEach(modal => {
+                modal.classList.add('hidden');
+                modal.style.setProperty('display', 'none', 'important');
+            });
+        }
+    });
+
+    document.addEventListener('click', (e) => {
+        if (e.target.classList.contains('modal-overlay')) {
+            e.target.classList.add('hidden');
+            e.target.style.setProperty('display', 'none', 'important');
+        }
+    });
+
     // Initial Execution
     window.loadVpsPorts = loadVpsPorts;
     window.loadDatabases = loadDatabases;

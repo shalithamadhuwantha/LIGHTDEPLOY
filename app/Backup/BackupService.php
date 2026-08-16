@@ -21,7 +21,24 @@ class BackupService
 
     public function getDatabases(): array
     {
-        return safeReadJson($this->configFile, ['databases' => []])['databases'] ?? [];
+        $dbs = safeReadJson($this->configFile, ['databases' => []])['databases'] ?? [];
+        $cleaned = [];
+        $needsMigration = false;
+
+        foreach ($dbs as $k => $db) {
+            $id = !empty($db['id']) ? (string)$db['id'] : (!empty($k) ? (string)$k : ('db_' . bin2hex(random_bytes(6))));
+            if ($k !== $id || ($db['id'] ?? '') !== $id) {
+                $db['id'] = $id;
+                $needsMigration = true;
+            }
+            $cleaned[$id] = $db;
+        }
+
+        if ($needsMigration) {
+            safeWriteJson($this->configFile, ['databases' => $cleaned]);
+        }
+
+        return $cleaned;
     }
 
     public function getDatabase(string $id): ?array
@@ -33,7 +50,11 @@ class BackupService
     public function saveDatabase(array $data): array
     {
         $dbs = $this->getDatabases();
-        $id = $data['id'] ?? ('db_' . bin2hex(random_bytes(6)));
+        $id = !empty($data['id']) ? trim((string)$data['id']) : ('db_' . bin2hex(random_bytes(6)));
+
+        if (isset($dbs[''])) {
+            unset($dbs['']);
+        }
 
         $existing = $dbs[$id] ?? [];
 
@@ -67,6 +88,32 @@ class BackupService
         return safeWriteJson($this->configFile, ['databases' => $dbs]);
     }
 
+    private function findMysqldumpBinary(): string
+    {
+        $candidates = [
+            '/usr/bin/mysqldump',
+            '/usr/local/bin/mysqldump',
+            '/www/server/mysql/bin/mysqldump',
+            '/www/server/mariadb/bin/mysqldump',
+            '/opt/lampp/bin/mysqldump'
+        ];
+
+        foreach ($candidates as $bin) {
+            if (file_exists($bin) && is_executable($bin)) {
+                return $bin;
+            }
+        }
+
+        if (function_exists('safeShellExec')) {
+            $whichPath = trim((string)safeShellExec('which mysqldump 2>/dev/null'));
+            if (!empty($whichPath) && file_exists($whichPath)) {
+                return $whichPath;
+            }
+        }
+
+        return 'mysqldump';
+    }
+
     public function runBackup(string $dbId, string $triggeredBy = 'system', string $format = 'sql'): array
     {
         $dbConfig = $this->getDatabase($dbId);
@@ -80,8 +127,12 @@ class BackupService
         $filename = "backup_{$dbId}_{$cleanDbName}_{$timestamp}.{$ext}";
         $targetFile = $this->storageDir . '/' . $filename;
 
+        $mysqldumpBin = $this->findMysqldumpBinary();
+
         // Secure MySQL dump using temporary defaults file
         $tempCnf = sys_get_temp_dir() . '/mysqldump_' . bin2hex(random_bytes(8)) . '.cnf';
+        $tempErr = sys_get_temp_dir() . '/mysqldump_err_' . bin2hex(random_bytes(8)) . '.log';
+
         $cnfContent = "[client]\n" .
             "host=" . escapeshellarg($dbConfig['db_host']) . "\n" .
             "port=" . (int)$dbConfig['db_port'] . "\n" .
@@ -97,34 +148,46 @@ class BackupService
             
             if ($ext === 'sql.gz') {
                 $cmd = sprintf(
-                    'mysqldump --defaults-extra-file=%s %s %s 2>&1 | gzip > %s',
+                    '%s --defaults-extra-file=%s %s %s 2> %s | gzip > %s',
+                    escapeshellcmd($mysqldumpBin),
                     escapeshellarg($tempCnf),
                     $dumpFlags,
                     escapeshellarg($dbConfig['db_name']),
+                    escapeshellarg($tempErr),
                     escapeshellarg($targetFile)
                 );
             } else {
                 $cmd = sprintf(
-                    'mysqldump --defaults-extra-file=%s %s %s 2>&1 > %s',
+                    '%s --defaults-extra-file=%s %s %s --result-file=%s 2> %s',
+                    escapeshellcmd($mysqldumpBin),
                     escapeshellarg($tempCnf),
                     $dumpFlags,
                     escapeshellarg($dbConfig['db_name']),
-                    escapeshellarg($targetFile)
+                    escapeshellarg($targetFile),
+                    escapeshellarg($tempErr)
                 );
             }
 
-            \safeExec($cmd, $output, $returnVar);
+            $output = [];
+            $returnVar = 0;
+            safeExec($cmd, $output, $returnVar);
 
-            if (file_exists($tempCnf)) {
-                @unlink($tempCnf);
-            }
+            $errLogContent = file_exists($tempErr) ? trim((string)file_get_contents($tempErr)) : '';
+            if (file_exists($tempErr)) @unlink($tempErr);
+            if (file_exists($tempCnf)) @unlink($tempCnf);
+
+            // Filter out harmless password warning lines from mysqldump
+            $criticalErrors = array_filter(explode("\n", $errLogContent), function($line) {
+                $line = trim($line);
+                return !empty($line) && !str_contains($line, '[Warning] Using a password');
+            });
 
             if ($returnVar !== 0 || !file_exists($targetFile) || filesize($targetFile) === 0) {
                 if (file_exists($targetFile)) {
                     @unlink($targetFile);
                 }
-                $errMsg = implode("\n", $output);
-                throw new \RuntimeException("mysqldump failed (code {$returnVar}): " . ($errMsg ?: 'Unknown dump error. Check database credentials.'));
+                $errMsg = !empty($criticalErrors) ? implode("\n", $criticalErrors) : ($errLogContent ?: 'Check database host, port, user, and password credentials.');
+                throw new \RuntimeException("MySQL Backup Failed: " . $errMsg);
             }
 
             // Inject phpMyAdmin-compatible transaction & foreign key checks header for plain .sql dumps

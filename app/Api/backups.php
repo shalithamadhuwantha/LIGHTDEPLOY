@@ -81,6 +81,7 @@ if ($method === 'POST') {
                 'message' => 'Database configuration saved successfully.',
                 'database' => $savedDb
             ]);
+            break;
 
         case 'delete_db':
             if (($currentUser['role'] ?? '') !== 'admin') {
@@ -93,10 +94,11 @@ if ($method === 'POST') {
             }
 
             if (!$backupService->deleteDatabase($dbId)) {
-                jsonError('NOT_FOUND', 'Database configuration not found.', 4404);
+                jsonError('NOT_FOUND', 'Database configuration not found.', 404);
             }
 
             jsonSuccess(['message' => 'Database configuration deleted successfully.']);
+            break;
 
         case 'run_backup':
             if (!in_array($currentUser['role'] ?? '', ['admin', 'deployer'], true)) {
@@ -118,6 +120,7 @@ if ($method === 'POST') {
             } catch (\Throwable $e) {
                 jsonError('BACKUP_FAILED', $e->getMessage(), 500);
             }
+            break;
 
         case 'delete_backup':
             if (!in_array($currentUser['role'] ?? '', ['admin', 'deployer'], true)) {
@@ -134,6 +137,7 @@ if ($method === 'POST') {
             }
 
             jsonSuccess(['message' => "Backup file '{$filename}' deleted successfully."]);
+            break;
 
         default:
             jsonError('INVALID_ACTION', "Unsupported action '{$postAction}'.", 400);
