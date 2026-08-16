@@ -6,6 +6,7 @@
 # ------------------------------------------
 config/users.json
 config/sites.json
+config/databases.json
 config/*.local.php
 .env
 .env.*

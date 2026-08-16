@@ -1262,8 +1262,263 @@ document.addEventListener('DOMContentLoaded', () => {
             .replace(/'/g, "&#039;");
     }
 
+    // ==========================================================================
+    // MYSQL DATABASE BACKUP SUITE ENGINE
+    // ==========================================================================
+    const dbContainer = document.getElementById('dbContainer');
+    const addDbForm = document.getElementById('addDbForm');
+
+    async function loadDatabases() {
+        window.loadDatabases = loadDatabases;
+        if (!dbContainer) return;
+        dbContainer.innerHTML = `<div style="text-align: center; color: var(--text-muted); padding: 30px;">Loading MySQL database backup configurations...</div>`;
+
+        const { ok, data } = await apiFetch('/api/backups.php');
+        if (ok && data.success) {
+            renderDatabases(data.databases || {});
+        } else {
+            dbContainer.innerHTML = `<div class="alert-box alert-danger">Failed to load database configurations: ${escapeHtml(data.message || 'Unknown error')}</div>`;
+        }
+    }
+
+    function renderDatabases(databases) {
+        const dbKeys = Object.keys(databases);
+        if (dbKeys.length === 0) {
+            dbContainer.innerHTML = `
+                <div style="text-align: center; padding: 40px 20px; background: rgba(255,255,255,0.02); border: 1px dashed var(--bg-card-border); border-radius: var(--radius-md);">
+                    <div style="font-size: 2.5rem; margin-bottom: 10px;">🗄️</div>
+                    <h4 style="margin: 0 0 8px; color: var(--text-main);">No MySQL Databases Configured</h4>
+                    <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 16px;">Add database login credentials to configure 1-Click backups and automated 7-day retention schedules.</p>
+                    ${userRole === 'admin' || userRole === 'deployer' ? '<button class="btn btn-primary btn-sm" onclick="openAddDbModal()">+ Add First Database</button>' : ''}
+                </div>
+            `;
+            return;
+        }
+
+        dbContainer.innerHTML = dbKeys.map(dbId => {
+            const db = databases[dbId];
+            const backups = db.backups || [];
+            
+            const scheduleBadgeMap = {
+                'daily': '<span class="badge badge-version" style="background: rgba(16, 185, 129, 0.15); color: #34d399;">📅 Daily (24h)</span>',
+                '12h': '<span class="badge badge-version" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8;">⏰ Every 12 Hours</span>',
+                '6h': '<span class="badge badge-version" style="background: rgba(168, 85, 247, 0.15); color: #c084fc;">⚡ Every 6 Hours</span>',
+                'weekly': '<span class="badge badge-version" style="background: rgba(245, 158, 11, 0.15); color: #fbbf24;">🗓️ Weekly</span>',
+                'disabled': '<span class="badge badge-version" style="background: rgba(239, 68, 68, 0.15); color: #f87171;">⏸️ Manual Only</span>'
+            };
+
+            const backupsRows = backups.length > 0 ? backups.map(b => {
+                const isSql = b.filename.endsWith('.sql');
+                const fileIcon = isSql ? '📜' : '📦';
+                const fileBadge = isSql
+                    ? '<span class="badge badge-version" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8;">📜 .SQL (phpMyAdmin Ready)</span>'
+                    : '<span class="badge badge-version" style="background: rgba(168, 85, 247, 0.15); color: #c084fc;">📦 .SQL.GZ Archive</span>';
+
+                return `
+                <tr>
+                    <td style="font-family: var(--font-mono); font-size: 0.85rem;">${fileIcon} ${escapeHtml(b.filename)}</td>
+                    <td>${fileBadge}</td>
+                    <td style="font-family: var(--font-mono); font-size: 0.85rem;">${escapeHtml(b.filesize_formatted)}</td>
+                    <td style="font-size: 0.85rem; color: var(--text-muted);">${escapeHtml(b.created_at)}</td>
+                    <td>
+                        <span class="badge badge-version" style="background: rgba(52, 211, 153, 0.1); color: #34d399;">Active (${escapeHtml(b.age_days)} days old)</span>
+                    </td>
+                    <td style="text-align: right;">
+                        <a href="/api/backups.php?action=download&filename=${encodeURIComponent(b.filename)}" class="btn btn-secondary btn-sm" style="padding: 2px 8px; font-size: 0.75rem;" title="Download ${isSql ? 'plain .sql file for phpMyAdmin import' : 'compressed archive'}">📥 Download ${isSql ? '.sql' : '.sql.gz'}</a>
+                        ${userRole === 'admin' || userRole === 'deployer' ? `
+                            <button class="btn btn-outline-danger btn-sm btn-delete-backup" data-filename="${escapeHtml(b.filename)}" style="padding: 2px 8px; font-size: 0.75rem;" title="Delete backup archive">🗑️</button>
+                        ` : ''}
+                    </td>
+                </tr>
+            `;
+            }).join('') : `
+                <tr>
+                    <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 16px;">No backup archives generated yet. Click "⚡ Backup Now (.sql)" to create your first phpMyAdmin compatible dump.</td>
+                </tr>
+            `;
+
+            return `
+                <div class="site-card" style="padding: 20px; border: 1px solid var(--bg-card-border); border-radius: var(--radius-md); background: rgba(15, 23, 42, 0.6);">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px; margin-bottom: 14px;">
+                        <div>
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <h4 style="margin: 0; font-size: 1.1rem; color: var(--text-main);">🗄️ ${escapeHtml(db.label)}</h4>
+                                ${scheduleBadgeMap[db.schedule] || ''}
+                                <span class="badge badge-version" style="background: rgba(255,255,255,0.05); color: var(--text-muted);">Retention: 7 Days</span>
+                            </div>
+                            <div style="margin-top: 6px; font-family: var(--font-mono); font-size: 0.85rem; color: var(--text-muted); display: flex; gap: 16px; flex-wrap: wrap;">
+                                <span>Host: <strong>${escapeHtml(db.db_host)}:${escapeHtml(db.db_port)}</strong></span>
+                                <span>Database: <strong>${escapeHtml(db.db_name)}</strong></span>
+                                <span>Username: <strong>${escapeHtml(db.db_user)}</strong></span>
+                                <span>Last Backup: <strong>${escapeHtml(db.last_backup_at || 'Never')}</strong></span>
+                            </div>
+                        </div>
+                        <div style="display: flex; gap: 8px;">
+                            ${userRole === 'admin' || userRole === 'deployer' ? `
+                                <button class="btn btn-primary btn-sm btn-run-backup" data-id="${db.id}" data-format="sql" title="Generate phpMyAdmin ready .sql file">⚡ Backup Now (.sql)</button>
+                                <button class="btn btn-secondary btn-sm btn-run-backup" data-id="${db.id}" data-format="sql.gz" title="Generate compressed .sql.gz file">📦 (.sql.gz)</button>
+                                <button class="btn btn-secondary btn-sm btn-edit-db" data-db='${escapeHtml(JSON.stringify(db))}'>✏️ Edit</button>
+                            ` : ''}
+                            ${userRole === 'admin' ? `
+                                <button class="btn btn-outline-danger btn-sm btn-delete-db" data-id="${db.id}">🗑️</button>
+                            ` : ''}
+                        </div>
+                    </div>
+
+                    <!-- Backup Archives Table -->
+                    <div class="table-responsive" style="margin-top: 10px; border-top: 1px dashed rgba(255,255,255,0.1); padding-top: 10px;">
+                        <table class="history-table">
+                            <thead>
+                                <tr>
+                                    <th>Backup File Name</th>
+                                    <th>Format / phpMyAdmin Ready</th>
+                                    <th>Size</th>
+                                    <th>Created At (Sri Lanka Time)</th>
+                                    <th>Retention Status</th>
+                                    <th style="text-align: right;">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${backupsRows}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        // Attach event handlers for DB operations
+        document.querySelectorAll('.btn-run-backup').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const dbId = btn.dataset.id;
+                const format = btn.dataset.format || 'sql';
+                btn.disabled = true;
+                const origText = btn.textContent;
+                btn.textContent = '⏳ Dumping...';
+
+                const { ok, data } = await apiFetch('/api/backups.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'run_backup', id: dbId, format: format })
+                });
+
+                if (ok && data.success) {
+                    showToast(data.message || 'Backup generated successfully!', 'success');
+                    loadDatabases();
+                } else {
+                    showToast(data.message || 'Backup failed.', 'error');
+                    btn.disabled = false;
+                    btn.textContent = origText;
+                }
+            });
+        });
+
+        document.querySelectorAll('.btn-edit-db').forEach(btn => {
+            btn.addEventListener('click', () => {
+                try {
+                    const db = JSON.parse(btn.dataset.db);
+                    document.getElementById('dbIdInput').value = db.id;
+                    document.getElementById('dbLabelInput').value = db.label || '';
+                    document.getElementById('dbHostInput').value = db.db_host || '127.0.0.1';
+                    document.getElementById('dbPortInput').value = db.db_port || 3306;
+                    document.getElementById('dbNameInput').value = db.db_name || '';
+                    document.getElementById('dbUserInput').value = db.db_user || '';
+                    document.getElementById('dbPassInput').value = '';
+                    document.getElementById('dbScheduleInput').value = db.schedule || 'daily';
+                    document.getElementById('addDbModalTitle').textContent = '✏️ Edit MySQL Database Configuration';
+                    openAddDbModal();
+                } catch (e) {
+                    console.error('Failed to parse database data for editing:', e);
+                }
+            });
+        });
+
+        document.querySelectorAll('.btn-delete-db').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const dbId = btn.dataset.id;
+                if (!confirm('Are you sure you want to delete this database configuration?')) return;
+
+                const { ok, data } = await apiFetch('/api/backups.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'delete_db', id: dbId })
+                });
+
+                if (ok && data.success) {
+                    showToast('Database configuration deleted.', 'success');
+                    loadDatabases();
+                } else {
+                    showToast(data.message || 'Failed to delete database config.', 'error');
+                }
+            });
+        });
+
+        document.querySelectorAll('.btn-delete-backup').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const filename = btn.dataset.filename;
+                if (!confirm(`Delete backup file '${filename}'?`)) return;
+
+                const { ok, data } = await apiFetch('/api/backups.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'delete_backup', filename: filename })
+                });
+
+                if (ok && data.success) {
+                    showToast('Backup file deleted.', 'success');
+                    loadDatabases();
+                } else {
+                    showToast(data.message || 'Failed to delete backup file.', 'error');
+                }
+            });
+        });
+    }
+
+    if (addDbForm) {
+        addDbForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const submitBtn = document.getElementById('addDbSubmitBtn');
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Saving...';
+
+            const formData = new FormData(addDbForm);
+            const payload = {
+                action: 'save_db',
+                id: formData.get('id') || '',
+                label: formData.get('label') || '',
+                db_host: formData.get('db_host') || '127.0.0.1',
+                db_port: parseInt(formData.get('db_port') || '3306', 10),
+                db_name: formData.get('db_name') || '',
+                db_user: formData.get('db_user') || '',
+                db_pass: formData.get('db_pass') || '',
+                schedule: formData.get('schedule') || 'daily',
+                retention_days: 7
+            };
+
+            const { ok, data } = await apiFetch('/api/backups.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Save Database Config';
+
+            if (ok && data.success) {
+                showToast(data.message || 'Database configuration saved successfully!', 'success');
+                addDbForm.reset();
+                document.getElementById('dbIdInput').value = '';
+                window.closeAddDbModal();
+                loadDatabases();
+            } else {
+                showToast(data.message || 'Failed to save database config.', 'error');
+            }
+        });
+    }
+
     // Initial Execution
     window.loadVpsPorts = loadVpsPorts;
+    window.loadDatabases = loadDatabases;
     updateServerMetrics();
     loadSites();
     loadPm2Data();

@@ -50,6 +50,43 @@ $csrfToken = Csrf::getToken();
                 modal.style.setProperty('display', 'none', 'important');
             }
         }
+        function openDbBackupsModal() {
+            var modal = document.getElementById('dbBackupsModal');
+            if (modal) {
+                modal.classList.remove('hidden');
+                modal.style.setProperty('display', 'flex', 'important');
+                modal.style.setProperty('visibility', 'visible', 'important');
+                modal.style.setProperty('opacity', '1', 'important');
+                modal.style.setProperty('z-index', '99999', 'important');
+            }
+            if (window.loadDatabases) {
+                window.loadDatabases();
+            }
+        }
+        function closeDbBackupsModal() {
+            var modal = document.getElementById('dbBackupsModal');
+            if (modal) {
+                modal.classList.add('hidden');
+                modal.style.setProperty('display', 'none', 'important');
+            }
+        }
+        function openAddDbModal() {
+            var modal = document.getElementById('addDbModal');
+            if (modal) {
+                modal.classList.remove('hidden');
+                modal.style.setProperty('display', 'flex', 'important');
+                modal.style.setProperty('visibility', 'visible', 'important');
+                modal.style.setProperty('opacity', '1', 'important');
+                modal.style.setProperty('z-index', '100000', 'important');
+            }
+        }
+        function closeAddDbModal() {
+            var modal = document.getElementById('addDbModal');
+            if (modal) {
+                modal.classList.add('hidden');
+                modal.style.setProperty('display', 'none', 'important');
+            }
+        }
     </script>
 </head>
 <body class="dashboard-body" data-user-role="<?= htmlspecialchars($user['role']) ?>" data-username="<?= htmlspecialchars($user['username']) ?>" data-csrf-token="<?= htmlspecialchars($csrfToken) ?>">
@@ -89,6 +126,7 @@ $csrfToken = Csrf::getToken();
         </div>
 
         <div class="header-right">
+            <button id="headerDbBackupsBtn" class="btn btn-secondary btn-sm btn-db-backups" style="margin-right: 8px;" onclick="openDbBackupsModal()">🗄️ Database Backups</button>
             <button id="headerViewPortsBtn" class="btn btn-secondary btn-sm btn-view-ports" style="margin-right: 8px;" onclick="openVpsPortsModal()">🌐 VPS Open Ports</button>
             <div class="user-info">
                 <span class="user-name"><?= htmlspecialchars($user['name']) ?></span>
@@ -567,6 +605,111 @@ $csrfToken = Csrf::getToken();
             <div class="modal-footer">
                 <button id="closePortsFooterBtn" class="btn btn-secondary" onclick="closeVpsPortsModal()">Close</button>
             </div>
+        </div>
+    </div>
+
+    <!-- MySQL Database Backups Suite Modal -->
+    <div id="dbBackupsModal" class="modal-overlay hidden">
+        <div class="modal-card modal-xl">
+            <div class="modal-header">
+                <div>
+                    <h3>🗄️ MySQL Database Backup & Automated Retention Manager</h3>
+                    <div class="modal-sub-info">Manage database credentials, 1-Click full dumps, automated schedules & 7-day backup rotation</div>
+                </div>
+                <button id="closeDbBackupsBtn" class="modal-close-btn" onclick="closeDbBackupsModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- Retention Callout & Section Actions -->
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 16px;">
+                    <div class="alert-box alert-success" style="margin: 0; flex: 1; min-width: 280px; padding: 10px 14px;">
+                        <strong>💡 Automated Retention Policy:</strong> Each database backup is automatically compressed (`.sql.gz`) and kept for <strong>7 days only</strong>. Backups older than 7 days are automatically pruned to preserve disk space.
+                    </div>
+                    <?php if (in_array(($user['role'] ?? ''), ['admin', 'deployer'], true)): ?>
+                        <button id="addDbConfigBtn" class="btn btn-primary btn-sm" onclick="openAddDbModal()">+ Add New Database</button>
+                    <?php endif; ?>
+                </div>
+
+                <!-- Database Cards & Backup Archives Container -->
+                <div id="dbContainer" style="display: flex; flex-direction: column; gap: 20px;">
+                    <div style="text-align: center; color: var(--text-muted); padding: 30px;">Loading database backup configurations...</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="closeDbBackupsFooterBtn" class="btn btn-secondary" onclick="closeDbBackupsModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add / Edit Database Credentials Modal -->
+    <div id="addDbModal" class="modal-overlay hidden">
+        <div class="modal-card" style="max-width: 540px;">
+            <div class="modal-header">
+                <div>
+                    <h3 id="addDbModalTitle">🗄️ Add MySQL Database Configuration</h3>
+                    <div class="modal-sub-info">Configure unique host, port, username, password, and backup schedule</div>
+                </div>
+                <button id="closeAddDbBtn" class="modal-close-btn" onclick="closeAddDbModal()">&times;</button>
+            </div>
+            <form id="addDbForm">
+                <input type="hidden" id="dbIdInput" name="id">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="dbLabelInput" class="form-label">Database Display Label / System Name</label>
+                        <input type="text" id="dbLabelInput" name="label" class="form-input" placeholder="e.g. Production E-Commerce DB" required>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 12px; margin-top: 10px;">
+                        <div class="form-group">
+                            <label for="dbHostInput" class="form-label">MySQL Host / IP</label>
+                            <input type="text" id="dbHostInput" name="db_host" class="form-input" value="127.0.0.1" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="dbPortInput" class="form-label">Port</label>
+                            <input type="number" id="dbPortInput" name="db_port" class="form-input" value="3306" required>
+                        </div>
+                    </div>
+
+                    <div class="form-group" style="margin-top: 10px;">
+                        <label for="dbNameInput" class="form-label">Target Database Name (`db_name`)</label>
+                        <input type="text" id="dbNameInput" name="db_name" class="form-input" placeholder="e.g. myapp_production" required>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px;">
+                        <div class="form-group">
+                            <label for="dbUserInput" class="form-label">Database Username (`db_user`)</label>
+                            <input type="text" id="dbUserInput" name="db_user" class="form-input" placeholder="e.g. myapp_user" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="dbPassInput" class="form-label">Database Password (`db_pass`)</label>
+                            <input type="password" id="dbPassInput" name="db_pass" class="form-input" placeholder="Enter password">
+                            <small class="form-help">Leave blank to keep existing password when editing.</small>
+                        </div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px;">
+                        <div class="form-group">
+                            <label for="dbScheduleInput" class="form-label">Automated Backup Schedule</label>
+                            <select id="dbScheduleInput" name="schedule" class="form-input">
+                                <option value="daily" selected>Daily (Every 24 Hours)</option>
+                                <option value="12h">Every 12 Hours</option>
+                                <option value="6h">Every 6 Hours</option>
+                                <option value="weekly">Weekly (Every 7 Days)</option>
+                                <option value="disabled">Disabled (Manual Only)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="dbRetentionInput" class="form-label">Retention Policy (Days)</label>
+                            <input type="number" id="dbRetentionInput" name="retention_days" class="form-input" value="7" readonly style="background: rgba(255,255,255,0.05);" title="Auto-prunes backups older than 7 days">
+                            <small class="form-help">Strict 7-day rotation policy enabled.</small>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" id="closeAddDbFooterBtn" class="btn btn-secondary" onclick="closeAddDbModal()">Cancel</button>
+                    <button type="submit" id="addDbSubmitBtn" class="btn btn-primary">Save Database Config</button>
+                </div>
+            </form>
         </div>
     </div>
 

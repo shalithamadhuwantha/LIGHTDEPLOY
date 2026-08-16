@@ -3,7 +3,7 @@ module.exports = {
     {
       name: 'lightdeploy',
       script: 'php',
-      args: '-S 0.0.0.0:8000 -t public',
+      args: '-S 0.0.0.0:8000 -t public public/router.php',
       cwd: __dirname,
       instances: 1,
       autorestart: true,
