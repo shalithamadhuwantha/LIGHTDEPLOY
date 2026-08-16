@@ -282,75 +282,109 @@ $csrfToken = Csrf::getToken();
 
     <!-- Add / Configure Site Modal -->
     <div id="addSiteModal" class="modal-overlay hidden">
-        <div class="modal-card" style="max-width: 540px;">
+        <div class="modal-card modal-lg" style="max-width: 780px;">
             <div class="modal-header">
-                <h3>Add New Website</h3>
+                <div>
+                    <h3>Add New Website</h3>
+                    <div class="modal-sub-info">Configure deployment scripts, post-deploy health checks, and PM2 ecosystem runner</div>
+                </div>
                 <button id="closeAddSiteBtn" class="modal-close-btn">&times;</button>
             </div>
-            <form id="addSiteForm">
-                <div class="modal-body">
-                    <div class="form-group">
-                        <label for="siteIdInput" class="form-label">Site Identifier (ID)</label>
-                        <input type="text" id="siteIdInput" name="site_id" class="form-input" placeholder="e.g. site-d or my-app" required pattern="[a-zA-Z0-9_-]{3,32}">
-                        <small class="form-help">Unique ID (3-32 characters, letters, numbers, hyphens)</small>
+            <form id="addSiteForm" style="display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden;">
+                <div class="modal-body" style="max-height: 72vh; overflow-y: auto; padding: 20px 24px;">
+                    <!-- Section 1: Basic Site Configuration -->
+                    <h4 style="margin: 0 0 14px; color: var(--accent-blue); font-size: 0.95rem; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 6px; display: flex; align-items: center; gap: 8px;">
+                        🌐 1. Basic Site Configuration
+                    </h4>
+                    
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px;">
+                        <div class="form-group">
+                            <label for="siteIdInput" class="form-label">Site Identifier (ID)</label>
+                            <input type="text" id="siteIdInput" name="site_id" class="form-input" placeholder="e.g. site-d or my-app" required pattern="[a-zA-Z0-9_-]{3,32}">
+                            <small class="form-help">Unique ID (3-32 chars: letters, numbers, hyphens)</small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="siteNameInput" class="form-label">Display Name</label>
+                            <input type="text" id="siteNameInput" name="name" class="form-input" placeholder="e.g. E-Commerce Store" required>
+                        </div>
                     </div>
 
-                    <div class="form-group">
-                        <label for="siteNameInput" class="form-label">Display Name</label>
-                        <input type="text" id="siteNameInput" name="name" class="form-input" placeholder="e.g. E-Commerce Store" required>
-                    </div>
-
-                    <div class="form-group">
+                    <div class="form-group" style="margin-top: 10px;">
                         <label for="siteDomainInput" class="form-label">Domain Name</label>
                         <input type="text" id="siteDomainInput" name="domain" class="form-input" placeholder="e.g. shop.example.com">
                     </div>
 
-                    <div class="form-group">
-                        <label for="siteScriptInput" class="form-label">Deployment Script Path</label>
-                        <input type="text" id="siteScriptInput" name="script" class="form-input" placeholder="e.g. scripts/site-d.sh (auto-created if empty)">
-                        <small class="form-help">Script will be auto-generated in <code>scripts/</code> if left blank.</small>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin-top: 10px;">
+                        <div class="form-group">
+                            <label for="siteScriptInput" class="form-label">Deployment Script Path</label>
+                            <input type="text" id="siteScriptInput" name="script" class="form-input" placeholder="e.g. scripts/site-d.sh (auto-created if empty)">
+                            <small class="form-help">Auto-generated in <code>scripts/</code> if left blank.</small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="siteRollbackInput" class="form-label">Rollback Script Path (Optional)</label>
+                            <input type="text" id="siteRollbackInput" name="rollback_script" class="form-input" placeholder="e.g. scripts/site-d-rollback.sh">
+                        </div>
                     </div>
 
-                    <div class="form-group">
-                        <label for="siteRollbackInput" class="form-label">Rollback Script Path (Optional)</label>
-                        <input type="text" id="siteRollbackInput" name="rollback_script" class="form-input" placeholder="e.g. scripts/site-d-rollback.sh">
-                    </div>
+                    <!-- Section 2: Health Check -->
+                    <h4 style="margin: 20px 0 14px; color: var(--accent-blue); font-size: 0.95rem; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 6px; display: flex; align-items: center; gap: 8px;">
+                        🩺 2. Post-Deployment Health Check
+                    </h4>
 
                     <div class="form-group">
                         <label class="form-checkbox-label">
                             <input type="checkbox" id="healthCheckEnableInput" name="health_check_enabled">
-                            Enable Post-Deployment Health Check
+                            Enable Post-Deployment HTTP Health Check
                         </label>
                     </div>
 
-                    <div class="form-group hidden" id="healthCheckUrlGroup">
-                        <label for="siteHealthCheckInput" class="form-label">Health Check URL</label>
+                    <div class="form-group hidden" id="healthCheckUrlGroup" style="margin-top: 10px;">
+                        <label for="siteHealthCheckInput" class="form-label">Health Check Target URL</label>
                         <input type="url" id="siteHealthCheckInput" name="health_check" class="form-input" placeholder="https://shop.example.com/healthz">
                     </div>
 
-                    <div class="form-group" style="margin-top: 16px; padding-top: 12px; border-top: 1px dashed rgba(255,255,255,0.1);">
+                    <!-- Section 3: PM2 Process Manager Ecosystem -->
+                    <h4 style="margin: 20px 0 14px; color: var(--accent-blue); font-size: 0.95rem; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 6px; display: flex; align-items: center; gap: 8px;">
+                        ⚡ 3. PM2 Process Manager Ecosystem Config
+                    </h4>
+
+                    <div class="form-group">
                         <label class="form-checkbox-label">
                             <input type="checkbox" id="pm2EnableInput" name="pm2_enabled">
-                            ⚡ Register & Control with PM2 Process Manager
+                            Register & Control with PM2 Process Manager
                         </label>
                     </div>
 
-                    <div class="form-group hidden" id="pm2OptionsGroup">
-                        <label for="pm2AppScriptInput" class="form-label">PM2 Entry File / Script Path</label>
-                        <input type="text" id="pm2AppScriptInput" name="pm2_script" class="form-input" placeholder="e.g. app.js or server.js">
-                        <small class="form-help">Node.js/Python entry file to launch and monitor via PM2</small>
-
-                        <div style="margin-top: 10px;">
-                            <label for="pm2NameInput" class="form-label">PM2 Process Name</label>
-                            <input type="text" id="pm2NameInput" name="pm2_name" class="form-input" placeholder="e.g. my-app">
-                        </div>
+                    <div class="form-group hidden" id="pm2OptionsGroup" style="margin-top: 12px;">
+                        <label for="pm2EcosystemInput" class="form-label">📋 PM2 Ecosystem Config Script (<code>ecosystem.config.js</code>)</label>
+                        <textarea id="pm2EcosystemInput" name="pm2_ecosystem" class="form-input" rows="14" style="font-family: var(--font-mono); font-size: 0.83rem; line-height: 1.5; resize: vertical; background: rgba(15, 23, 42, 0.7); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); white-space: pre; tab-size: 2; overflow-x: auto; border-radius: var(--radius-md);" placeholder="module.exports = {
+  apps: [{
+    name: 'solar-backend',
+    script: 'src/index.ts',
+    interpreter: 'node',
+    interpreter_args: '--require esbuild-register',
+    instances: 1,
+    exec_mode: 'fork',
+    watch: false,
+    max_memory_restart: '1G',
+    env: {
+      NODE_ENV: 'production',
+      PORT: 3000,
+    },
+    cwd: '/www/wwwroot/apisolar.cyberneticde.site',
+    autorestart: true,
+  }]
+};"></textarea>
+                        <small class="form-help">Paste your full <code>module.exports = { apps: [...] }</code> PM2 ecosystem config. LightDeploy will save this script and execute <code>pm2 start ecosystem.config.js</code> automatically during deployment.</small>
                     </div>
                 </div>
 
                 <div class="modal-footer">
                     <button type="button" id="deleteSiteModalBtn" class="btn btn-danger hidden" style="margin-right: auto;">Delete Site</button>
                     <button type="button" id="closeAddSiteFooterBtn" class="btn btn-secondary">Cancel</button>
-                    <button type="submit" id="saveSiteSubmitBtn" class="btn btn-primary">Save Site</button>
+                    <button type="submit" id="saveSiteSubmitBtn" class="btn btn-primary">Save Configuration</button>
                 </div>
             </form>
         </div>

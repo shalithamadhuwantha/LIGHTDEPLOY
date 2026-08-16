@@ -822,32 +822,61 @@ html {
 /* Tablet & Mobile Screens (max-width: 900px) */
 @media (max-width: 900px) {
     .app-header {
+        height: auto !important;
         flex-direction: column;
         align-items: stretch;
-        gap: 12px;
+        gap: 10px;
         padding: 12px 16px;
     }
 
-    .header-left, .header-right {
+    .header-left {
         width: 100%;
+        display: flex;
+        align-items: center;
         justify-content: space-between;
     }
 
-    .server-metrics-bar {
+    .header-center {
         width: 100%;
-        justify-content: flex-start;
+        display: flex;
+        align-items: center;
+        gap: 8px;
         overflow-x: auto;
-        padding-bottom: 4px;
+        padding: 4px 0;
         -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+    }
+
+    .header-center::-webkit-scrollbar {
+        display: none;
     }
 
     .metric-pill {
         white-space: nowrap;
         flex-shrink: 0;
+        font-size: 0.72rem;
+        padding: 4px 10px;
     }
 
-    .app-main {
-        padding: 16px;
+    .header-right {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 8px;
+        padding-top: 4px;
+        border-top: 1px dashed rgba(255, 255, 255, 0.08);
+    }
+
+    .header-right .btn {
+        flex: 1;
+        min-width: 130px;
+        font-size: 0.8rem;
+    }
+
+    .app-content, .app-main {
+        padding: 16px 14px;
     }
 
     .section-header {
@@ -858,12 +887,14 @@ html {
 
     .section-actions {
         width: 100%;
+        display: flex;
         flex-wrap: wrap;
+        gap: 8px;
     }
 
     .section-actions .btn {
         flex: 1;
-        min-width: 130px;
+        min-width: 120px;
         text-align: center;
         justify-content: center;
     }
@@ -871,7 +902,7 @@ html {
 
 /* Small Mobile Screens (max-width: 640px) */
 @media (max-width: 640px) {
-    /* Headings */
+    /* Typography */
     h1, h2 {
         font-size: 1.25rem;
     }
@@ -890,59 +921,73 @@ html {
         padding: 16px;
     }
 
+    /* Form Grids: Force multi-column form grids into 1 column on phone screens */
+    form div[style*="grid-template-columns"],
+    .modal-body div[style*="grid-template-columns"] {
+        grid-template-columns: 1fr !important;
+        gap: 10px !important;
+    }
+
     /* Form Inputs: 16px font prevents iOS auto-zoom on focus */
-    .form-input {
-        font-size: 16px;
-        padding: 12px 14px;
+    .form-input, select.form-input, textarea.form-input {
+        font-size: 16px !important;
+        padding: 10px 12px;
     }
 
     .form-label {
-        font-size: 0.85rem;
+        font-size: 0.82rem;
     }
 
     /* Buttons: Touch friendly targets */
     .btn {
-        padding: 10px 16px;
-        font-size: 0.9rem;
-        min-height: 44px;
+        padding: 10px 14px;
+        font-size: 0.85rem;
+        min-height: 42px;
     }
 
     .btn-sm {
         padding: 8px 12px;
-        font-size: 0.85rem;
+        font-size: 0.8rem;
         min-height: 38px;
     }
 
-    /* Action buttons inside site cards stacked cleanly */
+    /* Action buttons inside site cards stacked in clean touch rows */
     .card-actions {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(105px, 1fr));
         gap: 8px;
         margin-top: 16px;
     }
 
     .card-actions .btn {
         width: 100%;
+        justify-content: center;
     }
 
-    /* PM2 Table Responsive Touch Optimizations */
+    /* PM2 & History Tables: Touch scrollable */
     .table-responsive {
         -webkit-overflow-scrolling: touch;
         overflow-x: auto;
         border-radius: var(--radius-md);
+        margin: 0 -4px;
     }
 
-    .data-table th, .data-table td {
-        padding: 10px 12px;
-        font-size: 0.8rem;
+    .data-table, .history-table {
+        min-width: 600px;
+    }
+
+    .data-table th, .data-table td,
+    .history-table th, .history-table td {
+        padding: 10px 10px;
+        font-size: 0.78rem;
         white-space: nowrap;
     }
 
     .pm2-card {
-        padding: 12px;
+        padding: 10px;
     }
 
-    /* Mobile Modals (Bottom Sheet / Full Width UX) */
+    /* Mobile Modals (Bottom Sheet UX) */
     .modal-overlay {
         padding: 0;
         align-items: flex-end;
@@ -951,9 +996,10 @@ html {
     .modal-card {
         width: 100% !important;
         max-width: 100% !important;
-        max-height: 92vh;
+        max-height: 94vh;
         border-radius: 20px 20px 0 0 !important;
         margin: 0;
+        box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.8);
         animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
     }
 
@@ -963,19 +1009,19 @@ html {
     }
 
     .modal-header {
-        padding: 16px 20px;
+        padding: 14px 18px;
         border-bottom: 1px solid var(--bg-card-border);
     }
 
     .modal-body {
-        padding: 16px 20px;
-        max-height: calc(92vh - 140px);
+        padding: 16px;
+        max-height: calc(94vh - 130px) !important;
         overflow-y: auto;
         -webkit-overflow-scrolling: touch;
     }
 
     .modal-footer {
-        padding: 14px 20px;
+        padding: 12px 16px;
         flex-direction: column-reverse;
         gap: 8px;
     }
@@ -991,30 +1037,31 @@ html {
     }
 
     .terminal-body {
-        font-size: 0.78rem;
-        padding: 12px;
-        max-height: 50vh;
+        font-size: 0.75rem;
+        padding: 10px;
+        max-height: 48vh;
     }
 
     /* Toast alerts on mobile float at top */
     .toast-container {
-        top: 12px;
-        right: 12px;
-        left: 12px;
+        top: 10px;
+        right: 10px;
+        left: 10px;
         bottom: auto;
+        z-index: 100000;
     }
 
     .toast {
         width: 100%;
-        box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
     }
 
     /* Login Page Mobile Optimization */
     .login-container {
-        padding: 16px;
+        padding: 14px;
     }
 
     .login-card {
-        padding: 24px 20px;
+        padding: 24px 18px;
     }
 }

@@ -36,6 +36,7 @@ $healthCheckEnabled = !empty($input['health_check_enabled']);
 $pm2Enabled = !empty($input['pm2_enabled']);
 $pm2Script = trim((string)($input['pm2_script'] ?? ''));
 $pm2Name = trim((string)($input['pm2_name'] ?? $siteId));
+$pm2Ecosystem = trim((string)($input['pm2_ecosystem'] ?? ''));
 $enabled = isset($input['enabled']) ? !empty($input['enabled']) : true;
 
 // Validate site_id
@@ -53,25 +54,38 @@ if (empty($script)) {
     $script = "scripts/{$siteId}.sh";
 }
 
-// PM2 Auto launch if enabled
+// PM2 Ecosystem file saving & auto-launch if enabled
+$ecosystemFilePath = null;
 if ($pm2Enabled) {
-    if (empty($pm2Script)) {
-        $pm2Script = $script;
-    }
-    if (empty($pm2Name)) {
-        $pm2Name = $siteId;
+    $ecosystemFileName = "ecosystem.{$siteId}.config.js";
+    $ecosystemFilePath = $config['config_dir'] . '/' . $ecosystemFileName;
+
+    if (!empty($pm2Ecosystem)) {
+        @file_put_contents($ecosystemFilePath, $pm2Ecosystem, LOCK_EX);
     }
 
     $pm2Manager = new \LightDeploy\PM2\PM2Manager();
     if ($pm2Manager->isInstalled()) {
-        $pm2Manager->startApp($pm2Script, $pm2Name);
+        if (!empty($pm2Ecosystem) && file_exists($ecosystemFilePath)) {
+            $pm2Manager->startApp($ecosystemFilePath);
+        } elseif (!empty($pm2Script)) {
+            $pm2Manager->startApp($pm2Script, $pm2Name);
+        }
     }
 }
 
 // Create script file if it does not exist
 $scriptFullPath = $config['scripts_dir'] . '/' . basename($script);
 if (!file_exists($scriptFullPath)) {
-    $pm2Step = $pm2Enabled ? "echo \"[PM2] Reloading PM2 process {$pm2Name}...\"\nif command -v pm2 >/dev/null 2>&1; then pm2 reload {$pm2Name} || pm2 start {$pm2Script} --name {$pm2Name}; fi\n" : "";
+    $pm2Step = "";
+    if ($pm2Enabled) {
+        if (!empty($pm2Ecosystem) && file_exists($ecosystemFilePath)) {
+            $pm2Step = "echo \"[PM2] Reloading PM2 ecosystem config {$ecosystemFileName}...\"\nif command -v pm2 >/dev/null 2>&1; then pm2 reload {$ecosystemFilePath} || pm2 start {$ecosystemFilePath}; fi\n";
+        } else {
+            $pm2Step = "echo \"[PM2] Reloading PM2 process {$pm2Name}...\"\nif command -v pm2 >/dev/null 2>&1; then pm2 reload {$pm2Name} || pm2 start {$pm2Script} --name {$pm2Name}; fi\n";
+        }
+    }
+
     $template = "#!/bin/bash\n" .
                 "# LightDeploy Script: {$name}\n" .
                 "set -e\n\n" .
@@ -118,6 +132,7 @@ $sitesData['sites'][$siteId] = [
     'pm2_enabled' => $pm2Enabled,
     'pm2_script' => $pm2Script,
     'pm2_name' => $pm2Name,
+    'pm2_ecosystem' => $pm2Ecosystem,
     'enabled' => $enabled
 ];
 

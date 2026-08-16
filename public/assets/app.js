@@ -150,6 +150,14 @@ document.addEventListener('DOMContentLoaded', () => {
                             Log
                         </button>
                     ` : ''}
+                    ${site.pm2_enabled ? `
+                        <button class="btn btn-secondary btn-sm btn-pm2-reload" data-pm2-target="${escapeHtml(site.pm2_name || siteId)}">
+                            ⚡ PM2 Reload
+                        </button>
+                        <button class="btn btn-secondary btn-sm btn-pm2-logs" data-pm2-target="${escapeHtml(site.pm2_name || siteId)}">
+                            📄 PM2 Logs
+                        </button>
+                    ` : ''}
                     ${userRole === 'admin' ? `
                         <button class="btn btn-secondary btn-sm btn-edit-site" data-site-id="${siteId}">
                             ⚙️ Edit
@@ -172,6 +180,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
         document.querySelectorAll('.btn-view-log').forEach(btn => {
             btn.addEventListener('click', () => viewDeploymentLog(btn.dataset.depId, btn.dataset.siteId));
+        });
+
+        document.querySelectorAll('.btn-pm2-reload').forEach(btn => {
+            btn.addEventListener('click', () => executePm2Action('reload', btn.dataset.pm2Target));
+        });
+
+        document.querySelectorAll('.btn-pm2-logs').forEach(btn => {
+            btn.addEventListener('click', () => openPm2LogsModal(btn.dataset.pm2Target));
         });
 
         document.querySelectorAll('.btn-edit-site').forEach(btn => {
@@ -566,6 +582,9 @@ document.addEventListener('DOMContentLoaded', () => {
             if (pm2EnableInput) pm2EnableInput.checked = false;
             if (pm2OptionsGroup) pm2OptionsGroup.classList.add('hidden');
 
+            const pm2EcosystemInput = document.getElementById('pm2EcosystemInput');
+            if (pm2EcosystemInput) pm2EcosystemInput.value = '';
+
             const deleteBtn = document.getElementById('deleteSiteModalBtn');
             if (deleteBtn) deleteBtn.classList.add('hidden');
 
@@ -612,11 +631,8 @@ document.addEventListener('DOMContentLoaded', () => {
             else pm2OptionsGroup.classList.add('hidden');
         }
 
-        const pm2AppScriptInput = document.getElementById('pm2AppScriptInput');
-        if (pm2AppScriptInput) pm2AppScriptInput.value = site.pm2_script || '';
-
-        const pm2NameInput = document.getElementById('pm2NameInput');
-        if (pm2NameInput) pm2NameInput.value = site.pm2_name || siteId;
+        const pm2EcosystemInput = document.getElementById('pm2EcosystemInput');
+        if (pm2EcosystemInput) pm2EcosystemInput.value = site.pm2_ecosystem || '';
 
         const deleteBtn = document.getElementById('deleteSiteModalBtn');
         if (deleteBtn) deleteBtn.classList.remove('hidden');
@@ -701,8 +717,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 health_check_enabled: document.getElementById('healthCheckEnableInput').checked,
                 health_check: document.getElementById('siteHealthCheckInput').value.trim(),
                 pm2_enabled: document.getElementById('pm2EnableInput')?.checked || false,
-                pm2_script: document.getElementById('pm2AppScriptInput')?.value.trim() || '',
-                pm2_name: document.getElementById('pm2NameInput')?.value.trim() || ''
+                pm2_ecosystem: document.getElementById('pm2EcosystemInput')?.value || ''
             };
 
             const { ok, data } = await apiFetch('/api/save_site.php', {

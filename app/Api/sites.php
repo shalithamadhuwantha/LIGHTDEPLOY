@@ -54,6 +54,14 @@ foreach ($configuredSites as $siteId => $siteMeta) {
         }
     }
 
+    $pm2Ecosystem = $siteMeta['pm2_ecosystem'] ?? '';
+    if (empty($pm2Ecosystem)) {
+        $ecosystemFile = $config['config_dir'] . "/ecosystem.{$siteId}.config.js";
+        if (file_exists($ecosystemFile)) {
+            $pm2Ecosystem = (string)@file_get_contents($ecosystemFile);
+        }
+    }
+
     $sanitizedSites[$siteId] = [
         'id' => $siteId,
         'name' => $siteMeta['name'] ?? $siteId,
@@ -66,6 +74,7 @@ foreach ($configuredSites as $siteId => $siteMeta) {
         'pm2_enabled' => !empty($siteMeta['pm2_enabled']),
         'pm2_script' => $siteMeta['pm2_script'] ?? '',
         'pm2_name' => $siteMeta['pm2_name'] ?? $siteId,
+        'pm2_ecosystem' => $pm2Ecosystem,
         'enabled' => !empty($siteMeta['enabled']),
         'is_locked' => $isLocked,
         'active_lock' => $lockInfo,
