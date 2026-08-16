@@ -70,24 +70,40 @@ class DeploymentRunner
             'PATH' => getenv('PATH') ?: '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
         ]);
 
-        // Launch shell execution safely with absolute binary path
-        $command = ['/bin/bash', $scriptPath];
+        $pid = 0;
+        $process = null;
 
-        $process = proc_open($command, $descriptors, $pipes, $workDir, $env);
+        if (function_exists('proc_open')) {
+            try {
+                $process = @proc_open(['/bin/bash', $scriptPath], $descriptors, $pipes, $workDir, $env);
+                if (is_resource($process)) {
+                    @fclose($pipes[0]);
+                    $status = proc_get_status($process);
+                    $pid = (int)($status['pid'] ?? 0);
+                }
+            } catch (\Throwable $e) {}
+        }
 
-        if (!is_resource($process)) {
+        // Fallback execution when proc_open is disabled in php.ini
+        if ($pid <= 0) {
+            $cmdStr = sprintf(
+                'cd %s && /bin/bash %s >> %s 2>&1 & echo $!',
+                escapeshellarg($workDir),
+                escapeshellarg($scriptPath),
+                escapeshellarg($streamFile)
+            );
+            $pidStr = safeShellExec($cmdStr);
+            $pid = (int)trim((string)$pidStr);
+        }
+
+        if ($pid <= 0) {
             @file_put_contents($streamFile, "[" . date('H:i:s') . "] [ERROR] Failed to spawn deployment process for script {$scriptPath}.\n", FILE_APPEND);
             return [
                 'success' => false,
                 'pid' => 0,
-                'error' => 'Failed to spawn process resource.'
+                'error' => 'Failed to spawn deployment process resource.'
             ];
         }
-
-        fclose($pipes[0]); // Close stdin
-
-        $status = proc_get_status($process);
-        $pid = (int)$status['pid'];
 
         @file_put_contents($pidFile, (string)$pid);
 

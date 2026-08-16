@@ -14,10 +14,39 @@ class PM2Manager
     {
         if ($customPath && file_exists($customPath)) {
             $this->pm2Path = $customPath;
-        } else {
-            $path = trim((string)\safeShellExec('which pm2 2>/dev/null'));
-            $this->pm2Path = !empty($path) ? $path : 'pm2';
+            return;
         }
+
+        // 1. Try `which pm2`
+        $path = trim((string)\safeShellExec('which pm2 2>/dev/null'));
+        if (!empty($path) && file_exists($path)) {
+            $this->pm2Path = $path;
+            return;
+        }
+
+        // 2. Comprehensive binary discovery across system & NVM environments
+        $nvmPaths = array_merge(
+            glob('/root/.nvm/versions/node/*/bin/pm2') ?: [],
+            glob((getenv('HOME') ?: '/root') . '/.nvm/versions/node/*/bin/pm2') ?: [],
+            glob('/home/*/.nvm/versions/node/*/bin/pm2') ?: []
+        );
+
+        $candidates = array_merge([
+            '/usr/local/bin/pm2',
+            '/usr/bin/pm2',
+            '/opt/node/bin/pm2',
+            getenv('HOME') . '/.npm-global/bin/pm2',
+            '/root/.npm-global/bin/pm2'
+        ], $nvmPaths);
+
+        foreach ($candidates as $candidate) {
+            if (!empty($candidate) && file_exists($candidate) && is_executable($candidate)) {
+                $this->pm2Path = $candidate;
+                return;
+            }
+        }
+
+        $this->pm2Path = 'pm2';
     }
 
     /**
@@ -25,8 +54,13 @@ class PM2Manager
      */
     public function isInstalled(): bool
     {
-        $output = \safeShellExec(escapeshellcmd($this->pm2Path) . ' -v 2>&1');
-        return !empty($output) && preg_match('/^\d+\.\d+\.\d+/', trim((string)$output)) === 1;
+        $cmd = escapeshellcmd($this->pm2Path) . ' -v 2>&1';
+        $output = \safeShellExec($cmd);
+        if (empty($output)) {
+            return false;
+        }
+        $outputStr = trim((string)$output);
+        return (bool)preg_match('/\d+\.\d+\.\d+/', $outputStr);
     }
 
     /**
