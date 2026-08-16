@@ -11,7 +11,12 @@ use LightDeploy\Auth\AuthService;
 use LightDeploy\Auth\Csrf;
 
 $authService = new AuthService($config['config_dir'] . '/users.json');
-$user = $authService->requireAuth();
+if (!$authService->isAuthenticated()) {
+    header('Location: /login.php');
+    exit;
+}
+
+$user = $authService->getCurrentUser();
 $csrfToken = Csrf::getToken();
 ?>
 <!DOCTYPE html>
