@@ -15,7 +15,7 @@ class PM2Manager
         if ($customPath && file_exists($customPath)) {
             $this->pm2Path = $customPath;
         } else {
-            $path = trim((string)@shell_exec('which pm2 2>/dev/null'));
+            $path = trim((string)\safeShellExec('which pm2 2>/dev/null'));
             $this->pm2Path = !empty($path) ? $path : 'pm2';
         }
     }
@@ -25,7 +25,7 @@ class PM2Manager
      */
     public function isInstalled(): bool
     {
-        $output = @shell_exec(escapeshellcmd($this->pm2Path) . ' -v 2>&1');
+        $output = \safeShellExec(escapeshellcmd($this->pm2Path) . ' -v 2>&1');
         return !empty($output) && preg_match('/^\d+\.\d+\.\d+/', trim((string)$output)) === 1;
     }
 
@@ -34,7 +34,7 @@ class PM2Manager
      */
     public function getVersion(): ?string
     {
-        $output = @shell_exec(escapeshellcmd($this->pm2Path) . ' -v 2>&1');
+        $output = \safeShellExec(escapeshellcmd($this->pm2Path) . ' -v 2>&1');
         return $output ? trim((string)$output) : null;
     }
 
@@ -48,7 +48,7 @@ class PM2Manager
         }
 
         $cmd = escapeshellcmd($this->pm2Path) . ' jlist 2>&1';
-        $json = @shell_exec($cmd);
+        $json = \safeShellExec($cmd);
         if (!$json) {
             return [];
         }
@@ -120,7 +120,7 @@ class PM2Manager
         }
 
         $cmd = sprintf('%s %s %s 2>&1', escapeshellcmd($this->pm2Path), escapeshellarg($action), escapeshellarg($target));
-        $output = @shell_exec($cmd);
+        $output = \safeShellExec($cmd);
 
         return [
             'success' => true,
@@ -152,7 +152,7 @@ class PM2Manager
         }
         $cmd .= ' 2>&1';
 
-        $output = @shell_exec($cmd);
+        $output = \safeShellExec($cmd);
         return [
             'success' => true,
             'output' => trim((string)$output)
@@ -174,7 +174,7 @@ class PM2Manager
 
         $lines = max(1, min(500, $lines));
         $cmd = sprintf('%s logs %s --lines %d --nostream 2>&1', escapeshellcmd($this->pm2Path), escapeshellarg($target), $lines);
-        $output = @shell_exec($cmd);
+        $output = \safeShellExec($cmd);
 
         // Strip ANSI escape sequences for clean browser output
         $clean = preg_replace('/\x1b\[[0-9;]*[mGKB]/', '', (string)$output) ?: 'No log output returned.';
@@ -186,13 +186,13 @@ class PM2Manager
      */
     public function autoInstall(): array
     {
-        $npmPath = trim((string)@shell_exec('which npm 2>/dev/null'));
+        $npmPath = trim((string)\safeShellExec('which npm 2>/dev/null'));
         if (empty($npmPath)) {
             return ['success' => false, 'error' => 'Node.js / npm is not installed on this server. Please install Node.js and npm first.'];
         }
 
         $cmd = 'npm install -g pm2 2>&1';
-        $output = @shell_exec($cmd);
+        $output = \safeShellExec($cmd);
 
         if ($this->isInstalled()) {
             return ['success' => true, 'message' => 'PM2 installed successfully globally via npm!', 'output' => $output];
@@ -274,7 +274,7 @@ class PM2Manager
         $cmdParts[] = escapeshellcmd($this->pm2Path) . ' save 2>&1';
 
         $fullCmd = implode(' ', $cmdParts);
-        $output = @shell_exec($fullCmd);
+        $output = \safeShellExec($fullCmd);
 
         return [
             'success' => true,

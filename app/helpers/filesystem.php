@@ -105,3 +105,110 @@ if (!function_exists('ensureDirExists')) {
         }
     }
 }
+
+if (!function_exists('safeShellExec')) {
+    /**
+     * Safely executes a shell command with automatic fallback cascading across available PHP execution mechanisms.
+     * Prevents fatal uncaught errors when shell_exec is disabled in php.ini.
+     */
+    function safeShellExec(string $command): ?string
+    {
+        // 1. Try shell_exec if function exists
+        if (function_exists('shell_exec')) {
+            try {
+                $res = @shell_exec($command);
+                if ($res !== false && $res !== null) {
+                    return $res;
+                }
+            } catch (\Throwable $e) {}
+        }
+
+        // 2. Try exec if shell_exec is disabled or failed
+        if (function_exists('exec')) {
+            try {
+                $output = [];
+                $returnVar = -1;
+                @exec($command, $output, $returnVar);
+                if (!empty($output) || $returnVar === 0) {
+                    return implode("\n", $output);
+                }
+            } catch (\Throwable $e) {}
+        }
+
+        // 3. Try proc_open if exec & shell_exec are disabled
+        if (function_exists('proc_open')) {
+            try {
+                $descriptorspec = [
+                    0 => ["pipe", "r"],
+                    1 => ["pipe", "w"],
+                    2 => ["pipe", "w"]
+                ];
+                $process = @proc_open($command, $descriptorspec, $pipes);
+                if (is_resource($process)) {
+                    fclose($pipes[0]);
+                    $stdout = stream_get_contents($pipes[1]);
+                    fclose($pipes[1]);
+                    fclose($pipes[2]);
+                    proc_close($process);
+                    return $stdout !== false ? $stdout : null;
+                }
+            } catch (\Throwable $e) {}
+        }
+
+        // 4. Try passthru
+        if (function_exists('passthru')) {
+            try {
+                ob_start();
+                @passthru($command);
+                $res = ob_get_clean();
+                if ($res !== false && $res !== '') {
+                    return $res;
+                }
+            } catch (\Throwable $e) {}
+        }
+
+        // 5. Try popen
+        if (function_exists('popen')) {
+            try {
+                $handle = @popen($command, 'r');
+                if ($handle) {
+                    $read = '';
+                    while (!feof($handle)) {
+                        $read .= fread($handle, 2096);
+                    }
+                    pclose($handle);
+                    return $read;
+                }
+            } catch (\Throwable $e) {}
+        }
+
+        return null;
+    }
+}
+
+if (!function_exists('safeExec')) {
+    /**
+     * Safely executes a command and populates output array and exit code.
+     */
+    function safeExec(string $command, array &$output = [], int &$returnVar = 0): bool
+    {
+        $output = [];
+        $returnVar = 1;
+
+        if (function_exists('exec')) {
+            try {
+                @exec($command, $output, $returnVar);
+                return $returnVar === 0;
+            } catch (\Throwable $e) {}
+        }
+
+        $res = safeShellExec($command);
+        if ($res !== null) {
+            $output = explode("\n", rtrim($res));
+            $returnVar = 0;
+            return true;
+        }
+
+        return false;
+    }
+}

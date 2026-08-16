@@ -66,7 +66,7 @@ $appCpuPercent = 0.0;
 
 if ($appPid) {
     // Try ps command for current PHP server process
-    $psOutput = @shell_exec("ps -p {$appPid} -o %cpu,rss 2>/dev/null");
+    $psOutput = safeShellExec("ps -p {$appPid} -o %cpu,rss 2>/dev/null");
     if ($psOutput) {
         $lines = explode("\n", trim($psOutput));
         if (isset($lines[1])) {

@@ -113,7 +113,7 @@ class BackupService
                 );
             }
 
-            exec($cmd, $output, $returnVar);
+            \safeExec($cmd, $output, $returnVar);
 
             if (file_exists($tempCnf)) {
                 @unlink($tempCnf);

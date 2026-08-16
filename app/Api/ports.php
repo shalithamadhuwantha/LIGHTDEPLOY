@@ -16,7 +16,7 @@ if (!$authService->isAuthenticated()) {
 }
 
 // 1. Fetch listening ports from Linux system using ss, netstat, or lsof
-$output = shell_exec('ss -tulpn 2>/dev/null || netstat -tulpn 2>/dev/null || lsof -i -P -n 2>/dev/null') ?? '';
+$output = safeShellExec('ss -tulpn 2>/dev/null || netstat -tulpn 2>/dev/null || lsof -i -P -n 2>/dev/null') ?? '';
 
 $openPorts = [];
 $usedPortNumbers = [];

@@ -190,9 +190,9 @@ class DeploymentRunner
                     @posix_kill($pid, SIGKILL);
                 }
             } else {
-                exec("kill -15 $pid 2>/dev/null");
+                \safeExec("kill -15 $pid 2>/dev/null");
                 usleep(500000);
-                exec("kill -9 $pid 2>/dev/null");
+                \safeExec("kill -9 $pid 2>/dev/null");
             }
         }
 
