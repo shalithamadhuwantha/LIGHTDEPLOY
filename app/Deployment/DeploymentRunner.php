@@ -73,7 +73,17 @@ class DeploymentRunner
         $pid = 0;
         $process = null;
 
-        if (function_exists('proc_open')) {
+        // Export environment variables for the child process
+        $envExport = '';
+        foreach ($env as $k => $v) {
+            $kClean = preg_replace('/[^a-zA-Z0-9_]/', '', (string)$k);
+            if (!empty($kClean)) {
+                $envExport .= "export {$kClean}=" . escapeshellarg((string)$v) . "; ";
+            }
+        }
+
+        // Strategy 1: proc_open (preferred — gives us a real process resource)
+        if (isFunctionAvailable('proc_open')) {
             try {
                 $process = @proc_open(['/bin/bash', $scriptPath], $descriptors, $pipes, $workDir, $env);
                 if (is_resource($process)) {
@@ -81,27 +91,74 @@ class DeploymentRunner
                     $status = proc_get_status($process);
                     $pid = (int)($status['pid'] ?? 0);
                 }
-            } catch (\Throwable $e) {}
+            } catch (\Throwable $e) {
+                @file_put_contents($streamFile, "[" . date('H:i:s') . "] [DEBUG] proc_open unavailable: " . $e->getMessage() . "\n", FILE_APPEND);
+            }
         }
 
-        // Fallback execution when proc_open is disabled in php.ini
+        // Strategy 2: nohup + PID file (most reliable shell fallback)
+        if ($pid <= 0) {
+            $tmpPidFile = sys_get_temp_dir() . '/lightdeploy_pid_' . $deploymentId . '.tmp';
+            $cmdStr = sprintf(
+                'cd %s && %s nohup /bin/bash %s >> %s 2>&1 & echo $! > %s',
+                escapeshellarg($workDir),
+                $envExport,
+                escapeshellarg($scriptPath),
+                escapeshellarg($streamFile),
+                escapeshellarg($tmpPidFile)
+            );
+            safeShellExec($cmdStr);
+            // Give the OS a moment to write the PID file
+            usleep(200000);
+            if (file_exists($tmpPidFile)) {
+                $pid = (int)trim((string)@file_get_contents($tmpPidFile));
+                @unlink($tmpPidFile);
+            }
+        }
+
+        // Strategy 3: Direct background exec with echo $!
         if ($pid <= 0) {
             $cmdStr = sprintf(
-                'cd %s && /bin/bash %s >> %s 2>&1 & echo $!',
+                'cd %s && %s /bin/bash %s >> %s 2>&1 & echo $!',
                 escapeshellarg($workDir),
+                $envExport,
                 escapeshellarg($scriptPath),
                 escapeshellarg($streamFile)
             );
             $pidStr = safeShellExec($cmdStr);
-            $pid = (int)trim((string)$pidStr);
+            if ($pidStr !== null) {
+                // The PID might be on the last non-empty line
+                $lines = array_filter(explode("\n", trim($pidStr)), 'strlen');
+                $pid = (int)trim(end($lines) ?: '0');
+            }
+        }
+
+        // Strategy 4: Write a wrapper script that records its own PID
+        if ($pid <= 0) {
+            $wrapperScript = sys_get_temp_dir() . '/lightdeploy_wrapper_' . $deploymentId . '.sh';
+            $wrapperContent = "#!/bin/bash\n" .
+                "echo \$\$ > " . escapeshellarg($pidFile) . "\n" .
+                $envExport . "\n" .
+                "cd " . escapeshellarg($workDir) . "\n" .
+                "/bin/bash " . escapeshellarg($scriptPath) . " >> " . escapeshellarg($streamFile) . " 2>&1\n";
+            @file_put_contents($wrapperScript, $wrapperContent);
+            @chmod($wrapperScript, 0755);
+
+            safeShellExec("nohup /bin/bash {$wrapperScript} > /dev/null 2>&1 &");
+            usleep(500000);
+
+            if (file_exists($pidFile)) {
+                $pid = (int)trim((string)@file_get_contents($pidFile));
+            }
+            @unlink($wrapperScript);
         }
 
         if ($pid <= 0) {
-            @file_put_contents($streamFile, "[" . date('H:i:s') . "] [ERROR] Failed to spawn deployment process for script {$scriptPath}.\n", FILE_APPEND);
+            @file_put_contents($streamFile, "[" . date('H:i:s') . "] [ERROR] All process spawn strategies failed for script {$scriptPath}. Check server php.ini disable_functions.\n", FILE_APPEND);
             return [
                 'success' => false,
                 'pid' => 0,
-                'error' => 'Failed to spawn deployment process resource.'
+                'error' => 'Failed to spawn deployment process resource. All execution strategies exhausted. Please check php.ini disable_functions on your server.'
             ];
         }
 

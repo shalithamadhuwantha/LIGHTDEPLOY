@@ -220,19 +220,57 @@ class PM2Manager
      */
     public function autoInstall(): array
     {
-        $npmPath = trim((string)\safeShellExec('which npm 2>/dev/null'));
+        $npmPath = $this->findNpmPath();
         if (empty($npmPath)) {
             return ['success' => false, 'error' => 'Node.js / npm is not installed on this server. Please install Node.js and npm first.'];
         }
 
-        $cmd = 'npm install -g pm2 2>&1';
+        $cmd = escapeshellcmd($npmPath) . ' install -g pm2 2>&1';
         $output = \safeShellExec($cmd);
+
+        // Re-discover pm2 path after install
+        $this->__construct();
 
         if ($this->isInstalled()) {
             return ['success' => true, 'message' => 'PM2 installed successfully globally via npm!', 'output' => $output];
         }
 
         return ['success' => false, 'error' => 'PM2 installation failed. Output: ' . substr((string)$output, 0, 300)];
+    }
+
+    /**
+     * Discover npm binary path across system and NVM installations
+     */
+    private function findNpmPath(): string
+    {
+        // 1. Try `which npm`
+        $path = trim((string)\safeShellExec('which npm 2>/dev/null'));
+        if (!empty($path) && file_exists($path)) {
+            return $path;
+        }
+
+        // 2. Search common locations and NVM paths
+        $nvmPaths = array_merge(
+            glob('/root/.nvm/versions/node/*/bin/npm') ?: [],
+            glob((getenv('HOME') ?: '/root') . '/.nvm/versions/node/*/bin/npm') ?: [],
+            glob('/home/*/.nvm/versions/node/*/bin/npm') ?: []
+        );
+
+        $candidates = array_merge([
+            '/usr/local/bin/npm',
+            '/usr/bin/npm',
+            '/opt/node/bin/npm',
+            getenv('HOME') . '/.npm-global/bin/npm',
+            '/root/.npm-global/bin/npm'
+        ], $nvmPaths);
+
+        foreach ($candidates as $candidate) {
+            if (!empty($candidate) && file_exists($candidate) && is_executable($candidate)) {
+                return $candidate;
+            }
+        }
+
+        return '';
     }
 
     /**

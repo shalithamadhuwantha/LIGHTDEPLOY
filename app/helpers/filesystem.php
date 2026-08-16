@@ -106,15 +106,35 @@ if (!function_exists('ensureDirExists')) {
     }
 }
 
+if (!function_exists('isFunctionAvailable')) {
+    /**
+     * Checks if a PHP function is both defined AND not disabled in php.ini.
+     * function_exists() alone returns true for disabled functions in PHP 8+,
+     * which causes fatal uncaught Error exceptions when the function is called.
+     */
+    function isFunctionAvailable(string $func): bool
+    {
+        if (!function_exists($func)) {
+            return false;
+        }
+        $disabled = ini_get('disable_functions');
+        if ($disabled === false || $disabled === '') {
+            return true;
+        }
+        $disabledList = array_map('trim', explode(',', strtolower($disabled)));
+        return !in_array(strtolower($func), $disabledList, true);
+    }
+}
+
 if (!function_exists('safeShellExec')) {
     /**
      * Safely executes a shell command with automatic fallback cascading across available PHP execution mechanisms.
-     * Prevents fatal uncaught errors when shell_exec is disabled in php.ini.
+     * Prevents fatal uncaught errors when shell_exec/exec/proc_open are disabled in php.ini.
      */
     function safeShellExec(string $command): ?string
     {
-        // 1. Try shell_exec if function exists
-        if (function_exists('shell_exec')) {
+        // 1. Try shell_exec
+        if (isFunctionAvailable('shell_exec')) {
             try {
                 $res = @shell_exec($command);
                 if ($res !== false && $res !== null) {
@@ -123,8 +143,8 @@ if (!function_exists('safeShellExec')) {
             } catch (\Throwable $e) {}
         }
 
-        // 2. Try exec if shell_exec is disabled or failed
-        if (function_exists('exec')) {
+        // 2. Try exec
+        if (isFunctionAvailable('exec')) {
             try {
                 $output = [];
                 $returnVar = -1;
@@ -135,8 +155,8 @@ if (!function_exists('safeShellExec')) {
             } catch (\Throwable $e) {}
         }
 
-        // 3. Try proc_open if exec & shell_exec are disabled
-        if (function_exists('proc_open')) {
+        // 3. Try proc_open
+        if (isFunctionAvailable('proc_open')) {
             try {
                 $descriptorspec = [
                     0 => ["pipe", "r"],
@@ -156,7 +176,7 @@ if (!function_exists('safeShellExec')) {
         }
 
         // 4. Try passthru
-        if (function_exists('passthru')) {
+        if (isFunctionAvailable('passthru')) {
             try {
                 ob_start();
                 @passthru($command);
@@ -168,7 +188,7 @@ if (!function_exists('safeShellExec')) {
         }
 
         // 5. Try popen
-        if (function_exists('popen')) {
+        if (isFunctionAvailable('popen')) {
             try {
                 $handle = @popen($command, 'r');
                 if ($handle) {
@@ -195,7 +215,7 @@ if (!function_exists('safeExec')) {
         $output = [];
         $returnVar = 1;
 
-        if (function_exists('exec')) {
+        if (isFunctionAvailable('exec')) {
             try {
                 @exec($command, $output, $returnVar);
                 return $returnVar === 0;
@@ -212,3 +232,4 @@ if (!function_exists('safeExec')) {
         return false;
     }
 }
+
