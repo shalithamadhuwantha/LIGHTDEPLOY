@@ -4,13 +4,22 @@ This guide covers installing LightDeploy on a Linux server running aaPanel, Ngin
 
 ---
 
-## Requirements
+## Requirements & Interactive Auto-Installer
 
-- **Operating System**: Linux (Ubuntu 20.04+, Debian 10+, CentOS 7+/Rocky Linux, AlmaLinux)
+LightDeploy includes an automated **Dependency & Prerequisite Scanner**. When running `./install.sh`, it automatically checks system binaries, PHP version, and PHP extensions, presenting a clear `[HAVE]` vs `[NOT HAVE]` report.
+
+If missing dependencies are detected, the installer will prompt:
+`May I install the missing dependencies automatically? (y/N):`
+
+If accepted, it detects your package manager (`apt-get`, `dnf`, `yum`, `apk`, `pacman`) and installs the required packages.
+
+### System Prerequisites
+- **Operating System**: Linux (Ubuntu 20.04+, Debian 10+, CentOS 7+/Rocky Linux, AlmaLinux, Alpine)
 - **Web Server**: Nginx or Apache (managed by aaPanel or standalone)
 - **PHP**: PHP 8.0, 8.1, 8.2, 8.3 with PHP-FPM
-- **PHP Extensions**: `json`, `session`, `curl`
-- **PHP Functions**: `proc_open` must be enabled (not in `disable_functions`)
+- **PHP Extensions**: `json`, `session`, `curl` (Required), `mbstring`, `zip` (Recommended)
+- **PHP Functions**: `proc_open` must be enabled (not listed in `disable_functions` in `php.ini`)
+- **System Tools**: `git`, `curl`, `rsync`, `tar`, `unzip`
 
 ---
 
@@ -29,7 +38,7 @@ LightDeploy can be run in two modes:
 # Navigate to project directory
 cd /home/shalith/Documents/CYBERnetic/project
 
-# Run local setup
+# Run local setup wizard
 ./install.sh --local
 
 # Start built-in local development web server
@@ -55,9 +64,10 @@ sudo ./install.sh --production
 ```
 
 The installer will:
-1. Validate system PHP requirements.
-2. Ensure `proc_open()` is enabled.
-3. Deploy files to `/opt/lightdeploy`.
+1. Scan all system tools, PHP version, functions, and extensions (`[HAVE]` / `[NOT HAVE]`).
+2. Prompt to auto-install any missing dependencies using your OS package manager.
+3. Verify that `proc_open()` is enabled in `php.ini`.
+4. Deploy files to `/opt/lightdeploy`.
 4. Set directory permissions (`755` for public, `700` for configs/logs).
 5. Generate a random password for the default `admin` account.
 

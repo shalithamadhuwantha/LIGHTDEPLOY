@@ -1,6 +1,6 @@
 #!/bin/bash
 # ==============================================================================
-# LIGHTDEPLOY INSTALLATION & SETUP WIZARD
+# LIGHTDEPLOY INSTALLATION & DEPENDENCY WIZARD
 # Supports both Local Machine Development Testing & Production Server Installation
 # ==============================================================================
 
@@ -10,6 +10,7 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
 BLUE='\033[0;34m'
+BOLD='\033[1m'
 NC='\033[0m'
 
 SRC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -35,15 +36,256 @@ if [ -z "$MODE" ]; then
 fi
 
 # ------------------------------------------------------------------------------
+# DEPENDENCY SCANNING & INTERACTIVE AUTO-INSTALLATION ENGINE
+# ------------------------------------------------------------------------------
+
+MISSING_CRITICAL=0
+MISSING_OPTIONAL=0
+MISSING_PKGS_DEBIAN=()
+MISSING_PKGS_REDHAT=()
+MISSING_PKGS_ALPINE=()
+MISSING_DESCRIPTIONS=()
+
+scan_dependencies() {
+    MISSING_CRITICAL=0
+    MISSING_OPTIONAL=0
+    MISSING_PKGS_DEBIAN=()
+    MISSING_PKGS_REDHAT=()
+    MISSING_PKGS_ALPINE=()
+    MISSING_DESCRIPTIONS=()
+
+    echo -e "\n${BLUE}====================================================${NC}"
+    echo -e "${BLUE}        DEPENDENCY & PREREQUISITE SCANNER          ${NC}"
+    echo -e "${BLUE}====================================================${NC}\n"
+
+    echo -e "${BOLD}1. System Binaries & CLI Tools:${NC}"
+
+    # PHP CLI
+    if command -v php &> /dev/null; then
+        PHP_VER=$(php -r 'echo PHP_MAJOR_VERSION . "." . PHP_MINOR_VERSION . "." . PHP_RELEASE_VERSION;' 2>/dev/null || echo "Unknown")
+        PHP_MAJOR=$(php -r 'echo PHP_MAJOR_VERSION;' 2>/dev/null || echo "0")
+        if [ "$PHP_MAJOR" -ge 8 ]; then
+            echo -e "  [ ${GREEN}HAVE${NC} ] PHP CLI (Version: ${PHP_VER} >= 8.0)"
+        else
+            echo -e "  [ ${RED}NOT HAVE${NC} ] PHP CLI Version >= 8.0 (Found ${PHP_VER})"
+            MISSING_CRITICAL=$((MISSING_CRITICAL + 1))
+            MISSING_DESCRIPTIONS+=("PHP CLI (Version 8.0+ required)")
+            MISSING_PKGS_DEBIAN+=("php-cli")
+            MISSING_PKGS_REDHAT+=("php-cli")
+            MISSING_PKGS_ALPINE+=("php81-cli")
+        fi
+    else
+        echo -e "  [ ${RED}NOT HAVE${NC} ] PHP CLI (Not installed)"
+        MISSING_CRITICAL=$((MISSING_CRITICAL + 1))
+        MISSING_DESCRIPTIONS+=("PHP CLI binary")
+        MISSING_PKGS_DEBIAN+=("php-cli")
+        MISSING_PKGS_REDHAT+=("php-cli")
+        MISSING_PKGS_ALPINE+=("php81-cli")
+    fi
+
+    # Git
+    if command -v git &> /dev/null; then
+        echo -e "  [ ${GREEN}HAVE${NC} ] git"
+    else
+        echo -e "  [ ${RED}NOT HAVE${NC} ] git"
+        MISSING_OPTIONAL=$((MISSING_OPTIONAL + 1))
+        MISSING_DESCRIPTIONS+=("git command-line tool")
+        MISSING_PKGS_DEBIAN+=("git")
+        MISSING_PKGS_REDHAT+=("git")
+        MISSING_PKGS_ALPINE+=("git")
+    fi
+
+    # Curl binary
+    if command -v curl &> /dev/null; then
+        echo -e "  [ ${GREEN}HAVE${NC} ] curl"
+    else
+        echo -e "  [ ${RED}NOT HAVE${NC} ] curl"
+        MISSING_OPTIONAL=$((MISSING_OPTIONAL + 1))
+        MISSING_DESCRIPTIONS+=("curl command-line tool")
+        MISSING_PKGS_DEBIAN+=("curl")
+        MISSING_PKGS_REDHAT+=("curl")
+        MISSING_PKGS_ALPINE+=("curl")
+    fi
+
+    # Rsync
+    if command -v rsync &> /dev/null; then
+        echo -e "  [ ${GREEN}HAVE${NC} ] rsync"
+    else
+        echo -e "  [ ${RED}NOT HAVE${NC} ] rsync"
+        MISSING_OPTIONAL=$((MISSING_OPTIONAL + 1))
+        MISSING_DESCRIPTIONS+=("rsync file synchronizer")
+        MISSING_PKGS_DEBIAN+=("rsync")
+        MISSING_PKGS_REDHAT+=("rsync")
+        MISSING_PKGS_ALPINE+=("rsync")
+    fi
+
+    # Tar
+    if command -v tar &> /dev/null; then
+        echo -e "  [ ${GREEN}HAVE${NC} ] tar"
+    else
+        echo -e "  [ ${RED}NOT HAVE${NC} ] tar"
+        MISSING_OPTIONAL=$((MISSING_OPTIONAL + 1))
+        MISSING_DESCRIPTIONS+=("tar archive utility")
+        MISSING_PKGS_DEBIAN+=("tar")
+        MISSING_PKGS_REDHAT+=("tar")
+        MISSING_PKGS_ALPINE+=("tar")
+    fi
+
+    # Unzip
+    if command -v unzip &> /dev/null; then
+        echo -e "  [ ${GREEN}HAVE${NC} ] unzip"
+    else
+        echo -e "  [ ${RED}NOT HAVE${NC} ] unzip"
+        MISSING_OPTIONAL=$((MISSING_OPTIONAL + 1))
+        MISSING_DESCRIPTIONS+=("unzip archive utility")
+        MISSING_PKGS_DEBIAN+=("unzip")
+        MISSING_PKGS_REDHAT+=("unzip")
+        MISSING_PKGS_ALPINE+=("unzip")
+    fi
+
+    echo -e "\n${BOLD}2. PHP Capabilities & Extensions:${NC}"
+
+    if command -v php &> /dev/null; then
+        # proc_open check
+        if php -r 'exit(function_exists("proc_open") ? 0 : 1);' 2>/dev/null; then
+            echo -e "  [ ${GREEN}HAVE${NC} ] PHP function: proc_open()"
+        else
+            echo -e "  [ ${RED}NOT HAVE${NC} ] PHP function: proc_open() (Disabled in php.ini)"
+            MISSING_CRITICAL=$((MISSING_CRITICAL + 1))
+            MISSING_DESCRIPTIONS+=("proc_open() function (Enabled in php.ini)")
+        fi
+
+        # Required & Recommended PHP Extensions
+        REQUIRED_EXTS=("json" "session" "curl" "mbstring" "zip")
+        for ext in "${REQUIRED_EXTS[@]}"; do
+            if php -m 2>/dev/null | grep -qi "^${ext}$"; then
+                echo -e "  [ ${GREEN}HAVE${NC} ] PHP extension: ${ext}"
+            else
+                echo -e "  [ ${RED}NOT HAVE${NC} ] PHP extension: ${ext}"
+                if [[ "$ext" == "json" || "$ext" == "session" || "$ext" == "curl" ]]; then
+                    MISSING_CRITICAL=$((MISSING_CRITICAL + 1))
+                else
+                    MISSING_OPTIONAL=$((MISSING_OPTIONAL + 1))
+                fi
+                MISSING_DESCRIPTIONS+=("PHP extension: ${ext}")
+                MISSING_PKGS_DEBIAN+=("php-${ext}")
+                MISSING_PKGS_REDHAT+=("php-${ext}")
+                MISSING_PKGS_ALPINE+=("php81-${ext}")
+            fi
+        done
+    else
+        echo -e "  [ ${RED}NOT HAVE${NC} ] Unable to check PHP capabilities (PHP binary missing)"
+    fi
+}
+
+install_missing_dependencies() {
+    TOTAL_MISSING=$((MISSING_CRITICAL + MISSING_OPTIONAL))
+    if [ "$TOTAL_MISSING" -eq 0 ]; then
+        echo -e "\n${GREEN}[OK] All dependencies and prerequisites are satisfied!${NC}"
+        return 0
+    fi
+
+    echo -e "\n${YELLOW}----------------------------------------------------${NC}"
+    echo -e "${YELLOW}[!] MISSING DEPENDENCIES SUMMARY [NOT HAVE]:${NC}"
+    for desc in "${MISSING_DESCRIPTIONS[@]}"; do
+        echo -e "  - ${desc}"
+    done
+    echo -e "${YELLOW}----------------------------------------------------${NC}"
+
+    read -p "May I install the missing dependencies automatically? (y/N): " MAY_INSTALL
+    if [[ "$MAY_INSTALL" != "y" && "$MAY_INSTALL" != "Y" ]]; then
+        echo -e "${YELLOW}[INFO] Automatic installation skipped by user.${NC}"
+        if [ "$MISSING_CRITICAL" -gt 0 ]; then
+            echo -e "${RED}[ERROR] Critical dependencies are missing. Cannot proceed without installation.${NC}"
+            exit 1
+        fi
+        return 0
+    fi
+
+    # Detect Package Manager
+    PKG_MGR=""
+    SUDO=""
+    if [ "$EUID" -ne 0 ]; then
+        if command -v sudo &> /dev/null; then
+            SUDO="sudo"
+        else
+            echo -e "${RED}[ERROR] Root privileges or sudo is required to install system packages.${NC}"
+            exit 1
+        fi
+    fi
+
+    if command -v apt-get &> /dev/null; then
+        PKG_MGR="apt-get"
+        INSTALL_PKGS=("${MISSING_PKGS_DEBIAN[@]}")
+    elif command -v dnf &> /dev/null; then
+        PKG_MGR="dnf"
+        INSTALL_PKGS=("${MISSING_PKGS_REDHAT[@]}")
+    elif command -v yum &> /dev/null; then
+        PKG_MGR="yum"
+        INSTALL_PKGS=("${MISSING_PKGS_REDHAT[@]}")
+    elif command -v apk &> /dev/null; then
+        PKG_MGR="apk"
+        INSTALL_PKGS=("${MISSING_PKGS_ALPINE[@]}")
+    elif command -v pacman &> /dev/null; then
+        PKG_MGR="pacman"
+        INSTALL_PKGS=("${MISSING_PKGS_DEBIAN[@]}")
+    fi
+
+    if [ -z "$PKG_MGR" ]; then
+        echo -e "${RED}[ERROR] Operating system package manager could not be auto-detected.${NC}"
+        echo -e "Please install the missing dependencies manually and re-run install.sh."
+        if [ "$MISSING_CRITICAL" -gt 0 ]; then
+            exit 1
+        fi
+        return 0
+    fi
+
+    # Deduplicate package list
+    UNIQUE_PKGS=($(echo "${INSTALL_PKGS[@]}" | tr ' ' '\n' | sort -u | tr '\n' ' '))
+
+    if [ ${#UNIQUE_PKGS[@]} -eq 0 ]; then
+        echo -e "${YELLOW}[INFO] No installable system packages mapped. Please resolve missing functions/ini settings manually.${NC}"
+        return 0
+    fi
+
+    echo -e "\n${YELLOW}[INSTALLING] Triggering package installation using ${PKG_MGR}...${NC}"
+    echo -e "Packages to install: ${GREEN}${UNIQUE_PKGS[*]}${NC}"
+
+    case "$PKG_MGR" in
+        apt-get)
+            $SUDO apt-get update -y
+            $SUDO apt-get install -y "${UNIQUE_PKGS[@]}"
+            ;;
+        dnf|yum)
+            $SUDO "$PKG_MGR" install -y "${UNIQUE_PKGS[@]}"
+            ;;
+        apk)
+            $SUDO apk add --no-cache "${UNIQUE_PKGS[@]}"
+            ;;
+        pacman)
+            $SUDO pacman -S --noconfirm "${UNIQUE_PKGS[@]}"
+            ;;
+    esac
+
+    echo -e "\n${GREEN}[OK] Package installation completed! Re-scanning dependencies...${NC}"
+    scan_dependencies
+
+    if [ "$MISSING_CRITICAL" -gt 0 ]; then
+        echo -e "${RED}[ERROR] Critical dependencies are still missing after package installation attempt.${NC}"
+        echo -e "If proc_open() is listed as disabled, please remove 'proc_open' from 'disable_functions' in your php.ini."
+        exit 1
+    fi
+}
+
+# Run Pre-flight Dependency Scan & Auto-Installer
+scan_dependencies
+install_missing_dependencies
+
+# ------------------------------------------------------------------------------
 # MODE 1: LOCAL DEVELOPMENT & TESTING MODE
 # ------------------------------------------------------------------------------
 if [ "$MODE" == "1" ]; then
     echo -e "\n${YELLOW}[LOCAL SETUP] Initializing LightDeploy Local Development Workspace...${NC}"
-
-    if ! command -v php &> /dev/null; then
-        echo -e "${RED}[ERROR] PHP CLI is not installed or not in system PATH.${NC}"
-        exit 1
-    fi
 
     # Create local directories
     mkdir -p "$SRC_DIR"/{runtime/{locks,jobs,pids,streams},logs/{deployments,security,application},releases}
@@ -84,40 +326,8 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
-# 2. System PHP Audit
-echo -e "\n${YELLOW}[1/6] Auditing System & PHP Dependencies...${NC}"
-
-if ! command -v php &> /dev/null; then
-    echo -e "${RED}[ERROR] PHP is not installed or not in system PATH.${NC}"
-    exit 1
-fi
-
-PHP_VER=$(php -r 'echo PHP_MAJOR_VERSION . "." . PHP_MINOR_VERSION;')
-echo -e "${GREEN}[OK] Detected PHP Version: ${PHP_VER}${NC}"
-
-PHP_MAJOR=$(php -r 'echo PHP_MAJOR_VERSION;')
-if [ "$PHP_MAJOR" -lt 8 ]; then
-    echo -e "${RED}[ERROR] LightDeploy requires PHP 8.0 or higher (Found PHP ${PHP_VER}).${NC}"
-    exit 1
-fi
-
-REQUIRED_EXTS=("json" "session" "curl")
-for ext in "${REQUIRED_EXTS[@]}"; do
-    if ! php -m | grep -qi "$ext"; then
-        echo -e "${RED}[ERROR] Missing required PHP extension: ${ext}${NC}"
-        exit 1
-    fi
-done
-
-if php -r 'exit(function_exists("proc_open") ? 0 : 1);'; then
-    echo -e "${GREEN}[OK] Required PHP execution function proc_open() is enabled.${NC}"
-else
-    echo -e "${RED}[ERROR] proc_open() is disabled in php.ini. Remove proc_open from disable_functions.${NC}"
-    exit 1
-fi
-
-# 3. Create System User
-echo -e "\n${YELLOW}[2/6] Configuring Service User (${SERVICE_USER})...${NC}"
+# 2. Configure Service User
+echo -e "\n${YELLOW}[1/5] Configuring Service User (${SERVICE_USER})...${NC}"
 if ! id "$SERVICE_USER" &>/dev/null; then
     useradd -r -s /bin/false -d "$TARGET_DIR" "$SERVICE_USER"
     echo -e "${GREEN}[OK] Created dedicated system user '${SERVICE_USER}'.${NC}"
@@ -125,8 +335,8 @@ else
     echo -e "${GREEN}[OK] System user '${SERVICE_USER}' already exists.${NC}"
 fi
 
-# 4. Copy Files
-echo -e "\n${YELLOW}[3/6] Deploying LightDeploy Files to ${TARGET_DIR}...${NC}"
+# 3. Copy Files
+echo -e "\n${YELLOW}[2/5] Deploying LightDeploy Files to ${TARGET_DIR}...${NC}"
 
 mkdir -p "$TARGET_DIR"/{app,public/assets,config,scripts,runtime/{locks,jobs,pids,streams},logs/{deployments,security,application},releases,tests}
 
@@ -137,8 +347,8 @@ cp -r "$SRC_DIR"/scripts/* "$TARGET_DIR"/scripts/
 cp -r "$SRC_DIR"/tests/* "$TARGET_DIR"/tests/
 cp "$SRC_DIR"/*.md "$TARGET_DIR"/ 2>/dev/null || true
 
-# 5. Security & Permissions
-echo -e "\n${YELLOW}[4/6] Setting Secure File Permissions...${NC}"
+# 4. Security & Permissions
+echo -e "\n${YELLOW}[3/5] Setting Secure File Permissions...${NC}"
 
 WEB_USER="www"
 if id "www-data" &>/dev/null; then
@@ -159,8 +369,8 @@ chmod +x "$TARGET_DIR"/scripts/*.sh 2>/dev/null || true
 
 echo -e "${GREEN}[OK] Permissions hardened: Only public/ is web-accessible.${NC}"
 
-# 6. Admin Credentials
-echo -e "\n${YELLOW}[5/6] Generating Production Administrator Account...${NC}"
+# 5. Admin Credentials
+echo -e "\n${YELLOW}[4/5] Generating Production Administrator Account...${NC}"
 ADMIN_PASS=$(head /dev/urandom | tr -dc A-Za-z0-9 | head -c 16)
 ADMIN_HASH=$(php -r "echo password_hash('${ADMIN_PASS}', PASSWORD_BCRYPT);")
 
@@ -177,8 +387,8 @@ cat <<EOF > "$TARGET_DIR/config/users.json"
 EOF
 chmod 600 "$TARGET_DIR/config/users.json"
 
-# 7. Sanity Check
-echo -e "\n${YELLOW}[6/6] Running Security Sanity Check...${NC}"
+# 6. Sanity Check
+echo -e "\n${YELLOW}[5/5] Running Security Sanity Check...${NC}"
 cd "$TARGET_DIR"
 if php tests/test_runner.php; then
     echo -e "${GREEN}[OK] Security Sanity Check PASSED!${NC}"
@@ -224,3 +434,4 @@ Nginx Block Example:
 NGINX_CONF
 
 echo -e "\nInstallation finished!"
+
