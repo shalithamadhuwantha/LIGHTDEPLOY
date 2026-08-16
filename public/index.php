@@ -80,8 +80,21 @@ $csrfToken = Csrf::getToken();
                 modal.style.setProperty('z-index', '100000', 'important');
             }
         }
-        function closeAddDbModal() {
-            var modal = document.getElementById('addDbModal');
+        function openUpdateSystemModal() {
+            var modal = document.getElementById('updateSystemModal');
+            if (modal) {
+                modal.classList.remove('hidden');
+                modal.style.setProperty('display', 'flex', 'important');
+                modal.style.setProperty('visibility', 'visible', 'important');
+                modal.style.setProperty('opacity', '1', 'important');
+                modal.style.setProperty('z-index', '99999', 'important');
+            }
+            if (window.checkSystemUpdates) {
+                window.checkSystemUpdates();
+            }
+        }
+        function closeUpdateSystemModal() {
+            var modal = document.getElementById('updateSystemModal');
             if (modal) {
                 modal.classList.add('hidden');
                 modal.style.setProperty('display', 'none', 'important');
@@ -98,7 +111,7 @@ $csrfToken = Csrf::getToken();
                     <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
                 </svg>
                 <span class="brand-title">LIGHTDEPLOY</span>
-                <span class="badge badge-version">v1.0</span>
+                <span class="badge badge-version">v1.2</span>
             </div>
         </div>
 
@@ -126,8 +139,11 @@ $csrfToken = Csrf::getToken();
         </div>
 
         <div class="header-right">
-            <button id="headerDbBackupsBtn" class="btn btn-secondary btn-sm btn-db-backups" style="margin-right: 8px;" onclick="openDbBackupsModal()">🗄️ Database Backups</button>
-            <button id="headerViewPortsBtn" class="btn btn-secondary btn-sm btn-view-ports" style="margin-right: 8px;" onclick="openVpsPortsModal()">🌐 VPS Open Ports</button>
+            <button id="headerDbBackupsBtn" class="btn btn-secondary btn-sm btn-db-backups" style="margin-right: 6px;" onclick="openDbBackupsModal()">🗄️ Database Backups</button>
+            <button id="headerViewPortsBtn" class="btn btn-secondary btn-sm btn-view-ports" style="margin-right: 6px;" onclick="openVpsPortsModal()">🌐 VPS Ports</button>
+            <?php if (($user['role'] ?? '') === 'admin'): ?>
+                <button id="headerUpdateSystemBtn" class="btn btn-primary btn-sm" style="margin-right: 6px; background: linear-gradient(135deg, #059669, #10b981);" onclick="openUpdateSystemModal()">🔄 Update System</button>
+            <?php endif; ?>
             <div class="user-info">
                 <span class="user-name"><?= htmlspecialchars($user['name']) ?></span>
                 <span class="badge badge-role badge-role-<?= htmlspecialchars($user['role']) ?>"><?= strtoupper(htmlspecialchars($user['role'])) ?></span>
@@ -744,6 +760,53 @@ $csrfToken = Csrf::getToken();
                     <button type="submit" id="addDbSubmitBtn" class="btn btn-primary">Save Database Config</button>
                 </div>
             </form>
+        </div>
+    </div>
+    <!-- System Update from GitHub Modal -->
+    <div id="updateSystemModal" class="modal-overlay hidden">
+        <div class="modal-card" style="max-width: 580px;">
+            <div class="modal-header">
+                <div>
+                    <h3>🔄 GitHub Software Update Center</h3>
+                    <div class="modal-sub-info">Repository: <a href="https://github.com/shalithamadhuwantha/LIGHTDEPLOY" target="_blank" style="color: var(--accent-blue); text-decoration: underline;">shalithamadhuwantha/LIGHTDEPLOY</a></div>
+                </div>
+                <button class="modal-close-btn" onclick="closeUpdateSystemModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="alert-box alert-success" style="margin-bottom: 16px;">
+                    <strong>💡 Zero-Data-Loss Protection:</strong> Upgrading will pull the latest source code from GitHub while preserving all your configured websites, user logins, database settings, and custom scripts intact!
+                </div>
+
+                <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid var(--bg-card-border); padding: 16px; border-radius: var(--radius-md); margin-bottom: 16px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <span style="color: var(--text-muted); font-weight: 600; font-size: 0.85rem;">Installed Version</span>
+                        <span class="badge badge-version" style="font-size: 0.9rem;">v1.2</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <span style="color: var(--text-muted); font-weight: 600; font-size: 0.85rem;">Latest GitHub Commit (`main`)</span>
+                        <span id="updateRepoCommitVal" class="badge badge-version" style="font-size: 0.85rem; background: rgba(56, 189, 248, 0.15); color: #38bdf8;">Checking GitHub...</span>
+                    </div>
+                    <div id="updateCommitMsgBox" style="font-family: var(--font-mono); font-size: 0.78rem; color: var(--text-secondary); background: rgba(0,0,0,0.3); padding: 8px 10px; border-radius: 6px; margin-top: 8px;" class="hidden">
+                        --
+                    </div>
+                </div>
+
+                <!-- Terminal Output Window for Update Progress -->
+                <div id="updateTerminalContainer" class="terminal-container hidden" style="margin-top: 12px;">
+                    <div class="terminal-header">
+                        <span class="terminal-dot red"></span>
+                        <span class="terminal-dot yellow"></span>
+                        <span class="terminal-dot green"></span>
+                        <span class="terminal-title">system_upgrade_process.log</span>
+                    </div>
+                    <pre id="updateTerminalOutput" class="terminal-body" style="max-height: 200px; font-size: 0.75rem;">Initializing update procedure...</pre>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeUpdateSystemModal()">Close</button>
+                <button type="button" id="executeSystemUpdateBtn" class="btn btn-primary" onclick="window.triggerSystemUpdate()" style="background: linear-gradient(135deg, #059669, #10b981);">🚀 Update Now from GitHub</button>
+            </div>
         </div>
     </div>
 

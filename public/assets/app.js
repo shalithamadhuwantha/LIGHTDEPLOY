@@ -42,6 +42,56 @@ document.addEventListener('DOMContentLoaded', () => {
     const modalDeployAgainBtn = document.getElementById('modalDeployAgainBtn');
     const historyTableBody = document.getElementById('historyTableBody');
 
+    // Global Toast Notification System
+    function showToast(message, type = 'info') {
+        let toastContainer = document.getElementById('toastContainer');
+        if (!toastContainer) {
+            toastContainer = document.createElement('div');
+            toastContainer.id = 'toastContainer';
+            toastContainer.style.cssText = 'position: fixed; bottom: 20px; right: 20px; z-index: 999999; display: flex; flex-direction: column; gap: 8px; max-width: 380px; width: 100%; pointer-events: none;';
+            document.body.appendChild(toastContainer);
+        }
+
+        const toast = document.createElement('div');
+        toast.className = `toast toast-${type}`;
+        
+        let bgColor = '#1e293b';
+        let borderColor = '#3b82f6';
+        let icon = 'ℹ️';
+
+        if (type === 'success') {
+            bgColor = '#064e3b';
+            borderColor = '#10b981';
+            icon = '✅';
+        } else if (type === 'danger' || type === 'error') {
+            bgColor = '#7f1d1d';
+            borderColor = '#ef4444';
+            icon = '❌';
+        } else if (type === 'warning') {
+            bgColor = '#78350f';
+            borderColor = '#f59e0b';
+            icon = '⚠️';
+        }
+
+        toast.style.cssText = `background: ${bgColor}; border-left: 4px solid ${borderColor}; color: #f8fafc; padding: 12px 16px; border-radius: 6px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.5); font-size: 0.85rem; line-height: 1.4; opacity: 0; transform: translateY(10px); transition: all 0.3s ease; pointer-events: auto; font-family: var(--font-sans, sans-serif);`;
+        toast.innerHTML = `<strong>${icon} ${message}</strong>`;
+
+        toastContainer.appendChild(toast);
+
+        requestAnimationFrame(() => {
+            toast.style.opacity = '1';
+            toast.style.transform = 'translateY(0)';
+        });
+
+        setTimeout(() => {
+            toast.style.opacity = '0';
+            toast.style.transform = 'translateY(10px)';
+            setTimeout(() => toast.remove(), 300);
+        }, 4000);
+    }
+
+    window.showToast = showToast;
+
     // Helper: Standard Fetch Wrapper with CSRF header
     async function apiFetch(url, options = {}) {
         options.credentials = 'same-origin';
@@ -1530,6 +1580,87 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
+
+    // --------------------------------------------------------------------------
+    // 1-CLICK GITHUB SYSTEM UPDATER ENGINE
+    // --------------------------------------------------------------------------
+    window.checkSystemUpdates = async function() {
+        const repoCommitVal = document.getElementById('updateRepoCommitVal');
+        const commitMsgBox = document.getElementById('updateCommitMsgBox');
+        const executeBtn = document.getElementById('executeSystemUpdateBtn');
+        const termContainer = document.getElementById('updateTerminalContainer');
+        
+        if (!repoCommitVal) return;
+
+        repoCommitVal.textContent = 'Checking GitHub...';
+        repoCommitVal.style.background = 'rgba(56, 189, 248, 0.15)';
+        repoCommitVal.style.color = '#38bdf8';
+        if (commitMsgBox) commitMsgBox.classList.add('hidden');
+        if (termContainer) termContainer.classList.add('hidden');
+        if (executeBtn) {
+            executeBtn.disabled = false;
+            executeBtn.textContent = '🚀 Update Now from GitHub';
+        }
+
+        try {
+            const { ok, data } = await apiFetch('/api/update_system.php');
+            if (ok && data.success) {
+                if (data.latest_commit) {
+                    repoCommitVal.textContent = `${data.latest_commit.sha} (${data.latest_commit.date.substring(0,10)})`;
+                    if (commitMsgBox) {
+                        commitMsgBox.classList.remove('hidden');
+                        commitMsgBox.textContent = `Latest Commit: "${data.latest_commit.message}" by ${data.latest_commit.author}`;
+                    }
+                } else {
+                    repoCommitVal.textContent = 'Connected (main branch)';
+                }
+            } else {
+                repoCommitVal.textContent = 'GitHub Reachable';
+            }
+        } catch (err) {
+            repoCommitVal.textContent = 'Ready to sync';
+        }
+    };
+
+    window.triggerSystemUpdate = async function() {
+        const executeBtn = document.getElementById('executeSystemUpdateBtn');
+        const termContainer = document.getElementById('updateTerminalContainer');
+        const termOutput = document.getElementById('updateTerminalOutput');
+
+        if (!executeBtn || !termOutput) return;
+
+        executeBtn.disabled = true;
+        executeBtn.textContent = '⏳ Updating System...';
+        if (termContainer) termContainer.classList.remove('hidden');
+        termOutput.textContent = '🚀 Launching GitHub system updater...\nConnecting to GitHub repository...\n';
+
+        try {
+            const { ok, data } = await apiFetch('/api/update_system.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'update' })
+            });
+
+            if (ok && data.success) {
+                termOutput.textContent = data.logs || 'System updated successfully!';
+                showToast(data.message || 'LightDeploy updated successfully from GitHub!', 'success');
+                executeBtn.textContent = '✅ Update Complete!';
+                setTimeout(() => {
+                    window.location.reload();
+                }, 3000);
+            } else {
+                termOutput.textContent += `\n❌ UPDATE FAILED: ${data.message || 'Unknown error occurred.'}`;
+                showToast(data.message || 'Failed to update system from GitHub.', 'error');
+                executeBtn.disabled = false;
+                executeBtn.textContent = '🔄 Retry Update';
+            }
+        } catch (err) {
+            termOutput.textContent += `\n❌ NETWORK ERROR: ${err.message}`;
+            showToast('Network error during system update.', 'error');
+            executeBtn.disabled = false;
+            executeBtn.textContent = '🔄 Retry Update';
+        }
+    };
 
     // Initial Execution
     window.loadVpsPorts = loadVpsPorts;

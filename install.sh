@@ -21,20 +21,52 @@ echo -e "${BLUE}====================================================${NC}"
 echo -e "${BLUE}        LIGHTDEPLOY INSTALLATION WIZARD             ${NC}"
 echo -e "${BLUE}====================================================${NC}"
 
-# Check Mode Flag or Prompt User
+# Check Mode Flags or Prompt User
 MODE=""
-if [ "$1" == "--local" ]; then
-    MODE="1"
-elif [ "$1" == "--production" ]; then
-    MODE="2"
-fi
+UPDATE_MODE=0
+FRESH_INSTALL=0
+
+for arg in "$@"; do
+    case "$arg" in
+        --local)
+            MODE="1"
+            ;;
+        --production)
+            MODE="2"
+            ;;
+        --update|--upgrade)
+            MODE="2"
+            UPDATE_MODE=1
+            ;;
+        --fresh)
+            FRESH_INSTALL=1
+            ;;
+    esac
+done
 
 if [ -z "$MODE" ]; then
     echo -e "\nPlease choose your installation environment:\n"
-    echo -e "  ${GREEN}1) Local Development & Testing Mode${NC} (Run in current workspace, NO root required)"
-    echo -e "  ${YELLOW}2) Production Server Mode${NC} (Install to /opt/lightdeploy for aaPanel / Nginx, requires root)\n"
-    read -p "Select option [1 or 2] (default: 1): " CHOICE
-    MODE="${CHOICE:-1}"
+    if [ -d "/opt/lightdeploy" ]; then
+        echo -e "  ${GREEN}1) Safe Upgrade / Update Existing LightDeploy${NC} (Preserves all users, sites, databases & scripts)"
+        echo -e "  ${YELLOW}2) Local Development & Testing Mode${NC} (Run in current workspace)"
+        echo -e "  ${RED}3) Fresh Production Reinstall${NC} (OVERWRITE all existing configuration & users)\n"
+        read -p "Select option [1, 2, or 3] (default: 1): " CHOICE
+        CHOICE="${CHOICE:-1}"
+        if [ "$CHOICE" == "1" ]; then
+            MODE="2"
+            UPDATE_MODE=1
+        elif [ "$CHOICE" == "2" ]; then
+            MODE="1"
+        else
+            MODE="2"
+            FRESH_INSTALL=1
+        fi
+    else
+        echo -e "  ${GREEN}1) Local Development & Testing Mode${NC} (Run in current workspace, NO root required)"
+        echo -e "  ${YELLOW}2) Production Server Mode${NC} (Install to /opt/lightdeploy for aaPanel / Nginx, requires root)\n"
+        read -p "Select option [1 or 2] (default: 1): " CHOICE
+        MODE="${CHOICE:-1}"
+    fi
 fi
 
 # ------------------------------------------------------------------------------
@@ -410,18 +442,56 @@ else
     echo -e "${GREEN}[OK] System user '${SERVICE_USER}' already exists.${NC}"
 fi
 
-# 3. Copy Files
+# 3. Copy Files & Apply Safe Upgrade Guard
 echo -e "\n${YELLOW}[2/5] Deploying LightDeploy Files to ${TARGET_DIR}...${NC}"
 
 mkdir -p "$TARGET_DIR"/{app,public/assets,config,scripts,runtime/{locks,jobs,pids,streams,sessions},logs/{deployments,security,application},releases,tests}
 
-cp -r "$SRC_DIR"/app/* "$TARGET_DIR"/app/
-cp -r "$SRC_DIR"/public/* "$TARGET_DIR"/public/
-cp -r "$SRC_DIR"/config/* "$TARGET_DIR"/config/
-cp -r "$SRC_DIR"/scripts/* "$TARGET_DIR"/scripts/
-cp -r "$SRC_DIR"/tests/* "$TARGET_DIR"/tests/
-cp "$SRC_DIR"/ecosystem.config.js "$TARGET_DIR"/ 2>/dev/null || true
-cp "$SRC_DIR"/*.md "$TARGET_DIR"/ 2>/dev/null || true
+if [ "$UPDATE_MODE" -eq 1 ]; then
+    echo -e "${GREEN}[SAFE UPGRADE MODE] Preserving existing user data, sites.json, databases.json, and custom scripts...${NC}"
+    
+    # 3a. Backup existing config & scripts as safety net
+    BACKUP_STAMP=$(date +%Y%m%d_%H%M%S)
+    mkdir -p "$TARGET_DIR/backups/$BACKUP_STAMP"
+    cp -r "$TARGET_DIR/config" "$TARGET_DIR/backups/$BACKUP_STAMP/" 2>/dev/null || true
+    cp -r "$TARGET_DIR/scripts" "$TARGET_DIR/backups/$BACKUP_STAMP/" 2>/dev/null || true
+    echo -e "  [${GREEN}BACKUP${NC}] Safety snapshot created at: ${TARGET_DIR}/backups/${BACKUP_STAMP}/"
+
+    # 3b. Overwrite code application directories ONLY
+    cp -r "$SRC_DIR"/app/* "$TARGET_DIR"/app/
+    cp -r "$SRC_DIR"/public/* "$TARGET_DIR"/public/
+    cp -r "$SRC_DIR"/tests/* "$TARGET_DIR"/tests/
+    cp "$SRC_DIR"/*.md "$TARGET_DIR"/ 2>/dev/null || true
+
+    # 3c. Copy config files & subdirectories ONLY if they do NOT exist
+    for cfg in "$SRC_DIR"/config/*; do
+        [ -e "$cfg" ] || continue
+        cfg_name=$(basename "$cfg")
+        if [ ! -e "$TARGET_DIR/config/$cfg_name" ]; then
+            cp -r "$cfg" "$TARGET_DIR/config/"
+            echo -e "  [${GREEN}NEW CONFIG${NC}] Added missing config template: ${cfg_name}"
+        fi
+    done
+
+    # 3d. Copy scripts & subdirectories ONLY if they do NOT exist
+    for scr in "$SRC_DIR"/scripts/*; do
+        [ -e "$scr" ] || continue
+        scr_name=$(basename "$scr")
+        if [ ! -e "$TARGET_DIR/scripts/$scr_name" ]; then
+            cp -r "$scr" "$TARGET_DIR/scripts/"
+            echo -e "  [${GREEN}NEW SCRIPT${NC}] Added missing script template: ${scr_name}"
+        fi
+    done
+else
+    # Fresh Install Mode
+    cp -r "$SRC_DIR"/app/* "$TARGET_DIR"/app/
+    cp -r "$SRC_DIR"/public/* "$TARGET_DIR"/public/
+    cp -r "$SRC_DIR"/config/* "$TARGET_DIR"/config/
+    cp -r "$SRC_DIR"/scripts/* "$TARGET_DIR"/scripts/
+    cp -r "$SRC_DIR"/tests/* "$TARGET_DIR"/tests/
+    cp "$SRC_DIR"/ecosystem.config.js "$TARGET_DIR"/ 2>/dev/null || true
+    cp "$SRC_DIR"/*.md "$TARGET_DIR"/ 2>/dev/null || true
+fi
 
 # 4. Security & Permissions
 echo -e "\n${YELLOW}[3/5] Setting Secure File Permissions...${NC}"
@@ -445,18 +515,21 @@ chmod +x "$TARGET_DIR"/scripts/*.sh 2>/dev/null || true
 
 echo -e "${GREEN}[OK] Permissions hardened: Only public/ is web-accessible.${NC}"
 
-# 5. Admin Credentials
-echo -e "\n${YELLOW}[4/5] Generating Production Administrator Account...${NC}"
-read -p "Enter Administrator Username (default: admin): " INPUT_ADMIN_USER
-ADMIN_USER=$(echo "${INPUT_ADMIN_USER:-admin}" | tr -cd 'a-zA-Z0-9_-')
-if [ -z "$ADMIN_USER" ]; then
-    ADMIN_USER="admin"
-fi
+# 5. Admin Credentials (Skipped on Upgrade)
+if [ "$UPDATE_MODE" -eq 1 ] && [ -f "$TARGET_DIR/config/users.json" ]; then
+    echo -e "\n${GREEN}[4/5] Preserving Existing Admin & User Credentials (users.json intact).${NC}"
+else
+    echo -e "\n${YELLOW}[4/5] Generating Production Administrator Account...${NC}"
+    read -p "Enter Administrator Username (default: admin): " INPUT_ADMIN_USER
+    ADMIN_USER=$(echo "${INPUT_ADMIN_USER:-admin}" | tr -cd 'a-zA-Z0-9_-')
+    if [ -z "$ADMIN_USER" ]; then
+        ADMIN_USER="admin"
+    fi
 
-ADMIN_PASS=$(head /dev/urandom | tr -dc A-Za-z0-9 | head -c 16)
-ADMIN_HASH=$(php -r "echo password_hash('${ADMIN_PASS}', PASSWORD_BCRYPT);")
+    ADMIN_PASS=$(head /dev/urandom | tr -dc A-Za-z0-9 | head -c 16)
+    ADMIN_HASH=$(php -r "echo password_hash('${ADMIN_PASS}', PASSWORD_BCRYPT);")
 
-cat <<EOF > "$TARGET_DIR/config/users.json"
+    cat <<EOF > "$TARGET_DIR/config/users.json"
 {
     "users": {
         "${ADMIN_USER}": {
@@ -467,7 +540,8 @@ cat <<EOF > "$TARGET_DIR/config/users.json"
     }
 }
 EOF
-chmod 600 "$TARGET_DIR/config/users.json"
+    chmod 600 "$TARGET_DIR/config/users.json"
+fi
 
 # 6. Sanity Check
 echo -e "\n${YELLOW}[5/5] Running Security Sanity Check...${NC}"
@@ -476,13 +550,24 @@ if php tests/test_runner.php; then
     echo -e "${GREEN}[OK] Security Sanity Check PASSED!${NC}"
 fi
 
-# 7. Interactive PM2 Hosting Setup
+# 7. PM2 Process Manager Upgrade / Setup
 echo -e "\n${BLUE}----------------------------------------------------${NC}"
 echo -e "${YELLOW}PM2 PRODUCTION PROCESS MANAGER SETUP${NC}"
 echo -e "${BLUE}----------------------------------------------------${NC}"
 
+if [ "$UPDATE_MODE" -eq 1 ] && command -v pm2 &>/dev/null; then
+    if pm2 list 2>/dev/null | grep -q "lightdeploy"; then
+        echo -e "${GREEN}[PM2 RELOAD] Reloading LightDeploy service under PM2...${NC}"
+        pm2 reload lightdeploy 2>/dev/null || pm2 restart lightdeploy 2>/dev/null || true
+        pm2 save 2>/dev/null || true
+        echo -e "${GREEN}[OK] LightDeploy process updated and reloaded with ZERO DOWNTIME!${NC}"
+    fi
+fi
+
 PM2_WANT_INSTALL=""
-if [ "$1" == "--pm2" ] || [ "$2" == "--pm2" ]; then
+if [ "$UPDATE_MODE" -eq 1 ]; then
+    PM2_WANT_INSTALL="n"
+elif [ "$1" == "--pm2" ] || [ "$2" == "--pm2" ]; then
     PM2_WANT_INSTALL="y"
 else
     read -p "Do you want to host and launch LightDeploy using PM2? [y/N]: " PM2_INPUT
