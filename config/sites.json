@@ -26,6 +26,27 @@
             "health_check": null,
             "health_check_enabled": false,
             "enabled": true
+        },
+        "test": {
+            "name": "tezst1",
+            "domain": "test.com",
+            "script": "/home/shalith/Documents/CYBERnetic/project/scripts/text.sh",
+            "rollback_script": "",
+            "health_check": "",
+            "health_check_enabled": false,
+            "enabled": true
+        },
+        "pm2-test-node": {
+            "name": "pm2-test-node",
+            "domain": "test.com",
+            "script": "/home/shalith/pm2-test/test.sh",
+            "rollback_script": "",
+            "health_check": "",
+            "health_check_enabled": false,
+            "pm2_enabled": true,
+            "pm2_script": "/home/shalith/pm2-test/app.js",
+            "pm2_name": "testapp",
+            "enabled": true
         }
     }
 }

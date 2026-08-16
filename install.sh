@@ -6,6 +6,8 @@
 
 set -e
 
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
+
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
@@ -345,7 +347,7 @@ if [ "$MODE" == "1" ]; then
     echo -e "\n${YELLOW}[LOCAL SETUP] Initializing LightDeploy Local Development Workspace...${NC}"
 
     # Create local directories
-    mkdir -p "$SRC_DIR"/{runtime/{locks,jobs,pids,streams},logs/{deployments,security,application},releases}
+    mkdir -p "$SRC_DIR"/{runtime/{locks,jobs,pids,streams,sessions},logs/{deployments,security,application},releases}
     chmod -R 777 "$SRC_DIR"/runtime "$SRC_DIR"/logs 2>/dev/null || true
     chmod +x "$SRC_DIR"/scripts/*.sh 2>/dev/null || true
     chmod +x "$SRC_DIR"/serve.sh 2>/dev/null || true
@@ -386,8 +388,24 @@ fi
 # 2. Configure Service User
 echo -e "\n${YELLOW}[1/5] Configuring Service User (${SERVICE_USER})...${NC}"
 if ! id "$SERVICE_USER" &>/dev/null; then
-    useradd -r -s /bin/false -d "$TARGET_DIR" "$SERVICE_USER"
-    echo -e "${GREEN}[OK] Created dedicated system user '${SERVICE_USER}'.${NC}"
+    USERADD_BIN=""
+    if command -v useradd &>/dev/null; then
+        USERADD_BIN="$(command -v useradd)"
+    elif [ -x /usr/sbin/useradd ]; then
+        USERADD_BIN="/usr/sbin/useradd"
+    elif [ -x /sbin/useradd ]; then
+        USERADD_BIN="/sbin/useradd"
+    fi
+
+    if [ -n "$USERADD_BIN" ]; then
+        "$USERADD_BIN" -r -s /bin/false -d "$TARGET_DIR" "$SERVICE_USER" 2>/dev/null || "$USERADD_BIN" -s /bin/false "$SERVICE_USER"
+        echo -e "${GREEN}[OK] Created dedicated system user '${SERVICE_USER}'.${NC}"
+    elif command -v adduser &>/dev/null; then
+        adduser -S -D -h "$TARGET_DIR" "$SERVICE_USER" 2>/dev/null || adduser --system --no-create-home "$SERVICE_USER" 2>/dev/null || true
+        echo -e "${GREEN}[OK] Created dedicated system user '${SERVICE_USER}'.${NC}"
+    else
+        echo -e "${YELLOW}[WARNING] Neither useradd nor adduser binary found. Skipping service user creation.${NC}"
+    fi
 else
     echo -e "${GREEN}[OK] System user '${SERVICE_USER}' already exists.${NC}"
 fi
@@ -395,13 +413,14 @@ fi
 # 3. Copy Files
 echo -e "\n${YELLOW}[2/5] Deploying LightDeploy Files to ${TARGET_DIR}...${NC}"
 
-mkdir -p "$TARGET_DIR"/{app,public/assets,config,scripts,runtime/{locks,jobs,pids,streams},logs/{deployments,security,application},releases,tests}
+mkdir -p "$TARGET_DIR"/{app,public/assets,config,scripts,runtime/{locks,jobs,pids,streams,sessions},logs/{deployments,security,application},releases,tests}
 
 cp -r "$SRC_DIR"/app/* "$TARGET_DIR"/app/
 cp -r "$SRC_DIR"/public/* "$TARGET_DIR"/public/
 cp -r "$SRC_DIR"/config/* "$TARGET_DIR"/config/
 cp -r "$SRC_DIR"/scripts/* "$TARGET_DIR"/scripts/
 cp -r "$SRC_DIR"/tests/* "$TARGET_DIR"/tests/
+cp "$SRC_DIR"/ecosystem.config.js "$TARGET_DIR"/ 2>/dev/null || true
 cp "$SRC_DIR"/*.md "$TARGET_DIR"/ 2>/dev/null || true
 
 # 4. Security & Permissions
@@ -428,13 +447,19 @@ echo -e "${GREEN}[OK] Permissions hardened: Only public/ is web-accessible.${NC}
 
 # 5. Admin Credentials
 echo -e "\n${YELLOW}[4/5] Generating Production Administrator Account...${NC}"
+read -p "Enter Administrator Username (default: admin): " INPUT_ADMIN_USER
+ADMIN_USER=$(echo "${INPUT_ADMIN_USER:-admin}" | tr -cd 'a-zA-Z0-9_-')
+if [ -z "$ADMIN_USER" ]; then
+    ADMIN_USER="admin"
+fi
+
 ADMIN_PASS=$(head /dev/urandom | tr -dc A-Za-z0-9 | head -c 16)
 ADMIN_HASH=$(php -r "echo password_hash('${ADMIN_PASS}', PASSWORD_BCRYPT);")
 
 cat <<EOF > "$TARGET_DIR/config/users.json"
 {
     "users": {
-        "admin": {
+        "${ADMIN_USER}": {
             "name": "System Administrator",
             "password_hash": "${ADMIN_HASH}",
             "role": "admin"
@@ -451,10 +476,104 @@ if php tests/test_runner.php; then
     echo -e "${GREEN}[OK] Security Sanity Check PASSED!${NC}"
 fi
 
+# 7. Interactive PM2 Hosting Setup
+echo -e "\n${BLUE}----------------------------------------------------${NC}"
+echo -e "${YELLOW}PM2 PRODUCTION PROCESS MANAGER SETUP${NC}"
+echo -e "${BLUE}----------------------------------------------------${NC}"
+
+PM2_WANT_INSTALL=""
+if [ "$1" == "--pm2" ] || [ "$2" == "--pm2" ]; then
+    PM2_WANT_INSTALL="y"
+else
+    read -p "Do you want to host and launch LightDeploy using PM2? [y/N]: " PM2_INPUT
+    PM2_WANT_INSTALL=$(echo "${PM2_INPUT:-n}" | tr '[:upper:]' '[:lower:]')
+fi
+
+PM2_RUNNING_OK=0
+
+if [ "$PM2_WANT_INSTALL" == "y" ] || [ "$PM2_WANT_INSTALL" == "yes" ]; then
+    echo -e "\n${YELLOW}Configuring PM2 Service Options:${NC}"
+    read -p "  1. PM2 Process Name (default: lightdeploy): " INPUT_PM2_NAME
+    PM2_APP_NAME="${INPUT_PM2_NAME:-lightdeploy}"
+
+    read -p "  2. Server Port (default: 8000): " INPUT_PM2_PORT
+    PM2_APP_PORT="${INPUT_PM2_PORT:-8000}"
+
+    read -p "  3. Server Host IP (default: 0.0.0.0): " INPUT_PM2_HOST
+    PM2_APP_HOST="${INPUT_PM2_HOST:-0.0.0.0}"
+
+    read -p "  4. Max Memory Restart Limit (default: 150M): " INPUT_PM2_MEM
+    PM2_APP_MEM="${INPUT_PM2_MEM:-150M}"
+
+    # Auto-install PM2 if binary is missing
+    if ! command -v pm2 &>/dev/null; then
+        echo -e "${YELLOW}[INFO] PM2 binary not found. Installing PM2 globally via npm...${NC}"
+        if command -v npm &>/dev/null; then
+            npm install -g pm2
+        else
+            echo -e "${RED}[ERROR] npm is required to install PM2. Please install Node.js & npm first.${NC}"
+        fi
+    fi
+
+    if command -v pm2 &>/dev/null; then
+        # Generate custom ecosystem.config.js with user settings
+        cat <<ECOSYSTEM_EOF > "$TARGET_DIR/ecosystem.config.js"
+module.exports = {
+  apps: [
+    {
+      name: '${PM2_APP_NAME}',
+      script: 'php',
+      args: '-S ${PM2_APP_HOST}:${PM2_APP_PORT} -t public',
+      cwd: '${TARGET_DIR}',
+      instances: 1,
+      autorestart: true,
+      watch: false,
+      max_memory_restart: '${PM2_APP_MEM}',
+      env: {
+        NODE_ENV: 'production',
+        PORT: ${PM2_APP_PORT}
+      },
+      error_file: '${TARGET_DIR}/logs/application/pm2-error.log',
+      out_file: '${TARGET_DIR}/logs/application/pm2-out.log',
+      log_date_format: 'YYYY-MM-DD HH:mm:ss Z'
+    }
+  ]
+};
+ECOSYSTEM_EOF
+
+        echo -e "${GREEN}[OK] Generated custom PM2 ecosystem configuration at ${TARGET_DIR}/ecosystem.config.js.${NC}"
+        echo -e "${YELLOW}Starting LightDeploy under PM2...${NC}"
+
+        cd "$TARGET_DIR"
+        pm2 delete "$PM2_APP_NAME" 2>/dev/null || true
+        pm2 start ecosystem.config.js
+        pm2 save
+
+        PM2_RUNNING_OK=1
+        echo -e "${GREEN}[OK] LightDeploy process '${PM2_APP_NAME}' is now LIVE and saved on PM2!${NC}"
+    fi
+fi
+
 echo -e "\n${BLUE}====================================================${NC}"
 echo -e "${GREEN}      PRODUCTION INSTALLATION SUCCESSFUL!           ${NC}"
 echo -e "${BLUE}====================================================${NC}"
 echo -e "Target Directory: ${TARGET_DIR}"
+echo -e "Admin Username:   ${BOLD}${ADMIN_USER}${NC}"
+echo -e "Admin Password:   ${BOLD}${ADMIN_PASS}${NC}"
+
+if [ "$PM2_RUNNING_OK" -eq 1 ]; then
+    echo -e "PM2 Status:       ${GREEN}LIVE (${PM2_APP_NAME} on http://${PM2_APP_HOST}:${PM2_APP_PORT})${NC}"
+    echo -e "\n${YELLOW}PM2 Management Commands:${NC}"
+    echo -e "  pm2 status ${PM2_APP_NAME}"
+    echo -e "  pm2 logs ${PM2_APP_NAME}"
+    echo -e "  pm2 restart ${PM2_APP_NAME}"
+else
+    echo -e "\n${YELLOW}Host LightDeploy Production Service via PM2:${NC}"
+    echo -e "  cd ${TARGET_DIR}"
+    echo -e "  ${GREEN}pm2 start ecosystem.config.js${NC}"
+    echo -e "  ${GREEN}pm2 save && pm2 startup${NC}"
+fi
+echo -e "${BLUE}====================================================${NC}\n"
 echo -e "Web Document Root: ${TARGET_DIR}/public"
 echo -e "Initial Admin Username: ${YELLOW}admin${NC}"
 echo -e "Initial Admin Password: ${YELLOW}${ADMIN_PASS}${NC}"

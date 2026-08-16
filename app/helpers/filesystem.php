@@ -32,8 +32,9 @@ if (!function_exists('safeReadJson')) {
     /**
      * Safely reads and parses a JSON file with file lock.
      */
-    function safeReadJson(string $filePath, array $default = []): array
+    function safeReadJson(string $filePath, ?array $default = []): array
     {
+        $default = $default ?? [];
         if (!file_exists($filePath) || !is_readable($filePath)) {
             return $default;
         }

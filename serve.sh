@@ -26,7 +26,7 @@ if ! command -v php &> /dev/null; then
 fi
 
 # Prepare local workspace directories
-mkdir -p "$SRC_DIR"/{runtime/{locks,jobs,pids,streams},logs/{deployments,security,application},releases}
+mkdir -p "$SRC_DIR"/{runtime/{locks,jobs,pids,streams,sessions},logs/{deployments,security,application},releases}
 chmod -R 777 "$SRC_DIR"/runtime "$SRC_DIR"/logs 2>/dev/null || true
 chmod +x "$SRC_DIR"/scripts/*.sh 2>/dev/null || true
 

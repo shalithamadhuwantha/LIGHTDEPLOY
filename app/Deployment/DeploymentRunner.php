@@ -40,8 +40,23 @@ class DeploymentRunner
         $jobFile = $this->getJobPath($deploymentId);
         $pidFile = $this->getPidPath($deploymentId);
 
-        // Reset stream file
-        @file_put_contents($streamFile, "[" . date('H:i:s') . "] [SYSTEM] Initializing execution engine...\n");
+        $workDir = is_dir(dirname($scriptPath)) ? dirname($scriptPath) : null;
+
+        // Reset stream file with system execution details
+        $initLog = "[" . date('H:i:s') . "] [SYSTEM] Initializing execution engine...\n" .
+                   "[" . date('H:i:s') . "] [SYSTEM] Script Path: {$scriptPath}\n" .
+                   "[" . date('H:i:s') . "] [SYSTEM] Working Dir: " . ($workDir ?: 'Default') . "\n";
+        @file_put_contents($streamFile, $initLog);
+
+        if (!file_exists($scriptPath)) {
+            $errLog = "[" . date('H:i:s') . "] [ERROR] Script file does not exist at location: {$scriptPath}\n";
+            @file_put_contents($streamFile, $errLog, FILE_APPEND);
+            return [
+                'success' => false,
+                'pid' => 0,
+                'error' => "Script file not found: {$scriptPath}"
+            ];
+        }
 
         $descriptors = [
             0 => ['pipe', 'r'], // stdin
@@ -58,10 +73,10 @@ class DeploymentRunner
         // Launch shell execution safely with absolute binary path
         $command = ['/bin/bash', $scriptPath];
 
-        $process = proc_open($command, $descriptors, $pipes, dirname($scriptPath), $env);
+        $process = proc_open($command, $descriptors, $pipes, $workDir, $env);
 
         if (!is_resource($process)) {
-            @file_put_contents($streamFile, "[" . date('H:i:s') . "] [ERROR] Failed to spawn deployment process.\n", FILE_APPEND);
+            @file_put_contents($streamFile, "[" . date('H:i:s') . "] [ERROR] Failed to spawn deployment process for script {$scriptPath}.\n", FILE_APPEND);
             return [
                 'success' => false,
                 'pid' => 0,
@@ -113,11 +128,31 @@ class DeploymentRunner
         $isAlive = $this->isPidRunning($pid);
 
         if (!$isAlive && ($job['status'] ?? '') === 'running') {
-            // Process finished
-            $exitCode = $job['exit_code'] ?? 0; // standard default
-            $newStatus = ($exitCode === 0) ? 'script_completed' : 'failed';
+            // Process finished - inspect stream log for exit errors
+            $streamFile = $this->getStreamPath($deploymentId);
+            $streamContent = file_exists($streamFile) ? file_get_contents($streamFile) : '';
+
+            $hasExplicitDone = (strpos($streamContent, '[DONE]') !== false);
+            $hasExplicitError = (strpos($streamContent, '[ERROR]') !== false ||
+                                 strpos($streamContent, 'command not found') !== false ||
+                                 strpos($streamContent, 'No such file or directory') !== false ||
+                                 strpos($streamContent, 'Permission denied') !== false ||
+                                 strpos($streamContent, 'syntax error') !== false);
+
+            $exitCode = (int)($job['exit_code'] ?? ($hasExplicitError ? 1 : 0));
+
+            if ($hasExplicitError || ($exitCode !== 0) || !$hasExplicitDone) {
+                $newStatus = 'failed';
+                if ($exitCode === 0 && !$hasExplicitDone) {
+                    $exitCode = 1;
+                    @file_put_contents($streamFile, "[" . date('H:i:s') . "] [ERROR] Deployment script exited unexpectedly before completion.\n", FILE_APPEND);
+                }
+            } else {
+                $newStatus = 'script_completed';
+            }
 
             $job['status'] = $newStatus;
+            $job['exit_code'] = $exitCode;
             $job['running'] = false;
             $job['end_time'] = time();
             $job['duration'] = $job['end_time'] - $job['start_time'];
@@ -179,10 +214,19 @@ class DeploymentRunner
             return false;
         }
 
+        $procStatFile = "/proc/$pid/status";
+        if (file_exists($procStatFile)) {
+            $content = @file_get_contents($procStatFile);
+            if ($content !== false && preg_match('/State:\s+([Zz])/', $content)) {
+                return false; // Zombie process = execution complete!
+            }
+            return true;
+        }
+
         if (function_exists('posix_kill')) {
             return @posix_kill($pid, 0);
         }
 
-        return file_exists("/proc/$pid");
+        return false;
     }
 }

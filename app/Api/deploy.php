@@ -87,7 +87,15 @@ $deploymentService = new DeploymentService(
     $config
 );
 
-$result = $deploymentService->startDeployment($siteId, $siteConfig, $user['username'], false);
+$deployedBy = $user['username'];
+if (($user['role'] ?? '') === 'admin' && !empty($input['deployed_by'])) {
+    $customUser = trim((string)$input['deployed_by']);
+    if (preg_match('/^[a-zA-Z0-9_\-\.\@]{1,64}$/', $customUser)) {
+        $deployedBy = $customUser;
+    }
+}
+
+$result = $deploymentService->startDeployment($siteId, $siteConfig, $deployedBy, false);
 
 if (!$result['success']) {
     jsonError(

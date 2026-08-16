@@ -1,0 +1,59 @@
+# ==========================================
+# LightDeploy - Version Control Ignore System
+# ==========================================
+
+# 1. Environment & Server Security Configurations
+# ------------------------------------------
+config/users.json
+config/sites.json
+config/*.local.php
+.env
+.env.*
+!.env.example
+
+# 2. Application Logs & Runtime State
+# ------------------------------------------
+logs/*
+!logs/.gitkeep
+runtime/*
+!runtime/.gitkeep
+releases/*
+!releases/.gitkeep
+*.log
+*.pid
+*.seed
+*.lock
+
+# 3. Dependencies & Node.js Packages
+# ------------------------------------------
+vendor/
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# 4. OS & IDE Specific Files
+# ------------------------------------------
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDEs and Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+*.sublime-project
+*.sublime-workspace
+
+# 5. Temporary & Cache Files
+# ------------------------------------------
+/tmp/
+*.tmp
+*.bak

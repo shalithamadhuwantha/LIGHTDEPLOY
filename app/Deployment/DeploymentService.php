@@ -212,7 +212,7 @@ class DeploymentService
                 $exitCode = 0;
                 if (preg_match('#\[EXIT_CODE:(\d+)\]#', $streamContent, $matches)) {
                     $exitCode = (int)$matches[1];
-                } elseif (strpos($streamContent, 'ERROR') !== false || strpos($streamContent, 'Failed') !== false) {
+                } elseif (strpos($streamContent, '[ERROR]') !== false || strpos($streamContent, 'FATAL') !== false) {
                     $exitCode = 1;
                 }
 
@@ -254,13 +254,48 @@ class DeploymentService
     private function finalizeDeployment(array $meta, string $siteId): void
     {
         $deploymentId = $meta['deployment_id'];
+        $streamPath = $this->runner->getStreamPath($deploymentId);
+        $streamContent = file_exists($streamPath) ? file_get_contents($streamPath) : '';
+
+        // Auto-generate crystal-clear Diagnostic Error Summary on failure
+        if (in_array($meta['status'], ['failed', 'health_check_failed', 'timeout'], true) && strpos($streamContent, '[DIAGNOSTIC SUMMARY]') === false) {
+            $exitCode = $meta['exit_code'] ?? 1;
+            $lines = explode("\n", trim($streamContent));
+            $detectedErrors = [];
+            foreach ($lines as $line) {
+                if (preg_match('/(error|failed|command not found|permission denied|no such file|syntax error|fatal|cannot open|invalid|denied)/i', $line)) {
+                    $detectedErrors[] = trim($line);
+                }
+            }
+
+            $diag = "\n" . str_repeat('=', 80) . "\n";
+            $diag .= "[" . date('H:i:s') . "] 🔴 [DIAGNOSTIC SUMMARY] EXECUTION FAILED (Status: " . strtoupper((string)$meta['status']) . " | Exit Code: {$exitCode})\n";
+            $diag .= str_repeat('-', 80) . "\n";
+            if (!empty($detectedErrors)) {
+                $diag .= "  Primary Root Cause Highlights:\n";
+                foreach (array_slice(array_unique($detectedErrors), -5) as $errLine) {
+                    $diag .= "   • {$errLine}\n";
+                }
+            } else {
+                $lastLines = array_slice(array_filter($lines, 'trim'), -3);
+                $diag .= "  Last Execution Output Captured:\n";
+                foreach ($lastLines as $lastLine) {
+                    $diag .= "   • {$lastLine}\n";
+                }
+            }
+            $diag .= "  Recommended Fixes:\n";
+            $diag .= "   1. Check script location, execute permissions (chmod +x), and directory ownership.\n";
+            $diag .= "   2. Ensure target CLI commands (node, php, python3, git, npm) exist in system PATH.\n";
+            $diag .= str_repeat('=', 80) . "\n\n";
+
+            @file_put_contents($streamPath, $diag, FILE_APPEND);
+            $streamContent .= $diag;
+        }
 
         // Save final job json
         safeWriteJson($this->runner->getJobPath($deploymentId), $meta);
 
         // Save permanent log
-        $streamPath = $this->runner->getStreamPath($deploymentId);
-        $streamContent = file_exists($streamPath) ? file_get_contents($streamPath) : '';
         $this->logger->saveDeployment($meta, $streamContent);
 
         // Release lock

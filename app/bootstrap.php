@@ -6,6 +6,9 @@ declare(strict_types=1);
  * Initializes security settings, error handling, autoloading, and sessions.
  */
 
+// Set default system timezone to Sri Lanka (Asia/Colombo)
+date_default_timezone_set('Asia/Colombo');
+
 // Error handling settings for production security
 ini_set('display_errors', '0');
 ini_set('display_startup_errors', '0');
@@ -47,7 +50,7 @@ spl_autoload_register(function (string $class) use ($rootDir) {
 
 // Set Security HTTP Headers
 if (!headers_sent()) {
-    header("Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none';");
+    header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none';");
     header("X-Content-Type-Options: nosniff");
     header("X-Frame-Options: DENY");
     header("X-XSS-Protection: 1; mode=block");
@@ -62,6 +65,14 @@ if (!headers_sent()) {
 if (session_status() === PHP_SESSION_NONE) {
     $isHttps = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') ||
                (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https');
+
+    $sessionSavePath = $rootDir . '/runtime/sessions';
+    if (!is_dir($sessionSavePath)) {
+        @mkdir($sessionSavePath, 0700, true);
+    }
+    if (is_writable($sessionSavePath)) {
+        session_save_path($sessionSavePath);
+    }
 
     session_name('LIGHTDEPLOY_SESS');
     session_set_cookie_params([

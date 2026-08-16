@@ -668,6 +668,47 @@ body {
     flex: 1;
 }
 
+/* Terminal Log Highlighting */
+.log-line {
+    display: block;
+    padding: 2px 6px;
+    border-radius: 3px;
+    margin-bottom: 3px;
+}
+.log-error, .log-line-error {
+    color: #f87171 !important;
+    background: rgba(239, 68, 68, 0.18);
+    border-left: 3px solid #ef4444;
+    padding-left: 8px;
+    font-weight: 600;
+}
+.log-success, .log-line-success {
+    color: #34d399 !important;
+    background: rgba(16, 185, 129, 0.12);
+    border-left: 3px solid #10b981;
+    padding-left: 8px;
+}
+.log-warning, .log-line-warning {
+    color: #fbbf24 !important;
+    background: rgba(245, 158, 11, 0.14);
+    border-left: 3px solid #f59e0b;
+    padding-left: 8px;
+}
+.log-system, .log-line-system {
+    color: #38bdf8 !important;
+    border-left: 3px solid #38bdf8;
+    padding-left: 8px;
+}
+.log-diagnostic {
+    background: rgba(239, 68, 68, 0.22);
+    border: 1px solid rgba(239, 68, 68, 0.5);
+    color: #fca5a5;
+    padding: 12px 16px;
+    border-radius: 6px;
+    margin: 12px 0;
+    font-weight: 600;
+}
+
 /* Table Styling */
 .table-responsive {
     width: 100%;
@@ -704,4 +745,276 @@ body {
     background: rgba(255, 255, 255, 0.03);
     border-radius: var(--radius-lg);
     animation: pulse 1.5s infinite;
+}
+
+/* Modal Form Input Styles */
+.form-input {
+    width: 100%;
+    padding: 10px 14px;
+    background: rgba(15, 23, 42, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    font-size: 0.9rem;
+    font-family: var(--font-sans);
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.form-input:focus {
+    border-color: var(--accent-blue);
+    box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.2);
+}
+
+.form-label {
+    display: block;
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+}
+
+.form-help {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-top: 4px;
+}
+
+.form-checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.85rem;
+    color: var(--text-primary);
+    cursor: pointer;
+    margin-top: 8px;
+}
+
+/* PM2 Manager Container */
+.pm2-card {
+    background: var(--bg-card);
+    border: 1px solid var(--bg-card-border);
+    backdrop-filter: blur(12px);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+    box-shadow: var(--shadow-card);
+}
+
+/* =========================================================================
+   MOBILE & TOUCH DEVICE RESPONSIVE SUITE
+   ========================================================================= */
+
+/* Prevent font scaling issues and ensure smooth touch feedback */
+html {
+    -webkit-text-size-adjust: 100%;
+    touch-action: manipulation;
+}
+
+/* Touch active feedback for interactive buttons */
+.btn:active, .modal-close-btn:active {
+    transform: scale(0.97);
+    opacity: 0.9;
+}
+
+/* Tablet & Mobile Screens (max-width: 900px) */
+@media (max-width: 900px) {
+    .app-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+        padding: 12px 16px;
+    }
+
+    .header-left, .header-right {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    .server-metrics-bar {
+        width: 100%;
+        justify-content: flex-start;
+        overflow-x: auto;
+        padding-bottom: 4px;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .metric-pill {
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+
+    .app-main {
+        padding: 16px;
+    }
+
+    .section-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+    }
+
+    .section-actions {
+        width: 100%;
+        flex-wrap: wrap;
+    }
+
+    .section-actions .btn {
+        flex: 1;
+        min-width: 130px;
+        text-align: center;
+        justify-content: center;
+    }
+}
+
+/* Small Mobile Screens (max-width: 640px) */
+@media (max-width: 640px) {
+    /* Headings */
+    h1, h2 {
+        font-size: 1.25rem;
+    }
+
+    .brand-title {
+        font-size: 1rem;
+    }
+
+    /* Grid Layouts */
+    .sites-grid {
+        grid-template-columns: 1fr;
+        gap: 16px;
+    }
+
+    .site-card {
+        padding: 16px;
+    }
+
+    /* Form Inputs: 16px font prevents iOS auto-zoom on focus */
+    .form-input {
+        font-size: 16px;
+        padding: 12px 14px;
+    }
+
+    .form-label {
+        font-size: 0.85rem;
+    }
+
+    /* Buttons: Touch friendly targets */
+    .btn {
+        padding: 10px 16px;
+        font-size: 0.9rem;
+        min-height: 44px;
+    }
+
+    .btn-sm {
+        padding: 8px 12px;
+        font-size: 0.85rem;
+        min-height: 38px;
+    }
+
+    /* Action buttons inside site cards stacked cleanly */
+    .card-actions {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+        gap: 8px;
+        margin-top: 16px;
+    }
+
+    .card-actions .btn {
+        width: 100%;
+    }
+
+    /* PM2 Table Responsive Touch Optimizations */
+    .table-responsive {
+        -webkit-overflow-scrolling: touch;
+        overflow-x: auto;
+        border-radius: var(--radius-md);
+    }
+
+    .data-table th, .data-table td {
+        padding: 10px 12px;
+        font-size: 0.8rem;
+        white-space: nowrap;
+    }
+
+    .pm2-card {
+        padding: 12px;
+    }
+
+    /* Mobile Modals (Bottom Sheet / Full Width UX) */
+    .modal-overlay {
+        padding: 0;
+        align-items: flex-end;
+    }
+
+    .modal-card {
+        width: 100% !important;
+        max-width: 100% !important;
+        max-height: 92vh;
+        border-radius: 20px 20px 0 0 !important;
+        margin: 0;
+        animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    @keyframes slideUp {
+        from { transform: translateY(100%); }
+        to { transform: translateY(0); }
+    }
+
+    .modal-header {
+        padding: 16px 20px;
+        border-bottom: 1px solid var(--bg-card-border);
+    }
+
+    .modal-body {
+        padding: 16px 20px;
+        max-height: calc(92vh - 140px);
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .modal-footer {
+        padding: 14px 20px;
+        flex-direction: column-reverse;
+        gap: 8px;
+    }
+
+    .modal-footer .btn {
+        width: 100%;
+        margin-right: 0 !important;
+    }
+
+    /* Terminal output box on mobile */
+    .terminal-container {
+        border-radius: var(--radius-md);
+    }
+
+    .terminal-body {
+        font-size: 0.78rem;
+        padding: 12px;
+        max-height: 50vh;
+    }
+
+    /* Toast alerts on mobile float at top */
+    .toast-container {
+        top: 12px;
+        right: 12px;
+        left: 12px;
+        bottom: auto;
+    }
+
+    .toast {
+        width: 100%;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    }
+
+    /* Login Page Mobile Optimization */
+    .login-container {
+        padding: 16px;
+    }
+
+    .login-card {
+        padding: 24px 20px;
+    }
 }

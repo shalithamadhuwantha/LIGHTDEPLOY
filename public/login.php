@@ -17,6 +17,19 @@ if ($authService->isAuthenticated()) {
     exit;
 }
 
+$errorMsg = '';
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['username'])) {
+    $username = trim((string)($_POST['username'] ?? ''));
+    $password = (string)($_POST['password'] ?? '');
+
+    if ($authService->login($username, $password)) {
+        header('Location: /index.php');
+        exit;
+    } else {
+        $errorMsg = 'Invalid username or password.';
+    }
+}
+
 $csrfToken = Csrf::getToken();
 ?>
 <!DOCTYPE html>
@@ -44,10 +57,12 @@ $csrfToken = Csrf::getToken();
                 <p>Secure Lightweight Web Deployment Panel</p>
             </div>
 
-            <div id="alertBox" class="alert-box hidden"></div>
+            <div id="alertBox" class="alert-box <?= empty($errorMsg) ? 'hidden' : 'alert-danger' ?>">
+                <?= htmlspecialchars($errorMsg) ?>
+            </div>
 
-            <form id="loginForm" autocomplete="off">
-                <input type="hidden" id="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
+            <form id="loginForm" method="POST" action="/login.php" autocomplete="off">
+                <input type="hidden" id="csrf_token" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
                 
                 <div class="form-group">
                     <label for="username">Username</label>
@@ -109,9 +124,8 @@ $csrfToken = Csrf::getToken();
                     alertBox.classList.remove('hidden');
                 }
             } catch (err) {
-                alertBox.textContent = 'Network error. Please check connection.';
-                alertBox.className = 'alert-box alert-danger';
-                alertBox.classList.remove('hidden');
+                // Fallback to standard form submission if fetch/JS encounters network error
+                document.getElementById('loginForm').submit();
             } finally {
                 btn.disabled = false;
                 btnText.textContent = 'Sign In to Dashboard';

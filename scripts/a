@@ -1,0 +1,13 @@
+#!/bin/bash
+# LightDeploy Script: tezst1
+set -e
+
+echo "[START] $(date '+%H:%M:%S') Starting deployment for tezst1..."
+echo "[INFO] Deployment ID: ${DEPLOYMENT_ID:-DEP-LOCAL}"
+echo "[INFO] Triggered by user: ${DEPLOYED_BY:-admin}"
+
+sleep 1
+echo "[SYNC] Synchronizing code and assets..."
+sleep 1
+echo "[DONE] $(date '+%H:%M:%S') Deployment for tezst1 completed successfully!"
+exit 0

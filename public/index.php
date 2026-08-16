@@ -25,12 +25,34 @@ $csrfToken = Csrf::getToken();
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard - LightDeploy</title>
-    <link rel="stylesheet" href="/assets/app.css">
+    <link rel="stylesheet" href="/assets/app.css?v=<?= time() ?>">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <script>
+        function openVpsPortsModal() {
+            var modal = document.getElementById('portsModal');
+            if (modal) {
+                modal.classList.remove('hidden');
+                modal.style.setProperty('display', 'flex', 'important');
+                modal.style.setProperty('visibility', 'visible', 'important');
+                modal.style.setProperty('opacity', '1', 'important');
+                modal.style.setProperty('z-index', '99999', 'important');
+            }
+            if (window.loadVpsPorts) {
+                window.loadVpsPorts();
+            }
+        }
+        function closeVpsPortsModal() {
+            var modal = document.getElementById('portsModal');
+            if (modal) {
+                modal.classList.add('hidden');
+                modal.style.setProperty('display', 'none', 'important');
+            }
+        }
+    </script>
 </head>
-<body class="dashboard-body" data-user-role="<?= htmlspecialchars($user['role']) ?>" data-csrf-token="<?= htmlspecialchars($csrfToken) ?>">
+<body class="dashboard-body" data-user-role="<?= htmlspecialchars($user['role']) ?>" data-username="<?= htmlspecialchars($user['username']) ?>" data-csrf-token="<?= htmlspecialchars($csrfToken) ?>">
     <!-- Top Navigation Bar -->
     <header class="app-header">
         <div class="header-left">
@@ -44,12 +66,16 @@ $csrfToken = Csrf::getToken();
         </div>
 
         <div class="header-center" id="serverMetricsWidget">
+            <div class="metric-pill" id="metricAppRam" style="border-color: rgba(56, 189, 248, 0.4); background: rgba(56, 189, 248, 0.08);" title="LightDeploy App Resource Footprint">
+                <span class="metric-label" style="color: #38bdf8;">LIGHTDEPLOY RAM</span>
+                <span class="metric-value" id="metricAppRamVal" style="color: #38bdf8;">-- MB</span>
+            </div>
             <div class="metric-pill" id="metricCpu">
-                <span class="metric-label">CPU</span>
+                <span class="metric-label">SYS CPU</span>
                 <span class="metric-value">--%</span>
             </div>
             <div class="metric-pill" id="metricRam">
-                <span class="metric-label">RAM</span>
+                <span class="metric-label">SYS RAM</span>
                 <span class="metric-value">--%</span>
             </div>
             <div class="metric-pill" id="metricDisk">
@@ -63,6 +89,7 @@ $csrfToken = Csrf::getToken();
         </div>
 
         <div class="header-right">
+            <button id="headerViewPortsBtn" class="btn btn-secondary btn-sm btn-view-ports" style="margin-right: 8px;" onclick="openVpsPortsModal()">🌐 VPS Open Ports</button>
             <div class="user-info">
                 <span class="user-name"><?= htmlspecialchars($user['name']) ?></span>
                 <span class="badge badge-role badge-role-<?= htmlspecialchars($user['role']) ?>"><?= strtoupper(htmlspecialchars($user['role'])) ?></span>
@@ -79,7 +106,11 @@ $csrfToken = Csrf::getToken();
                 <p class="section-desc">Select a site to initiate controlled script deployment</p>
             </div>
             <div class="section-actions">
+                <?php if (($user['role'] ?? '') === 'admin'): ?>
+                    <button id="addSiteBtn" class="btn btn-primary btn-sm">+ Add New Site</button>
+                <?php endif; ?>
                 <button id="refreshSitesBtn" class="btn btn-secondary btn-sm">Refresh List</button>
+                <button id="viewPortsBtn" class="btn btn-secondary btn-sm btn-view-ports" onclick="openVpsPortsModal()">🌐 VPS Open Ports</button>
                 <button id="viewHistoryBtn" class="btn btn-secondary btn-sm">Deployment History</button>
             </div>
         </div>
@@ -92,6 +123,46 @@ $csrfToken = Csrf::getToken();
             <div class="skeleton-card"></div>
             <div class="skeleton-card"></div>
             <div class="skeleton-card"></div>
+        </div>
+
+        <!-- PM2 Process Manager Section -->
+        <div class="section-header" style="margin-top: 40px;">
+            <div>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <h2>PM2 Process Manager</h2>
+                    <span id="pm2StatusBadge" class="badge badge-version">Checking PM2...</span>
+                </div>
+                <p class="section-desc">Monitor and control Node.js, Python, and background daemon processes live</p>
+            </div>
+            <div class="section-actions">
+                <?php if (in_array(($user['role'] ?? ''), ['admin', 'deployer'], true)): ?>
+                    <button id="startPm2AppBtn" class="btn btn-primary btn-sm">+ Launch App in PM2</button>
+                <?php endif; ?>
+                <button id="refreshPm2Btn" class="btn btn-secondary btn-sm">Refresh PM2</button>
+            </div>
+        </div>
+
+        <div id="pm2Card" class="pm2-card">
+            <div class="table-responsive">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Name</th>
+                            <th>PID</th>
+                            <th>Status</th>
+                            <th>CPU</th>
+                            <th>Memory</th>
+                            <th>Uptime</th>
+                            <th>Restarts</th>
+                            <th style="text-align: right;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="pm2TableBody">
+                        <tr><td colspan="9" class="text-center">Loading PM2 process status...</td></tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
     </main>
 
@@ -171,6 +242,334 @@ $csrfToken = Csrf::getToken();
         </div>
     </div>
 
-    <script src="/assets/app.js"></script>
+    <!-- Add / Configure Site Modal -->
+    <div id="addSiteModal" class="modal-overlay hidden">
+        <div class="modal-card" style="max-width: 540px;">
+            <div class="modal-header">
+                <h3>Add New Website</h3>
+                <button id="closeAddSiteBtn" class="modal-close-btn">&times;</button>
+            </div>
+            <form id="addSiteForm">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="siteIdInput" class="form-label">Site Identifier (ID)</label>
+                        <input type="text" id="siteIdInput" name="site_id" class="form-input" placeholder="e.g. site-d or my-app" required pattern="[a-zA-Z0-9_-]{3,32}">
+                        <small class="form-help">Unique ID (3-32 characters, letters, numbers, hyphens)</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="siteNameInput" class="form-label">Display Name</label>
+                        <input type="text" id="siteNameInput" name="name" class="form-input" placeholder="e.g. E-Commerce Store" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="siteDomainInput" class="form-label">Domain Name</label>
+                        <input type="text" id="siteDomainInput" name="domain" class="form-input" placeholder="e.g. shop.example.com">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="siteScriptInput" class="form-label">Deployment Script Path</label>
+                        <input type="text" id="siteScriptInput" name="script" class="form-input" placeholder="e.g. scripts/site-d.sh (auto-created if empty)">
+                        <small class="form-help">Script will be auto-generated in <code>scripts/</code> if left blank.</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="siteRollbackInput" class="form-label">Rollback Script Path (Optional)</label>
+                        <input type="text" id="siteRollbackInput" name="rollback_script" class="form-input" placeholder="e.g. scripts/site-d-rollback.sh">
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-checkbox-label">
+                            <input type="checkbox" id="healthCheckEnableInput" name="health_check_enabled">
+                            Enable Post-Deployment Health Check
+                        </label>
+                    </div>
+
+                    <div class="form-group hidden" id="healthCheckUrlGroup">
+                        <label for="siteHealthCheckInput" class="form-label">Health Check URL</label>
+                        <input type="url" id="siteHealthCheckInput" name="health_check" class="form-input" placeholder="https://shop.example.com/healthz">
+                    </div>
+
+                    <div class="form-group" style="margin-top: 16px; padding-top: 12px; border-top: 1px dashed rgba(255,255,255,0.1);">
+                        <label class="form-checkbox-label">
+                            <input type="checkbox" id="pm2EnableInput" name="pm2_enabled">
+                            ⚡ Register & Control with PM2 Process Manager
+                        </label>
+                    </div>
+
+                    <div class="form-group hidden" id="pm2OptionsGroup">
+                        <label for="pm2AppScriptInput" class="form-label">PM2 Entry File / Script Path</label>
+                        <input type="text" id="pm2AppScriptInput" name="pm2_script" class="form-input" placeholder="e.g. app.js or server.js">
+                        <small class="form-help">Node.js/Python entry file to launch and monitor via PM2</small>
+
+                        <div style="margin-top: 10px;">
+                            <label for="pm2NameInput" class="form-label">PM2 Process Name</label>
+                            <input type="text" id="pm2NameInput" name="pm2_name" class="form-input" placeholder="e.g. my-app">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" id="deleteSiteModalBtn" class="btn btn-danger hidden" style="margin-right: auto;">Delete Site</button>
+                    <button type="button" id="closeAddSiteFooterBtn" class="btn btn-secondary">Cancel</button>
+                    <button type="submit" id="saveSiteSubmitBtn" class="btn btn-primary">Save Site</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Launch App in PM2 Modal -->
+    <div id="pm2StartModal" class="modal-overlay hidden">
+        <div class="modal-card" style="max-width: 500px;">
+            <div class="modal-header">
+                <h3>Launch App in PM2</h3>
+                <button id="closePm2StartBtn" class="modal-close-btn">&times;</button>
+            </div>
+            <form id="pm2StartForm">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="pm2ScriptInput" class="form-label">Script / Application Path</label>
+                        <input type="text" id="pm2ScriptInput" name="script" class="form-input" placeholder="e.g. app.js, index.js, or server.py" required>
+                        <small class="form-help">Path to main executable file or ecosystem config</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="pm2AppNameInput" class="form-label">Application Name (Optional)</label>
+                        <input type="text" id="pm2AppNameInput" name="name" class="form-input" placeholder="e.g. my-node-api">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="pm2CwdInput" class="form-label">Working Directory (Optional)</label>
+                        <input type="text" id="pm2CwdInput" name="cwd" class="form-input" placeholder="e.g. /home/user/apps/api">
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" id="closePm2StartFooterBtn" class="btn btn-secondary">Cancel</button>
+                    <button type="submit" id="pm2StartSubmitBtn" class="btn btn-primary">Launch Process</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- PM2 Process Logs Modal -->
+    <div id="pm2LogsModal" class="modal-overlay hidden">
+        <div class="modal-card modal-lg">
+            <div class="modal-header">
+                <div>
+                    <h3 id="pm2LogsTitle">PM2 Output Logs</h3>
+                    <div class="modal-sub-info">Showing recent stderr and stdout lines</div>
+                </div>
+                <button id="closePm2LogsBtn" class="modal-close-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="terminal-container">
+                    <div class="terminal-header">
+                        <span class="terminal-dot red"></span>
+                        <span class="terminal-dot yellow"></span>
+                        <span class="terminal-dot green"></span>
+                        <span class="terminal-title" id="pm2LogsTerminalTitle">pm2_output.log</span>
+                        <button id="refreshPm2LogsBtn" class="btn btn-secondary btn-sm" style="padding: 2px 8px; font-size: 0.75rem;">Refresh Logs</button>
+                    </div>
+                    <pre id="pm2LogsOutput" class="terminal-body">Loading PM2 logs...</pre>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="closePm2LogsFooterBtn" class="btn btn-secondary">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- PM2 Edit Process Config Modal (Full Ecosystem Suite) -->
+    <div id="pm2EditModal" class="modal-overlay hidden">
+        <div class="modal-card modal-lg">
+            <div class="modal-header">
+                <div>
+                    <h3>⚙️ PM2 Process Ecosystem Settings</h3>
+                    <div class="modal-sub-info">Configure complete process lifecycle, memory, cron, logs & environment variables</div>
+                </div>
+                <button id="closePm2EditBtn" class="modal-close-btn">&times;</button>
+            </div>
+            <form id="pm2EditForm">
+                <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
+                    <!-- Section 1: Core Execution Settings -->
+                    <h4 style="margin: 0 0 12px; color: var(--accent-primary); border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 6px;">1. Core Execution & Binary Settings</h4>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px;">
+                        <div class="form-group">
+                            <label for="pm2EditNameInput" class="form-label">Process Name</label>
+                            <input type="text" id="pm2EditNameInput" name="name" class="form-input" readonly required style="background: rgba(255,255,255,0.05);">
+                        </div>
+                        <div class="form-group">
+                            <label for="pm2EditScriptInput" class="form-label">Script / Entry File Path</label>
+                            <input type="text" id="pm2EditScriptInput" name="script" class="form-input" placeholder="e.g. app.js or /path/to/server.py" required>
+                        </div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-top: 8px;">
+                        <div class="form-group">
+                            <label for="pm2EditCwdInput" class="form-label">Working Directory (`cwd`)</label>
+                            <input type="text" id="pm2EditCwdInput" name="cwd" class="form-input" placeholder="e.g. /home/user/pm2-test">
+                        </div>
+                        <div class="form-group">
+                            <label for="pm2EditArgsInput" class="form-label">Script Arguments (`args`)</label>
+                            <input type="text" id="pm2EditArgsInput" name="args" class="form-input" placeholder="e.g. --port 3000 --env prod">
+                        </div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-top: 8px;">
+                        <div class="form-group">
+                            <label for="pm2EditInterpreterInput" class="form-label">Interpreter Binary</label>
+                            <input type="text" id="pm2EditInterpreterInput" name="interpreter" class="form-input" placeholder="e.g. node, python3, bash, ts-node">
+                        </div>
+                        <div class="form-group">
+                            <label for="pm2EditInstancesInput" class="form-label">Cluster Instances (`-i`)</label>
+                            <input type="text" id="pm2EditInstancesInput" name="instances" class="form-input" placeholder="1 or max">
+                        </div>
+                    </div>
+
+                    <!-- Section 2: Memory, Auto-Restart & Cron -->
+                    <h4 style="margin: 18px 0 12px; color: var(--accent-primary); border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 6px;">2. Memory, Auto-Restart & Cron</h4>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px;">
+                        <div class="form-group">
+                            <label for="pm2EditMemInput" class="form-label">Max Memory Restart</label>
+                            <input type="text" id="pm2EditMemInput" name="max_memory_restart" class="form-input" placeholder="e.g. 150M, 500M, 1G">
+                        </div>
+                        <div class="form-group">
+                            <label for="pm2EditCronInput" class="form-label">Cron Restart Pattern</label>
+                            <input type="text" id="pm2EditCronInput" name="cron_restart" class="form-input" placeholder="e.g. 0 0 * * *">
+                        </div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-top: 8px;">
+                        <div class="form-group">
+                            <label for="pm2EditRestartDelayInput" class="form-label">Restart Delay (ms)</label>
+                            <input type="number" id="pm2EditRestartDelayInput" name="restart_delay" class="form-input" placeholder="e.g. 3000">
+                        </div>
+                        <div class="form-group" style="display: flex; align-items: center; margin-top: 24px;">
+                            <label style="display: inline-flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" id="pm2EditAutoRestartInput" name="autorestart" checked>
+                                <span>Enable Auto-Restart on Crash</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Section 3: Logging & Environment Variables -->
+                    <h4 style="margin: 18px 0 12px; color: var(--accent-primary); border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 6px;">3. Logs & Custom Environment Variables</h4>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px;">
+                        <div class="form-group">
+                            <label for="pm2EditOutLogInput" class="form-label">Stdout Log Path (`-o`)</label>
+                            <input type="text" id="pm2EditOutLogInput" name="output_log" class="form-input" placeholder="e.g. /var/log/app-out.log">
+                        </div>
+                        <div class="form-group">
+                            <label for="pm2EditErrLogInput" class="form-label">Stderr Log Path (`-e`)</label>
+                            <input type="text" id="pm2EditErrLogInput" name="error_log" class="form-input" placeholder="e.g. /var/log/app-err.log">
+                        </div>
+                    </div>
+
+                    <div class="form-group" style="margin-top: 8px;">
+                        <label for="pm2EditEnvInput" class="form-label">Environment Variables (KEY=VALUE, comma or newline separated)</label>
+                        <textarea id="pm2EditEnvInput" name="env_str" class="form-input" rows="3" placeholder="PORT=3000&#10;NODE_ENV=production&#10;DATABASE_URL=postgres://..."></textarea>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" id="closePm2EditFooterBtn" class="btn btn-secondary">Cancel</button>
+                    <button type="submit" id="pm2EditSubmitBtn" class="btn btn-primary">Save & Apply Ecosystem Settings</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Trigger Deployment / Rollback Confirmation & User Selection Modal -->
+    <div id="triggerDeployModal" class="modal-overlay hidden">
+        <div class="modal-card" style="max-width: 480px;">
+            <div class="modal-header">
+                <div>
+                    <h3 id="triggerDeployTitle">🚀 Confirm Deployment</h3>
+                    <div class="modal-sub-info" id="triggerDeploySubInfo">Site: --</div>
+                </div>
+                <button id="closeTriggerDeployBtn" class="modal-close-btn">&times;</button>
+            </div>
+            <form id="triggerDeployForm">
+                <div class="modal-body">
+                    <p style="margin-top: 0; color: var(--text-muted); font-size: 0.9rem;">
+                        You are about to execute a deployment for website <strong id="triggerDeploySiteName">--</strong>.
+                    </p>
+
+                    <div class="form-group" style="margin-top: 14px;">
+                        <label for="triggerDeployedByInput" class="form-label">Deployed By (Operator Username)</label>
+                        <?php if (($user['role'] ?? '') === 'admin'): ?>
+                            <input type="text" id="triggerDeployedByInput" name="deployed_by" class="form-input" value="<?= htmlspecialchars($user['username'] ?? 'admin') ?>" placeholder="e.g. admin, deployer, system-bot" required>
+                            <small class="form-help">Admin Privilege: Choose or enter any admin/user name for deployment tracking.</small>
+                        <?php else: ?>
+                            <input type="text" id="triggerDeployedByInput" name="deployed_by" class="form-input" value="<?= htmlspecialchars($user['username'] ?? '') ?>" readonly style="background: rgba(255,255,255,0.05);">
+                        <?php endif; ?>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" id="closeTriggerDeployFooterBtn" class="btn btn-secondary">Cancel</button>
+                    <button type="submit" id="triggerDeploySubmitBtn" class="btn btn-primary">🚀 Execute Now</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- VPS Open Ports & Process Discovery Modal -->
+    <div id="portsModal" class="modal-overlay hidden">
+        <div class="modal-card modal-xl">
+            <div class="modal-header">
+                <div>
+                    <h3>🌐 VPS Open Ports & Process Manager</h3>
+                    <div class="modal-sub-info">Scanned active listening ports and process assignments on this server</div>
+                </div>
+                <button id="closePortsBtn" class="modal-close-btn" onclick="closeVpsPortsModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- Suggested Free Ports Callout -->
+                <div class="alert-box alert-success" style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 16px;">
+                    <div>
+                        <strong>💡 Available Free Ports for New Applications:</strong>
+                        <div id="freePortsList" style="margin-top: 6px; font-family: var(--font-mono); font-size: 0.9rem; gap: 6px; display: flex; flex-wrap: wrap;">
+                            <span class="badge badge-version">Scanning...</span>
+                        </div>
+                    </div>
+                    <small style="color: var(--text-muted);">Use these unassigned ports when setting up new app configurations.</small>
+                </div>
+
+                <!-- Filter & Search Bar -->
+                <div style="display: flex; gap: 12px; margin-bottom: 16px;">
+                    <input type="text" id="portSearchInput" class="form-input" placeholder="🔍 Search port number, process name (e.g. node, php, 3000, 8085)..." style="flex: 1;">
+                    <button id="refreshPortsModalBtn" class="btn btn-secondary btn-sm">🔄 Refresh Ports</button>
+                </div>
+
+                <!-- Open Ports Table -->
+                <div class="table-responsive">
+                    <table class="history-table">
+                        <thead>
+                            <tr>
+                                <th>Port</th>
+                                <th>Protocol</th>
+                                <th>Scope / Bind Address</th>
+                                <th>System Process (PID)</th>
+                                <th>LightDeploy Application</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="portsTableBody">
+                            <tr>
+                                <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 20px;">Scanning VPS ports...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="closePortsFooterBtn" class="btn btn-secondary" onclick="closeVpsPortsModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/assets/app.js?v=<?= time() ?>"></script>
 </body>
 </html>

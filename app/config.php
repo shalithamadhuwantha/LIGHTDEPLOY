@@ -25,6 +25,7 @@ $defaultSecurity = [
 ];
 
 return [
+    'timezone' => 'Asia/Colombo',
     'root_dir' => $rootDir,
     'app_dir' => $rootDir . '/app',
     'public_dir' => $rootDir . '/public',

@@ -21,6 +21,7 @@ $securityLogger = new SecurityLogger($config['logs_dir'] . '/security');
 $authService = new AuthService($config['config_dir'] . '/users.json', $securityLogger);
 
 $user = $authService->requireAuth();
+session_write_close();
 
 $deploymentId = trim((string)($_GET['id'] ?? ''));
 

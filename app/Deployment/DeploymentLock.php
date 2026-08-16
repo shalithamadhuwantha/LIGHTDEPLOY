@@ -78,17 +78,27 @@ class DeploymentLock
         if (!$this->isLocked($siteId)) {
             return null;
         }
-        return safeReadJson($this->getLockFilePath($siteId), null);
+        $data = safeReadJson($this->getLockFilePath($siteId), []);
+        return !empty($data) ? $data : null;
     }
 
     private function isProcessAlive(int $pid): bool
     {
-        if (function_exists('posix_kill')) {
-            return @posix_kill($pid, 0);
+        if ($pid <= 0) {
+            return false;
         }
 
-        if (file_exists("/proc/$pid")) {
+        $procStatFile = "/proc/$pid/status";
+        if (file_exists($procStatFile)) {
+            $content = @file_get_contents($procStatFile);
+            if ($content !== false && preg_match('/State:\s+([Zz])/', $content)) {
+                return false; // Zombie process = dead/completed!
+            }
             return true;
+        }
+
+        if (function_exists('posix_kill')) {
+            return @posix_kill($pid, 0);
         }
 
         return false;

@@ -17,6 +17,7 @@ $securityLogger = new SecurityLogger($config['logs_dir'] . '/security');
 $authService = new AuthService($config['config_dir'] . '/users.json', $securityLogger);
 
 $user = $authService->requireAuth();
+session_write_close();
 
 $sitesFile = $config['config_dir'] . '/sites.json';
 $sitesData = safeReadJson($sitesFile, ['sites' => []]);
@@ -57,8 +58,14 @@ foreach ($configuredSites as $siteId => $siteMeta) {
         'id' => $siteId,
         'name' => $siteMeta['name'] ?? $siteId,
         'domain' => $siteMeta['domain'] ?? '',
+        'script' => $siteMeta['script'] ?? '',
+        'rollback_script' => $siteMeta['rollback_script'] ?? '',
+        'health_check' => $siteMeta['health_check'] ?? '',
         'has_rollback' => !empty($siteMeta['rollback_script']),
         'health_check_enabled' => !empty($siteMeta['health_check_enabled']),
+        'pm2_enabled' => !empty($siteMeta['pm2_enabled']),
+        'pm2_script' => $siteMeta['pm2_script'] ?? '',
+        'pm2_name' => $siteMeta['pm2_name'] ?? $siteId,
         'enabled' => !empty($siteMeta['enabled']),
         'is_locked' => $isLocked,
         'active_lock' => $lockInfo,

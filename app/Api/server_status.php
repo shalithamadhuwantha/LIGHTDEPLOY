@@ -15,6 +15,7 @@ $securityLogger = new SecurityLogger($config['logs_dir'] . '/security');
 $authService = new AuthService($config['config_dir'] . '/users.json', $securityLogger);
 
 $authService->requireAuth();
+session_write_close();
 
 // RAM metrics from /proc/meminfo
 $memInfo = [];
@@ -55,6 +56,40 @@ $hours = floor(($uptimeSeconds % 86400) / 3600);
 $mins = floor(($uptimeSeconds % 3600) / 60);
 $uptimeFormatted = "{$days}d {$hours}h {$mins}m";
 
+// App-specific resource metrics (LightDeploy itself)
+$appPid = getmypid();
+$appMemoryBytes = memory_get_usage(true);
+$appPeakMemoryBytes = memory_get_peak_usage(true);
+
+$appRssKb = 0;
+$appCpuPercent = 0.0;
+
+if ($appPid) {
+    // Try ps command for current PHP server process
+    $psOutput = @shell_exec("ps -p {$appPid} -o %cpu,rss 2>/dev/null");
+    if ($psOutput) {
+        $lines = explode("\n", trim($psOutput));
+        if (isset($lines[1])) {
+            $parts = preg_split('/\s+/', trim($lines[1]));
+            if (count($parts) >= 2) {
+                $appCpuPercent = (float)$parts[0];
+                $appRssKb = (int)$parts[1];
+            }
+        }
+    }
+}
+
+// Fallback to /proc/self/status if ps isn't available
+if ($appRssKb === 0 && file_exists('/proc/self/status')) {
+    $statusContent = @file_get_contents('/proc/self/status');
+    if ($statusContent && preg_match('/VmRSS:\s+(\d+)\s+kB/i', $statusContent, $m)) {
+        $appRssKb = (int)$m[1];
+    }
+}
+
+$appRssMb = $appRssKb > 0 ? round($appRssKb / 1024, 2) : round($appMemoryBytes / (1024 * 1024), 2);
+$appPeakMb = round($appPeakMemoryBytes / (1024 * 1024), 2);
+
 jsonSuccess([
     'cpu' => [
         'load_1m' => $load[0] ?? 0,
@@ -74,5 +109,14 @@ jsonSuccess([
         'percentage' => $diskPercentage
     ],
     'uptime' => $uptimeFormatted,
-    'hostname' => gethostname()
+    'hostname' => gethostname(),
+    'app_resources' => [
+        'pid' => $appPid,
+        'rss_mb' => $appRssMb,
+        'peak_mb' => $appPeakMb,
+        'allocated_mb' => round($appMemoryBytes / (1024 * 1024), 2),
+        'cpu_percent' => $appCpuPercent,
+        'php_version' => PHP_VERSION,
+        'memory_limit' => ini_get('memory_limit') ?: 'N/A'
+    ]
 ]);
