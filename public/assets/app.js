@@ -201,10 +201,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         </button>
                     ` : ''}
                     ${site.pm2_enabled ? `
-                        <button class="btn btn-secondary btn-sm btn-pm2-reload" data-pm2-target="${escapeHtml(site.pm2_name || siteId)}">
+                        <button class="btn btn-secondary btn-sm btn-pm2-reload" data-pm2-target="${escapeHtml(site.pm2_name || siteId)}" data-target="${escapeHtml(site.pm2_name || siteId)}">
                             ⚡ PM2 Reload
                         </button>
-                        <button class="btn btn-secondary btn-sm btn-pm2-logs" data-pm2-target="${escapeHtml(site.pm2_name || siteId)}">
+                        <button class="btn btn-secondary btn-sm btn-pm2-logs" data-pm2-target="${escapeHtml(site.pm2_name || siteId)}" data-target="${escapeHtml(site.pm2_name || siteId)}">
                             📄 PM2 Logs
                         </button>
                     ` : ''}
@@ -220,24 +220,24 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Attach Card Action Listeners
-        document.querySelectorAll('.btn-deploy').forEach(btn => {
+        document.querySelectorAll('#sitesGrid .btn-deploy').forEach(btn => {
             btn.addEventListener('click', () => triggerDeployment(btn.dataset.siteId));
         });
 
-        document.querySelectorAll('.btn-rollback').forEach(btn => {
+        document.querySelectorAll('#sitesGrid .btn-rollback').forEach(btn => {
             btn.addEventListener('click', () => triggerRollback(btn.dataset.siteId));
         });
 
-        document.querySelectorAll('.btn-view-log').forEach(btn => {
+        document.querySelectorAll('#sitesGrid .btn-view-log').forEach(btn => {
             btn.addEventListener('click', () => viewDeploymentLog(btn.dataset.depId, btn.dataset.siteId));
         });
 
-        document.querySelectorAll('.btn-pm2-reload').forEach(btn => {
-            btn.addEventListener('click', () => executePm2Action('reload', btn.dataset.pm2Target));
+        document.querySelectorAll('#sitesGrid .btn-pm2-reload').forEach(btn => {
+            btn.addEventListener('click', () => executePm2Action('reload', btn.dataset.pm2Target || btn.dataset.target));
         });
 
-        document.querySelectorAll('.btn-pm2-logs').forEach(btn => {
-            btn.addEventListener('click', () => openPm2LogsModal(btn.dataset.pm2Target));
+        document.querySelectorAll('#sitesGrid .btn-pm2-logs').forEach(btn => {
+            btn.addEventListener('click', () => openPm2LogsModal(btn.dataset.pm2Target || btn.dataset.target));
         });
 
         document.querySelectorAll('.btn-edit-site').forEach(btn => {
@@ -512,101 +512,113 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Cancel Deployment Execution
-    modalCancelBtn.addEventListener('click', async () => {
-        if (!currentDeploymentId) return;
-        if (!confirm('Are you sure you want to CANCEL this active deployment process?')) return;
+    if (modalCancelBtn) {
+        modalCancelBtn.addEventListener('click', async () => {
+            if (!currentDeploymentId) return;
+            if (!confirm('Are you sure you want to CANCEL this active deployment process?')) return;
 
-        modalCancelBtn.disabled = true;
-        const { ok, data } = await apiFetch('/api/cancel.php', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ deployment_id: currentDeploymentId })
+            modalCancelBtn.disabled = true;
+            const { ok, data } = await apiFetch('/api/cancel.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ deployment_id: currentDeploymentId })
+            });
+
+            modalCancelBtn.disabled = false;
+            if (ok && data.success) {
+                appendTerminalLine(`[${formatSriLankaTime()}] [SYSTEM] Cancellation command issued.`);
+            } else {
+                alert(`Cancel failed: ${data.error?.message || 'Unknown error'}`);
+            }
         });
+    }
 
-        modalCancelBtn.disabled = false;
-        if (ok && data.success) {
-            appendTerminalLine(`[${formatSriLankaTime()}] [SYSTEM] Cancellation command issued.`);
-        } else {
-            alert(`Cancel failed: ${data.error?.message || 'Unknown error'}`);
-        }
-    });
+    if (modalRollbackBtn) {
+        modalRollbackBtn.addEventListener('click', () => {
+            if (currentSiteId) {
+                if (deploymentModal) deploymentModal.classList.add('hidden');
+                triggerRollback(currentSiteId);
+            }
+        });
+    }
 
-    modalRollbackBtn.addEventListener('click', () => {
-        if (currentSiteId) {
-            deploymentModal.classList.add('hidden');
-            triggerRollback(currentSiteId);
-        }
-    });
-
-    modalDeployAgainBtn.addEventListener('click', () => {
-        if (currentSiteId) {
-            deploymentModal.classList.add('hidden');
-            triggerDeployment(currentSiteId);
-        }
-    });
+    if (modalDeployAgainBtn) {
+        modalDeployAgainBtn.addEventListener('click', () => {
+            if (currentSiteId) {
+                if (deploymentModal) deploymentModal.classList.add('hidden');
+                triggerDeployment(currentSiteId);
+            }
+        });
+    }
 
     // Modal Close Listeners
-    closeModalBtn.addEventListener('click', () => {
-        if (activeEventSource) {
-            if (!confirm('Deployment is still running in the background. Close modal window?')) {
-                return;
+    if (closeModalBtn) {
+        closeModalBtn.addEventListener('click', () => {
+            if (activeEventSource) {
+                if (!confirm('Deployment is still running in the background. Close modal window?')) {
+                    return;
+                }
             }
-        }
-        deploymentModal.classList.add('hidden');
-    });
+            if (deploymentModal) deploymentModal.classList.add('hidden');
+        });
+    }
 
-    modalCloseFooterBtn.addEventListener('click', () => {
-        deploymentModal.classList.add('hidden');
-    });
+    if (modalCloseFooterBtn) {
+        modalCloseFooterBtn.addEventListener('click', () => {
+            if (deploymentModal) deploymentModal.classList.add('hidden');
+        });
+    }
 
     // 6. Audit History View
-    viewHistoryBtn.addEventListener('click', async () => {
-        historyModal.classList.remove('hidden');
-        historyTableBody.innerHTML = `<tr><td colspan="7" class="text-center">Loading audit history...</td></tr>`;
+    if (viewHistoryBtn) {
+        viewHistoryBtn.addEventListener('click', async () => {
+            if (historyModal) historyModal.classList.remove('hidden');
+            if (historyTableBody) historyTableBody.innerHTML = `<tr><td colspan="7" class="text-center">Loading audit history...</td></tr>`;
 
-        const { ok, data } = await apiFetch('/api/history.php');
-        if (!ok || !data.success) {
-            historyTableBody.innerHTML = `<tr><td colspan="7" class="text-center text-danger">Failed to load history.</td></tr>`;
-            return;
-        }
+            const { ok, data } = await apiFetch('/api/history.php');
+            if (!ok || !data.success) {
+                if (historyTableBody) historyTableBody.innerHTML = `<tr><td colspan="7" class="text-center text-danger">Failed to load history.</td></tr>`;
+                return;
+            }
 
-        const history = data.history;
-        if (history.length === 0) {
-            historyTableBody.innerHTML = `<tr><td colspan="7" class="text-center">No deployment history recorded yet.</td></tr>`;
-            return;
-        }
+            const history = data.history || [];
+            if (history.length === 0) {
+                if (historyTableBody) historyTableBody.innerHTML = `<tr><td colspan="7" class="text-center">No deployment history recorded yet.</td></tr>`;
+                return;
+            }
 
-        historyTableBody.innerHTML = '';
-        history.forEach(h => {
-            const tr = document.createElement('tr');
-            const statusClass = `badge-status-${(h.status || 'unknown').toLowerCase()}`;
+            if (historyTableBody) historyTableBody.innerHTML = '';
+            history.forEach(h => {
+                const tr = document.createElement('tr');
+                const statusClass = `badge-status-${(h.status || 'unknown').toLowerCase()}`;
 
-            tr.innerHTML = `
-                <td>${escapeHtml(h.start_time || '')}</td>
-                <td><code>${escapeHtml(h.deployment_id || '')}</code></td>
-                <td><strong>${escapeHtml(h.site_name || h.site_id || '')}</strong></td>
-                <td>${escapeHtml(h.user || '')}</td>
-                <td><span class="badge badge-status ${statusClass}">${escapeHtml((h.status || '').toUpperCase())}</span></td>
-                <td>${h.duration ? `${h.duration}s` : '--'}</td>
-                <td>
-                    <button class="btn btn-secondary btn-sm hist-log-btn" data-dep-id="${h.deployment_id}" data-site-id="${h.site_id}">
-                        View Log
-                    </button>
-                </td>
-            `;
-            historyTableBody.appendChild(tr);
-        });
+                tr.innerHTML = `
+                    <td>${escapeHtml(h.start_time || '')}</td>
+                    <td><code>${escapeHtml(h.deployment_id || '')}</code></td>
+                    <td><strong>${escapeHtml(h.site_name || h.site_id || '')}</strong></td>
+                    <td>${escapeHtml(h.user || '')}</td>
+                    <td><span class="badge badge-status ${statusClass}">${escapeHtml((h.status || '').toUpperCase())}</span></td>
+                    <td>${h.duration ? `${h.duration}s` : '--'}</td>
+                    <td>
+                        <button class="btn btn-secondary btn-sm hist-log-btn" data-dep-id="${h.deployment_id}" data-site-id="${h.site_id}">
+                            View Log
+                        </button>
+                    </td>
+                `;
+                if (historyTableBody) historyTableBody.appendChild(tr);
+            });
 
-        document.querySelectorAll('.hist-log-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                historyModal.classList.add('hidden');
-                viewDeploymentLog(btn.dataset.depId, btn.dataset.siteId);
+            document.querySelectorAll('.hist-log-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    if (historyModal) historyModal.classList.add('hidden');
+                    viewDeploymentLog(btn.dataset.depId, btn.dataset.siteId);
+                });
             });
         });
-    });
+    }
 
-    closeHistoryBtn.addEventListener('click', () => historyModal.classList.add('hidden'));
-    closeHistoryFooterBtn.addEventListener('click', () => historyModal.classList.add('hidden'));
+    if (closeHistoryBtn) closeHistoryBtn.addEventListener('click', () => { if (historyModal) historyModal.classList.add('hidden'); });
+    if (closeHistoryFooterBtn) closeHistoryFooterBtn.addEventListener('click', () => { if (historyModal) historyModal.classList.add('hidden'); });
 
     // Add Site Modal Handlers
     const addSiteBtn = document.getElementById('addSiteBtn');
@@ -791,10 +803,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Logout Action
-    logoutBtn.addEventListener('click', async () => {
-        await apiFetch('/api/logout.php', { method: 'POST' });
-        window.location.href = '/login.php';
-    });
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', async () => {
+            await apiFetch('/api/logout.php', { method: 'POST' });
+            window.location.href = '/login.php';
+        });
+    }
 
     // =========================================================================
     // PM2 PROCESS MANAGER ENGINE
@@ -934,7 +948,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             `}
                             <button class="btn btn-secondary btn-sm btn-pm2-edit" data-name="${escapeHtml(proc.name)}" title="Ecosystem Settings">⚙️</button>
                         ` : ''}
-                        <button class="btn btn-secondary btn-sm btn-pm2-logs" data-target="${proc.name}" title="View Logs">📜</button>
+                        <button class="btn btn-secondary btn-sm btn-pm2-logs" data-target="${escapeHtml(proc.name)}" data-pm2-target="${escapeHtml(proc.name)}" title="View Logs">📜</button>
                         ${userRole === 'admin' ? `
                             <button class="btn btn-danger btn-sm btn-pm2-action" data-action="delete" data-target="${proc.id}" title="Delete">🗑️</button>
                         ` : ''}
@@ -945,7 +959,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         // Event Listeners for PM2 Row Action Buttons
-        document.querySelectorAll('.btn-pm2-action').forEach(btn => {
+        document.querySelectorAll('#pm2TableBody .btn-pm2-action').forEach(btn => {
             btn.addEventListener('click', () => {
                 const action = btn.dataset.action;
                 const target = btn.dataset.target;
@@ -956,15 +970,15 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         });
 
-        document.querySelectorAll('.btn-pm2-edit').forEach(btn => {
+        document.querySelectorAll('#pm2TableBody .btn-pm2-edit').forEach(btn => {
             btn.addEventListener('click', () => {
                 openPm2EditModal(btn.dataset.name);
             });
         });
 
-        document.querySelectorAll('.btn-pm2-logs').forEach(btn => {
+        document.querySelectorAll('#pm2TableBody .btn-pm2-logs').forEach(btn => {
             btn.addEventListener('click', () => {
-                openPm2LogsModal(btn.dataset.target);
+                openPm2LogsModal(btn.dataset.target || btn.dataset.pm2Target);
             });
         });
     }
@@ -1082,6 +1096,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function openPm2LogsModal(target) {
+        target = (target && target !== 'undefined') ? target : 'all';
         currentPm2LogTarget = target;
         if (pm2LogsTitle) pm2LogsTitle.textContent = `PM2 Output Logs: ${target}`;
         if (pm2LogsOutput) pm2LogsOutput.textContent = 'Fetching logs from PM2 daemon...';
@@ -1346,6 +1361,129 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    function showBackupsListModal(db) {
+        const titleEl = document.getElementById('dbBackupsListModalTitle');
+        const subTitleEl = document.getElementById('dbBackupsListModalSubtitle');
+        const tableBody = document.getElementById('dbBackupsListTableBody');
+        const actionsEl = document.getElementById('dbBackupsModalActions');
+
+        if (titleEl) titleEl.textContent = `📁 Backup Archives for ${db.label}`;
+        if (subTitleEl) subTitleEl.innerHTML = `Database: <code>${escapeHtml(db.db_name)}</code> | Host: <code>${escapeHtml(db.db_host)}:${escapeHtml(db.db_port)}</code>`;
+
+        if (actionsEl && (userRole === 'admin' || userRole === 'deployer')) {
+            actionsEl.innerHTML = `
+                <button class="btn btn-primary btn-sm btn-run-backup-modal" data-id="${db.id}" data-format="sql">⚡ Dump .sql Now</button>
+                <button class="btn btn-secondary btn-sm btn-run-backup-modal" data-id="${db.id}" data-format="sql.gz">📦 Dump .sql.gz Now</button>
+            `;
+
+            actionsEl.querySelectorAll('.btn-run-backup-modal').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    const dbId = btn.dataset.id;
+                    const format = btn.dataset.format || 'sql';
+                    btn.disabled = true;
+                    const origText = btn.textContent;
+                    btn.textContent = '⏳ Dumping...';
+
+                    const { ok, data } = await apiFetch('/api/backups.php', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action: 'run_backup', id: dbId, format: format })
+                    });
+
+                    btn.disabled = false;
+                    btn.textContent = origText;
+
+                    if (ok && data.success) {
+                        showToast(data.message || 'Backup generated successfully!', 'success');
+                        const res = await apiFetch('/api/backups.php');
+                        if (res.ok && res.data.success && res.data.databases[dbId]) {
+                            showBackupsListModal(res.data.databases[dbId]);
+                        }
+                        loadDatabases();
+                    } else {
+                        showToast(data.message || 'Backup failed.', 'error');
+                    }
+                });
+            });
+        }
+
+        const backups = db.backups || [];
+        if (backups.length === 0) {
+            if (tableBody) {
+                tableBody.innerHTML = `
+                    <tr>
+                        <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 30px;">
+                            No backup archives created yet for this database.<br>
+                            Click <strong>"⚡ Dump .sql Now"</strong> to generate your first backup file.
+                        </td>
+                    </tr>
+                `;
+            }
+        } else {
+            if (tableBody) {
+                tableBody.innerHTML = backups.map(b => {
+                    const isSql = b.filename.endsWith('.sql');
+                    const fileIcon = isSql ? '📜' : '📦';
+                    const fileBadge = isSql
+                        ? '<span class="badge badge-version" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8;">📜 .SQL (phpMyAdmin Ready)</span>'
+                        : '<span class="badge badge-version" style="background: rgba(168, 85, 247, 0.15); color: #c084fc;">📦 .SQL.GZ Archive</span>';
+
+                    return `
+                        <tr>
+                            <td style="font-family: var(--font-mono); font-size: 0.85rem; font-weight: 500;">${fileIcon} ${escapeHtml(b.filename)}</td>
+                            <td>${fileBadge}</td>
+                            <td style="font-family: var(--font-mono); font-size: 0.85rem;">${escapeHtml(b.filesize_formatted)}</td>
+                            <td style="font-size: 0.85rem; color: var(--text-muted);">${escapeHtml(b.created_at)}</td>
+                            <td>
+                                <span class="badge badge-version" style="background: rgba(52, 211, 153, 0.1); color: #34d399;">Active (${escapeHtml(b.age_days)} days old)</span>
+                            </td>
+                            <td style="text-align: right;">
+                                <a href="/api/backups.php?action=download&filename=${encodeURIComponent(b.filename)}" class="btn btn-secondary btn-sm" style="padding: 4px 10px; font-size: 0.8rem; text-decoration: none;" title="Download file">📥 Download</a>
+                                ${userRole === 'admin' || userRole === 'deployer' ? `
+                                    <button class="btn btn-outline-danger btn-sm btn-delete-backup-modal" data-filename="${escapeHtml(b.filename)}" data-db-id="${db.id}" style="padding: 4px 10px; font-size: 0.8rem;" title="Delete backup archive">🗑️ Delete</button>
+                                ` : ''}
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+
+                tableBody.querySelectorAll('.btn-delete-backup-modal').forEach(btn => {
+                    btn.addEventListener('click', async () => {
+                        const filename = btn.dataset.filename;
+                        const dbId = btn.dataset.dbId;
+                        if (!confirm(`Are you sure you want to delete backup '${filename}'?`)) return;
+
+                        btn.disabled = true;
+                        const { ok, data } = await apiFetch('/api/backups.php', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ action: 'delete_backup', filename: filename })
+                        });
+
+                        if (ok && data.success) {
+                            showToast(data.message || 'Backup file deleted.', 'success');
+                            const res = await apiFetch('/api/backups.php');
+                            if (res.ok && res.data.success && res.data.databases[dbId]) {
+                                showBackupsListModal(res.data.databases[dbId]);
+                            }
+                            loadDatabases();
+                        } else {
+                            showToast(data.message || 'Failed to delete backup file.', 'error');
+                            btn.disabled = false;
+                        }
+                    });
+                });
+            }
+        }
+
+        if (window.openDbBackupsListModal) {
+            window.openDbBackupsListModal();
+        } else {
+            const modal = document.getElementById('dbBackupsListModal');
+            if (modal) modal.classList.remove('hidden');
+        }
+    }
+
     function renderDatabases(databases) {
         const dbKeys = Object.keys(databases);
         if (dbKeys.length === 0) {
@@ -1360,97 +1498,89 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        dbContainer.innerHTML = dbKeys.map(dbId => {
+        const scheduleBadgeMap = {
+            '5m': '<span class="badge badge-version" style="background: rgba(239, 68, 68, 0.15); color: #f87171;">⚡ Every 5 Mins</span>',
+            'daily': '<span class="badge badge-version" style="background: rgba(16, 185, 129, 0.15); color: #34d399;">📅 Daily (24h)</span>',
+            '12h': '<span class="badge badge-version" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8;">⏰ Every 12 Hours</span>',
+            '6h': '<span class="badge badge-version" style="background: rgba(168, 85, 247, 0.15); color: #c084fc;">⚡ Every 6 Hours</span>',
+            'weekly': '<span class="badge badge-version" style="background: rgba(245, 158, 11, 0.15); color: #fbbf24;">🗓️ Weekly</span>',
+            'disabled': '<span class="badge badge-version" style="background: rgba(100, 116, 139, 0.15); color: #94a3b8;">⏸️ Manual Only</span>'
+        };
+
+        const cardsHtml = dbKeys.map(dbId => {
             const db = databases[dbId];
             const backups = db.backups || [];
             
-            const scheduleBadgeMap = {
-                'daily': '<span class="badge badge-version" style="background: rgba(16, 185, 129, 0.15); color: #34d399;">📅 Daily (24h)</span>',
-                '12h': '<span class="badge badge-version" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8;">⏰ Every 12 Hours</span>',
-                '6h': '<span class="badge badge-version" style="background: rgba(168, 85, 247, 0.15); color: #c084fc;">⚡ Every 6 Hours</span>',
-                'weekly': '<span class="badge badge-version" style="background: rgba(245, 158, 11, 0.15); color: #fbbf24;">🗓️ Weekly</span>',
-                'disabled': '<span class="badge badge-version" style="background: rgba(239, 68, 68, 0.15); color: #f87171;">⏸️ Manual Only</span>'
-            };
-
-            const backupsRows = backups.length > 0 ? backups.map(b => {
-                const isSql = b.filename.endsWith('.sql');
-                const fileIcon = isSql ? '📜' : '📦';
-                const fileBadge = isSql
-                    ? '<span class="badge badge-version" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8;">📜 .SQL (phpMyAdmin Ready)</span>'
-                    : '<span class="badge badge-version" style="background: rgba(168, 85, 247, 0.15); color: #c084fc;">📦 .SQL.GZ Archive</span>';
-
-                return `
-                <tr>
-                    <td style="font-family: var(--font-mono); font-size: 0.85rem;">${fileIcon} ${escapeHtml(b.filename)}</td>
-                    <td>${fileBadge}</td>
-                    <td style="font-family: var(--font-mono); font-size: 0.85rem;">${escapeHtml(b.filesize_formatted)}</td>
-                    <td style="font-size: 0.85rem; color: var(--text-muted);">${escapeHtml(b.created_at)}</td>
-                    <td>
-                        <span class="badge badge-version" style="background: rgba(52, 211, 153, 0.1); color: #34d399;">Active (${escapeHtml(b.age_days)} days old)</span>
-                    </td>
-                    <td style="text-align: right;">
-                        <a href="/api/backups.php?action=download&filename=${encodeURIComponent(b.filename)}" class="btn btn-secondary btn-sm" style="padding: 2px 8px; font-size: 0.75rem;" title="Download ${isSql ? 'plain .sql file for phpMyAdmin import' : 'compressed archive'}">📥 Download ${isSql ? '.sql' : '.sql.gz'}</a>
-                        ${userRole === 'admin' || userRole === 'deployer' ? `
-                            <button class="btn btn-outline-danger btn-sm btn-delete-backup" data-filename="${escapeHtml(b.filename)}" style="padding: 2px 8px; font-size: 0.75rem;" title="Delete backup archive">🗑️</button>
-                        ` : ''}
-                    </td>
-                </tr>
-            `;
-            }).join('') : `
-                <tr>
-                    <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 16px;">No backup archives generated yet. Click "⚡ Backup Now (.sql)" to create your first phpMyAdmin compatible dump.</td>
-                </tr>
-            `;
-
             return `
-                <div class="site-card" style="padding: 20px; border: 1px solid var(--bg-card-border); border-radius: var(--radius-md); background: rgba(15, 23, 42, 0.6);">
-                    <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px; margin-bottom: 14px;">
-                        <div>
-                            <div style="display: flex; align-items: center; gap: 10px;">
-                                <h4 style="margin: 0; font-size: 1.1rem; color: var(--text-main);">🗄️ ${escapeHtml(db.label)}</h4>
-                                ${scheduleBadgeMap[db.schedule] || ''}
-                                <span class="badge badge-version" style="background: rgba(255,255,255,0.05); color: var(--text-muted);">Retention: 7 Days</span>
+                <div class="site-card db-card" style="padding: 22px; border: 1px solid var(--bg-card-border); border-radius: var(--radius-md); background: rgba(15, 23, 42, 0.65); display: flex; flex-direction: column; justify-content: space-between; transition: all 0.2s ease;">
+                    <div>
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px; gap: 10px;">
+                            <div>
+                                <div style="font-size: 1.15rem; font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 8px;">
+                                    🗄️ ${escapeHtml(db.label)}
+                                </div>
+                                <div style="font-family: var(--font-mono); font-size: 0.84rem; color: #38bdf8; margin-top: 4px;">
+                                    Database: <strong>${escapeHtml(db.db_name)}</strong>
+                                </div>
                             </div>
-                            <div style="margin-top: 6px; font-family: var(--font-mono); font-size: 0.85rem; color: var(--text-muted); display: flex; gap: 16px; flex-wrap: wrap;">
-                                <span>Host: <strong>${escapeHtml(db.db_host)}:${escapeHtml(db.db_port)}</strong></span>
-                                <span>Database: <strong>${escapeHtml(db.db_name)}</strong></span>
-                                <span>Username: <strong>${escapeHtml(db.db_user)}</strong></span>
-                                <span>Last Backup: <strong>${escapeHtml(db.last_backup_at || 'Never')}</strong></span>
+                            <div>
+                                ${scheduleBadgeMap[db.schedule] || ''}
                             </div>
                         </div>
-                        <div style="display: flex; gap: 8px;">
-                            ${userRole === 'admin' || userRole === 'deployer' ? `
-                                <button class="btn btn-primary btn-sm btn-run-backup" data-id="${db.id}" data-format="sql" title="Generate phpMyAdmin ready .sql file">⚡ Backup Now (.sql)</button>
-                                <button class="btn btn-secondary btn-sm btn-run-backup" data-id="${db.id}" data-format="sql.gz" title="Generate compressed .sql.gz file">📦 (.sql.gz)</button>
-                                <button class="btn btn-secondary btn-sm btn-edit-db" data-db='${escapeHtml(JSON.stringify(db))}'>✏️ Edit</button>
-                            ` : ''}
-                            ${userRole === 'admin' ? `
-                                <button class="btn btn-outline-danger btn-sm btn-delete-db" data-id="${db.id}">🗑️</button>
-                            ` : ''}
+
+                        <div style="background: rgba(0, 0, 0, 0.25); border: 1px solid rgba(255, 255, 255, 0.05); padding: 12px 14px; border-radius: 8px; font-family: var(--font-mono); font-size: 0.82rem; margin-bottom: 16px;">
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+                                <span style="color: var(--text-muted);">Host / Port:</span>
+                                <span style="color: var(--text-main); font-weight: 600;">${escapeHtml(db.db_host)}:${escapeHtml(db.db_port)}</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+                                <span style="color: var(--text-muted);">User:</span>
+                                <span style="color: var(--text-main);">${escapeHtml(db.db_user)}</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+                                <span style="color: var(--text-muted);">Last Backup:</span>
+                                <span style="color: #38bdf8;">${escapeHtml(db.last_backup_at || 'Never')}</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between;">
+                                <span style="color: var(--text-muted);">Backup Files:</span>
+                                <span class="badge badge-version" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8;">📁 ${backups.length} Archives</span>
+                            </div>
                         </div>
                     </div>
 
-                    <!-- Backup Archives Table -->
-                    <div class="table-responsive" style="margin-top: 10px; border-top: 1px dashed rgba(255,255,255,0.1); padding-top: 10px;">
-                        <table class="history-table">
-                            <thead>
-                                <tr>
-                                    <th>Backup File Name</th>
-                                    <th>Format / phpMyAdmin Ready</th>
-                                    <th>Size</th>
-                                    <th>Created At (Sri Lanka Time)</th>
-                                    <th>Retention Status</th>
-                                    <th style="text-align: right;">Action</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${backupsRows}
-                            </tbody>
-                        </table>
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: auto;">
+                        <button class="btn btn-primary btn-sm btn-open-db-backups-modal" data-db='${escapeHtml(JSON.stringify(db))}' style="flex: 1; text-align: center; justify-content: center; font-weight: 600;">
+                            📁 View Backups (${backups.length})
+                        </button>
+                        ${userRole === 'admin' || userRole === 'deployer' ? `
+                            <button class="btn btn-secondary btn-sm btn-run-backup" data-id="${db.id}" data-format="sql" title="Run 1-Click Backup Now (.sql)">⚡ Backup Now</button>
+                            <button class="btn btn-secondary btn-sm btn-edit-db" data-db='${escapeHtml(JSON.stringify(db))}'>✏️ Edit</button>
+                        ` : ''}
+                        ${userRole === 'admin' ? `
+                            <button class="btn btn-outline-danger btn-sm btn-delete-db" data-id="${db.id}">🗑️</button>
+                        ` : ''}
                     </div>
                 </div>
             `;
         }).join('');
+
+        dbContainer.innerHTML = `
+            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 20px;">
+                ${cardsHtml}
+            </div>
+        `;
+
+        // Attach event handlers for "View Backups" popup modal
+        document.querySelectorAll('.btn-open-db-backups-modal').forEach(btn => {
+            btn.addEventListener('click', () => {
+                try {
+                    const db = JSON.parse(btn.dataset.db);
+                    showBackupsListModal(db);
+                } catch (e) {
+                    console.error('Failed to parse database data for backups modal:', e);
+                }
+            });
+        });
 
         // Attach event handlers for DB operations
         document.querySelectorAll('.btn-run-backup').forEach(btn => {
@@ -1488,7 +1618,17 @@ document.addEventListener('DOMContentLoaded', () => {
                     document.getElementById('dbPortInput').value = db.db_port || 3306;
                     document.getElementById('dbNameInput').value = db.db_name || '';
                     document.getElementById('dbUserInput').value = db.db_user || '';
-                    document.getElementById('dbPassInput').value = '';
+
+                    const dbPassInput = document.getElementById('dbPassInput');
+                    const dbPassHelpText = document.getElementById('dbPassHelpText');
+                    if (dbPassInput) {
+                        dbPassInput.value = '';
+                        dbPassInput.placeholder = '•••••••• (Existing password preserved)';
+                    }
+                    if (dbPassHelpText) {
+                        dbPassHelpText.innerHTML = '🔒 <strong>Password is saved.</strong> Leave blank to keep existing password, or enter a new password to update.';
+                    }
+
                     document.getElementById('dbScheduleInput').value = db.schedule || 'daily';
                     document.getElementById('addDbModalTitle').textContent = '✏️ Edit MySQL Database Configuration';
                     openAddDbModal();
@@ -1514,26 +1654,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     loadDatabases();
                 } else {
                     showToast(data.message || 'Failed to delete database config.', 'error');
-                }
-            });
-        });
-
-        document.querySelectorAll('.btn-delete-backup').forEach(btn => {
-            btn.addEventListener('click', async () => {
-                const filename = btn.dataset.filename;
-                if (!confirm(`Delete backup file '${filename}'?`)) return;
-
-                const { ok, data } = await apiFetch('/api/backups.php', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: 'delete_backup', filename: filename })
-                });
-
-                if (ok && data.success) {
-                    showToast('Backup file deleted.', 'success');
-                    loadDatabases();
-                } else {
-                    showToast(data.message || 'Failed to delete backup file.', 'error');
                 }
             });
         });
@@ -1577,6 +1697,326 @@ document.addEventListener('DOMContentLoaded', () => {
                 loadDatabases();
             } else {
                 showToast(data.message || 'Failed to save database config.', 'error');
+            }
+        });
+    }
+
+    const backupAllDbsBtn = document.getElementById('backupAllDbsBtn');
+    if (backupAllDbsBtn) {
+        backupAllDbsBtn.addEventListener('click', async () => {
+            if (!confirm('Run 1-Click backup for ALL configured databases? Each database will be saved into its own separate phpMyAdmin ready .sql file.')) return;
+
+            backupAllDbsBtn.disabled = true;
+            const origText = backupAllDbsBtn.textContent;
+            backupAllDbsBtn.textContent = '⏳ Backing up all...';
+
+            const { ok, data } = await apiFetch('/api/backups.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'backup_all', format: 'sql' })
+            });
+
+            backupAllDbsBtn.disabled = false;
+            backupAllDbsBtn.textContent = origText;
+
+            if (ok && data.success) {
+                showToast(data.message || 'All databases backed up into separate .sql files!', 'success');
+                loadDatabases();
+            } else {
+                showToast(data.message || 'Backup all failed.', 'error');
+            }
+        });
+    }
+
+    const globalScheduleForm = document.getElementById('globalScheduleForm');
+    if (globalScheduleForm) {
+        globalScheduleForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const submitBtn = document.getElementById('bulkScheduleSubmitBtn');
+            const scheduleSelect = document.getElementById('bulkScheduleInput');
+            const scheduleVal = scheduleSelect ? scheduleSelect.value : 'daily';
+
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Updating...';
+
+            const { ok, data } = await apiFetch('/api/backups.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'bulk_schedule', schedule: scheduleVal })
+            });
+
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Apply to All Databases';
+
+            if (ok && data.success) {
+                showToast(data.message || 'Global schedule updated successfully!', 'success');
+                if (window.closeGlobalScheduleModal) window.closeGlobalScheduleModal();
+                loadDatabases();
+            } else {
+                showToast(data.message || 'Failed to update bulk schedule.', 'error');
+            }
+        });
+    }
+
+    window.loadMasterCredentials = async function() {
+        const { ok, data } = await apiFetch('/api/backups.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'get_master_creds' })
+        });
+
+        if (ok && data.success && data.master_credentials) {
+            const creds = data.master_credentials;
+            if (document.getElementById('masterHostInput')) document.getElementById('masterHostInput').value = creds.db_host || '127.0.0.1';
+            if (document.getElementById('masterPortInput')) document.getElementById('masterPortInput').value = creds.db_port || 3306;
+            if (document.getElementById('masterUserInput')) document.getElementById('masterUserInput').value = creds.db_user || 'root';
+            
+            const passInput = document.getElementById('masterPassInput');
+            const helpText = document.getElementById('masterPassHelpText');
+            if (passInput) {
+                passInput.value = '';
+                passInput.placeholder = creds.has_password ? '•••••••• (Password Saved)' : 'Enter master password';
+            }
+            if (helpText) {
+                helpText.textContent = creds.has_password ? '🔒 Master password is saved. Leave blank to preserve.' : 'Enter MySQL root or admin password.';
+            }
+        }
+    };
+
+    const masterCredsForm = document.getElementById('masterCredsForm');
+    if (masterCredsForm) {
+        masterCredsForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const submitBtn = document.getElementById('saveMasterCredsBtn');
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Saving...';
+
+            const formData = new FormData(masterCredsForm);
+            const payload = {
+                action: 'save_master_creds',
+                enabled: true,
+                db_host: formData.get('db_host') || '127.0.0.1',
+                db_port: parseInt(formData.get('db_port') || '3306', 10),
+                db_user: formData.get('db_user') || 'root',
+                db_pass: formData.get('db_pass') || ''
+            };
+
+            const { ok, data } = await apiFetch('/api/backups.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Save Master Credentials';
+
+            if (ok && data.success) {
+                showToast(data.message || 'Master credentials saved!', 'success');
+                if (window.closeMasterCredsModal) window.closeMasterCredsModal();
+            } else {
+                showToast(data.message || 'Failed to save master credentials.', 'error');
+            }
+        });
+    }
+
+    const testMasterCredsBtn = document.getElementById('testMasterCredsBtn');
+    if (testMasterCredsBtn) {
+        testMasterCredsBtn.addEventListener('click', async () => {
+            testMasterCredsBtn.disabled = true;
+            testMasterCredsBtn.textContent = '🧪 Testing...';
+            const resultBox = document.getElementById('masterTestResultBox');
+            if (resultBox) {
+                resultBox.style.display = 'none';
+            }
+
+            const formData = masterCredsForm ? new FormData(masterCredsForm) : new FormData();
+            const payload = {
+                action: 'test_master_creds',
+                db_host: formData.get('db_host') || '127.0.0.1',
+                db_port: parseInt(formData.get('db_port') || '3306', 10),
+                db_user: formData.get('db_user') || 'root',
+                db_pass: formData.get('db_pass') || ''
+            };
+
+            const { ok, data } = await apiFetch('/api/backups.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            testMasterCredsBtn.disabled = false;
+            testMasterCredsBtn.textContent = '🧪 Test Connection & Discover DBs';
+
+            if (resultBox) {
+                resultBox.style.display = 'block';
+                if (ok && data.success && data.result) {
+                    const res = data.result;
+                    const dbsList = (res.user_databases || []).map(d => `<code>${escapeHtml(d)}</code>`).join(', ');
+                    resultBox.style.background = 'rgba(16, 185, 129, 0.15)';
+                    resultBox.style.border = '1px solid #10b981';
+                    resultBox.style.color = '#34d399';
+                    resultBox.innerHTML = `
+                        <strong>✅ Connection Successful!</strong><br>
+                        Discovered <strong>${res.user_database_count}</strong> user database(s) on <code>${escapeHtml(res.host)}:${res.port}</code> via user <code>${escapeHtml(res.user)}</code>.<br>
+                        <div style="margin-top: 6px; font-size: 0.82rem;"><strong>Discovered DBs:</strong> ${dbsList || 'None'}</div>
+                    `;
+                } else {
+                    resultBox.style.background = 'rgba(239, 68, 68, 0.15)';
+                    resultBox.style.border = '1px solid #ef4444';
+                    resultBox.style.color = '#f87171';
+                    resultBox.innerHTML = `<strong>❌ Connection Failed:</strong> ${escapeHtml(data.message || 'Check master username & password.')}`;
+                }
+            }
+        });
+    }
+
+    const masterBackupBtn = document.getElementById('masterBackupBtn');
+    if (masterBackupBtn) {
+        masterBackupBtn.addEventListener('click', async () => {
+            if (!confirm('Run Master Backup for ALL databases on this VPS using Master credentials? Each database will be dumped into its own separate, standalone .sql file.')) return;
+
+            masterBackupBtn.disabled = true;
+            const origText = masterBackupBtn.textContent;
+            masterBackupBtn.textContent = '⏳ Running Master Backup...';
+
+            const { ok, data } = await apiFetch('/api/backups.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'run_master_backup', format: 'sql' })
+            });
+
+            masterBackupBtn.disabled = false;
+            masterBackupBtn.textContent = origText;
+
+            if (ok && data.success) {
+                showToast(data.message || 'Master Backup completed! All VPS databases dumped into separate .sql files.', 'success');
+                loadDatabases();
+            } else {
+                showToast(data.message || 'Master Backup failed. Ensure Master Credentials are saved & tested.', 'error');
+            }
+        });
+    }
+
+    window.loadMasterBackupHistory = async function() {
+        const container = document.getElementById('masterSessionsContainer');
+        if (!container) return;
+
+        container.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 20px;">⏳ Loading Master Backup History...</div>';
+
+        const { ok, data } = await apiFetch('/api/backups.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'get_master_history' })
+        });
+
+        if (!ok || !data.success) {
+            container.innerHTML = `<div class="alert-box alert-danger">Failed to load backup history: ${escapeHtml(data.message || 'Unknown error')}</div>`;
+            return;
+        }
+
+        const sessions = data.sessions || [];
+        if (sessions.length === 0) {
+            container.innerHTML = `
+                <div style="text-align: center; padding: 32px 16px; background: rgba(15, 23, 42, 0.4); border: 1px dashed rgba(255,255,255,0.1); border-radius: 8px;">
+                    <div style="font-size: 2rem; margin-bottom: 8px;">📦</div>
+                    <div style="font-weight: 600; color: #f8fafc;">No Master VPS Backups Found</div>
+                    <div style="font-size: 0.85rem; color: #94a3b8; margin-top: 4px;">Click <strong>"⚡ Run Master Backup Now"</strong> above to dump all VPS databases into separate .sql files.</div>
+                </div>
+            `;
+            return;
+        }
+
+        let html = '';
+        sessions.forEach(session => {
+            let filesRows = session.files.map(f => `
+                <tr>
+                    <td style="font-weight: 600; color: #38bdf8;">🗄️ ${escapeHtml(f.db_name)}</td>
+                    <td><code style="font-size: 0.8rem;">${escapeHtml(f.filename)}</code></td>
+                    <td><span class="badge badge-version">${escapeHtml(f.filesize_formatted)}</span></td>
+                    <td style="text-align: right;">
+                        <a href="/api/backups.php?action=download&filename=${encodeURIComponent(f.filename)}" class="btn btn-secondary btn-sm" style="margin-right: 4px; text-decoration: none; padding: 3px 8px; font-size: 0.78rem;">📥 Download</a>
+                        <button class="btn btn-outline-danger btn-sm btn-delete-master-file" data-filename="${escapeHtml(f.filename)}" style="padding: 3px 8px; font-size: 0.78rem;">🗑️</button>
+                    </td>
+                </tr>
+            `).join('');
+
+            html += `
+                <div class="card" style="margin-bottom: 16px; border: 1px solid rgba(139, 92, 246, 0.25); background: rgba(15, 23, 42, 0.6);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: rgba(139, 92, 246, 0.1); border-bottom: 1px solid rgba(139, 92, 246, 0.2);">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span style="font-size: 1.1rem;">📅</span>
+                            <strong style="font-size: 0.95rem; color: #c084fc;">${escapeHtml(session.timestamp_label)}</strong>
+                        </div>
+                        <div style="display: flex; gap: 8px;">
+                            <span class="badge badge-version" style="background: rgba(139, 92, 246, 0.2); color: #c084fc;">🗄️ ${session.total_files} Database Dump(s)</span>
+                            <span class="badge badge-version" style="background: rgba(16, 185, 129, 0.2); color: #34d399;">💾 ${escapeHtml(session.total_size_formatted)}</span>
+                        </div>
+                    </div>
+                    <div style="padding: 12px;">
+                        <table class="table" style="margin: 0; font-size: 0.85rem;">
+                            <thead>
+                                <tr>
+                                    <th>Database</th>
+                                    <th>File Name</th>
+                                    <th>Size</th>
+                                    <th style="text-align: right;">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${filesRows}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+        });
+
+        container.innerHTML = html;
+
+        container.querySelectorAll('.btn-delete-master-file').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const fname = btn.dataset.filename;
+                if (!confirm(`Delete backup file '${fname}'?`)) return;
+
+                const { ok, data } = await apiFetch('/api/backups.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'delete_backup', filename: fname })
+                });
+
+                if (ok && data.success) {
+                    showToast('Backup file deleted.', 'success');
+                    window.loadMasterBackupHistory();
+                    loadDatabases();
+                } else {
+                    showToast(data.message || 'Failed to delete file.', 'error');
+                }
+            });
+        });
+    };
+
+    const runMasterBackupModalBtn = document.getElementById('runMasterBackupModalBtn');
+    if (runMasterBackupModalBtn) {
+        runMasterBackupModalBtn.addEventListener('click', async () => {
+            runMasterBackupModalBtn.disabled = true;
+            const origText = runMasterBackupModalBtn.textContent;
+            runMasterBackupModalBtn.textContent = '⏳ Running Backup...';
+
+            const { ok, data } = await apiFetch('/api/backups.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'run_master_backup', format: 'sql' })
+            });
+
+            runMasterBackupModalBtn.disabled = false;
+            runMasterBackupModalBtn.textContent = origText;
+
+            if (ok && data.success) {
+                showToast(data.message || 'Master Backup completed successfully!', 'success');
+                window.loadMasterBackupHistory();
+                loadDatabases();
+            } else {
+                showToast(data.message || 'Master Backup failed. Check Master DB User credentials.', 'error');
             }
         });
     }
@@ -1691,8 +2131,9 @@ document.addEventListener('DOMContentLoaded', () => {
     window.loadVpsPorts = loadVpsPorts;
     window.loadDatabases = loadDatabases;
     updateServerMetrics();
-    loadSites();
-    loadPm2Data();
+    if (sitesGrid) loadSites();
+    if (pm2TableBody) loadPm2Data();
+    if (dbContainer) loadDatabases();
     checkActiveReconnection();
 
     // Periodic Server Status Polling (every 15s)

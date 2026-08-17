@@ -36,8 +36,8 @@
             "health_check_enabled": false,
             "enabled": true
         },
-        "pm2-test-node": {
-            "name": "pm2-test-node",
+        "pm2-test-node2": {
+            "name": "pm2-test-node2",
             "domain": "test.com",
             "script": "/home/shalith/pm2-test/test.sh",
             "rollback_script": "",
@@ -45,7 +45,7 @@
             "health_check_enabled": false,
             "pm2_enabled": true,
             "pm2_script": "",
-            "pm2_name": "pm2-test-node",
+            "pm2_name": "pm2-test-node2",
             "pm2_ecosystem": "module.exports = {\n  apps: [\n    {\n      name: 'lightdeploy',\n      script: 'php',\n      args: '-S 0.0.0.0:8000 -t public public/router.php',\n      cwd: __dirname,\n      instances: 1,\n      autorestart: true,\n      watch: false,\n      max_memory_restart: '150M',\n      env: {\n        NODE_ENV: 'production',\n        PORT: 8000\n      },\n      error_file: './logs/application/pm2-error.log',\n      out_file: './logs/application/pm2-out.log',\n      log_date_format: 'YYYY-MM-DD HH:mm:ss Z'\n    }\n  ]\n};",
             "enabled": true
         }

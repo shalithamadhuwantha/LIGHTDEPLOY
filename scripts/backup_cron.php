@@ -38,16 +38,20 @@ foreach ($databases as $dbId => $dbConfig) {
 
     $isDue = false;
     $elapsedHours = ($now - $lastBackup) / 3600;
+    $elapsedMinutes = ($now - $lastBackup) / 60;
 
     switch ($schedule) {
+        case '5m':
+            $isDue = ($elapsedMinutes >= 4.5);
+            break;
         case '6h':
-            $isDue = ($elapsedHours >= 6);
+            $isDue = ($elapsedHours >= 5.8);
             break;
         case '12h':
-            $isDue = ($elapsedHours >= 12);
+            $isDue = ($elapsedHours >= 11.8);
             break;
         case 'weekly':
-            $isDue = ($elapsedHours >= 168);
+            $isDue = ($elapsedHours >= 167);
             break;
         case 'daily':
         default:

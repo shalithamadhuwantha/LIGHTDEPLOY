@@ -51,17 +51,7 @@ $csrfToken = Csrf::getToken();
             }
         }
         function openDbBackupsModal() {
-            var modal = document.getElementById('dbBackupsModal');
-            if (modal) {
-                modal.classList.remove('hidden');
-                modal.style.setProperty('display', 'flex', 'important');
-                modal.style.setProperty('visibility', 'visible', 'important');
-                modal.style.setProperty('opacity', '1', 'important');
-                modal.style.setProperty('z-index', '99999', 'important');
-            }
-            if (window.loadDatabases) {
-                window.loadDatabases();
-            }
+            window.location.href = '/databases.php';
         }
         function closeDbBackupsModal() {
             var modal = document.getElementById('dbBackupsModal');
@@ -118,7 +108,7 @@ $csrfToken = Csrf::getToken();
                     <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
                 </svg>
                 <span class="brand-title">LIGHTDEPLOY</span>
-                <span class="badge badge-version">v1.2.2</span>
+                <span class="badge badge-version">v1.2.3</span>
             </div>
         </div>
 
@@ -146,7 +136,7 @@ $csrfToken = Csrf::getToken();
         </div>
 
         <div class="header-right">
-            <button id="headerDbBackupsBtn" class="btn btn-secondary btn-sm btn-db-backups" style="margin-right: 6px;" onclick="openDbBackupsModal()">🗄️ Database Backups</button>
+            <a id="headerDbBackupsBtn" href="/databases.php" class="btn btn-secondary btn-sm btn-db-backups" style="margin-right: 6px; text-decoration: none;">🗄️ Database Backups</a>
             <button id="headerViewPortsBtn" class="btn btn-secondary btn-sm btn-view-ports" style="margin-right: 6px;" onclick="openVpsPortsModal()">🌐 VPS Ports</button>
             <?php if (($user['role'] ?? '') === 'admin'): ?>
                 <button id="headerUpdateSystemBtn" class="btn btn-primary btn-sm" style="margin-right: 6px; background: linear-gradient(135deg, #059669, #10b981);" onclick="openUpdateSystemModal()">🔄 Update System</button>
@@ -787,7 +777,7 @@ $csrfToken = Csrf::getToken();
                 <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid var(--bg-card-border); padding: 16px; border-radius: var(--radius-md); margin-bottom: 16px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                         <span style="color: var(--text-muted); font-weight: 600; font-size: 0.85rem;">Installed Version</span>
-                        <span class="badge badge-version" style="font-size: 0.9rem;">v1.2.2</span>
+                        <span class="badge badge-version" style="font-size: 0.9rem;">v1.2.3</span>
                     </div>
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                         <span style="color: var(--text-muted); font-weight: 600; font-size: 0.85rem;">Latest GitHub Commit (`main`)</span>

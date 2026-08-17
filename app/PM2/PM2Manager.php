@@ -31,13 +31,15 @@ class PM2Manager
             glob('/home/*/.nvm/versions/node/*/bin/pm2') ?: []
         );
 
+        $aaPanelPaths = glob('/www/server/nodejs/*/bin/pm2') ?: [];
+
         $candidates = array_merge([
             '/usr/local/bin/pm2',
             '/usr/bin/pm2',
             '/opt/node/bin/pm2',
             getenv('HOME') . '/.npm-global/bin/pm2',
             '/root/.npm-global/bin/pm2'
-        ], $nvmPaths);
+        ], $nvmPaths, $aaPanelPaths);
 
         foreach ($candidates as $candidate) {
             if (!empty($candidate) && file_exists($candidate) && is_executable($candidate)) {
@@ -211,8 +213,55 @@ class PM2Manager
         $output = \safeShellExec($cmd);
 
         // Strip ANSI escape sequences for clean browser output
-        $clean = preg_replace('/\x1b\[[0-9;]*[mGKB]/', '', (string)$output) ?: 'No log output returned.';
-        return $clean;
+        $clean = preg_replace('/\x1b\[[0-9;]*[mGKB]/', '', (string)$output) ?: '';
+
+        // Check if output contains actual log content lines beyond PM2 header info
+        $linesArr = array_filter(array_map('trim', explode("\n", $clean)), function($line) {
+            if (empty($line)) return false;
+            if (str_starts_with($line, '[TAILING]') || str_contains($line, 'last 150 lines:')) return false;
+            return true;
+        });
+
+        // If pm2 logs returned no actual log content lines, attempt direct file read from process log paths
+        if (empty($linesArr) && $target !== 'all') {
+            $processes = $this->listProcesses();
+            $procMatch = null;
+            foreach ($processes as $p) {
+                if ((string)$p['name'] === $target || (string)$p['id'] === $target) {
+                    $procMatch = $p;
+                    break;
+                }
+            }
+
+            $directLogs = [];
+            if ($procMatch) {
+                $outLog = $procMatch['output_log'] ?? '';
+                $errLog = $procMatch['error_log'] ?? '';
+
+                if (!empty($outLog) && file_exists($outLog) && is_readable($outLog) && filesize($outLog) > 0) {
+                    $tailOut = \safeShellExec('tail -n ' . (int)$lines . ' ' . escapeshellarg($outLog));
+                    if (!empty($tailOut)) {
+                        $directLogs[] = "=== STDOUT Log ({$outLog}) ===\n" . trim((string)$tailOut);
+                    }
+                }
+
+                if (!empty($errLog) && file_exists($errLog) && is_readable($errLog) && filesize($errLog) > 0) {
+                    $tailErr = \safeShellExec('tail -n ' . (int)$lines . ' ' . escapeshellarg($errLog));
+                    if (!empty($tailErr)) {
+                        $directLogs[] = "=== STDERR Log ({$errLog}) ===\n" . trim((string)$tailErr);
+                    }
+                }
+            }
+
+            if (!empty($directLogs)) {
+                return implode("\n\n", $directLogs);
+            }
+
+            // If log files are empty or don't exist yet
+            return (!empty($clean) ? $clean . "\n\n" : '') . "[INFO: Process '{$target}' is active, but no stdout/stderr log output has been emitted yet.]";
+        }
+
+        return !empty($clean) ? $clean : 'No log output returned.';
     }
 
     /**

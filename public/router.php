@@ -45,4 +45,9 @@ if ($uri === '/login' || $uri === '/login.php') {
     exit;
 }
 
+if ($uri === '/databases' || $uri === '/databases.php') {
+    require __DIR__ . '/databases.php';
+    exit;
+}
+
 require __DIR__ . '/index.php';

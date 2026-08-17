@@ -122,6 +122,139 @@ if ($method === 'POST') {
             }
             break;
 
+        case 'backup_all':
+            if (!in_array($currentUser['role'] ?? '', ['admin', 'deployer'], true)) {
+                jsonError('FORBIDDEN', 'Insufficient permissions to trigger database backup.', 403);
+            }
+
+            $format = trim($input['format'] ?? 'sql');
+            try {
+                $summary = $backupService->backupAllDatabases($currentUser['username'] ?? 'operator', $format);
+                jsonSuccess([
+                    'message' => sprintf(
+                        'Successfully backed up %d/%d databases into separate phpMyAdmin-compatible .%s files!',
+                        $summary['successful'],
+                        $summary['total'],
+                        $format
+                    ),
+                    'summary' => $summary
+                ]);
+            } catch (\Throwable $e) {
+                jsonError('BACKUP_ALL_FAILED', $e->getMessage(), 500);
+            }
+            break;
+
+        case 'bulk_schedule':
+            if (($currentUser['role'] ?? '') !== 'admin') {
+                jsonError('FORBIDDEN', 'Only administrators can update global database backup schedules.', 403);
+            }
+
+            $schedule = trim($input['schedule'] ?? 'daily');
+            try {
+                $count = $backupService->setBulkSchedule($schedule);
+                jsonSuccess([
+                    'message' => sprintf('Successfully updated schedule to \'%s\' for all %d configured databases.', $schedule, $count),
+                    'updated_count' => $count
+                ]);
+            } catch (\InvalidArgumentException $e) {
+                jsonError('INVALID_INPUT', $e->getMessage(), 400);
+            } catch (\Throwable $e) {
+                jsonError('BULK_SCHEDULE_FAILED', $e->getMessage(), 500);
+            }
+            break;
+
+        case 'get_master_creds':
+            if (($currentUser['role'] ?? '') !== 'admin') {
+                jsonError('FORBIDDEN', 'Only administrators can access Master DB credentials.', 403);
+            }
+
+            $creds = $backupService->getMasterCredentials();
+            unset($creds['db_pass']);
+            $creds['has_password'] = !empty($backupService->getMasterCredentials()['db_pass']);
+            jsonSuccess(['master_credentials' => $creds]);
+            break;
+
+        case 'save_master_creds':
+            if (($currentUser['role'] ?? '') !== 'admin') {
+                jsonError('FORBIDDEN', 'Only administrators can update Master DB credentials.', 403);
+            }
+
+            try {
+                $saved = $backupService->saveMasterCredentials([
+                    'enabled' => !empty($input['enabled']),
+                    'db_host' => $input['db_host'] ?? '127.0.0.1',
+                    'db_port' => (int)($input['db_port'] ?? 3306),
+                    'db_user' => $input['db_user'] ?? 'root',
+                    'db_pass' => $input['db_pass'] ?? ''
+                ]);
+                unset($saved['db_pass']);
+                jsonSuccess([
+                    'message' => 'Master MySQL credentials saved successfully!',
+                    'master_credentials' => $saved
+                ]);
+            } catch (\Throwable $e) {
+                jsonError('SAVE_MASTER_FAILED', $e->getMessage(), 500);
+            }
+            break;
+
+        case 'test_master_creds':
+            if (!in_array($currentUser['role'] ?? '', ['admin', 'deployer'], true)) {
+                jsonError('FORBIDDEN', 'Insufficient permissions to test database credentials.', 403);
+            }
+
+            $testCreds = null;
+            if (!empty($input['db_user'])) {
+                $saved = $backupService->getMasterCredentials();
+                $testCreds = [
+                    'db_host' => $input['db_host'] ?? '127.0.0.1',
+                    'db_port' => (int)($input['db_port'] ?? 3306),
+                    'db_user' => $input['db_user'] ?? 'root',
+                    'db_pass' => ($input['db_pass'] !== '') ? $input['db_pass'] : ($saved['db_pass'] ?? '')
+                ];
+            }
+
+            try {
+                $res = $backupService->testMasterConnection($testCreds);
+                jsonSuccess([
+                    'message' => sprintf('Connection successful! Found %d user databases on VPS via Master user \'%s\'.', $res['user_database_count'], $res['user']),
+                    'result' => $res
+                ]);
+            } catch (\Throwable $e) {
+                jsonError('TEST_MASTER_FAILED', 'Connection failed: ' . $e->getMessage(), 400);
+            }
+            break;
+
+        case 'run_master_backup':
+            if (!in_array($currentUser['role'] ?? '', ['admin', 'deployer'], true)) {
+                jsonError('FORBIDDEN', 'Insufficient permissions to run Master backup.', 403);
+            }
+
+            $format = trim($input['format'] ?? 'sql');
+            try {
+                $summary = $backupService->runMasterBackup($currentUser['username'] ?? 'operator', $format);
+                jsonSuccess([
+                    'message' => sprintf(
+                        'Master Dump Complete: Successfully backed up %d/%d VPS databases into separate phpMyAdmin-ready .%s files!',
+                        $summary['successful'],
+                        $summary['total'],
+                        $format
+                    ),
+                    'summary' => $summary
+                ]);
+            } catch (\Throwable $e) {
+                jsonError('MASTER_BACKUP_FAILED', $e->getMessage(), 500);
+            }
+            break;
+
+        case 'get_master_history':
+            try {
+                $sessions = $backupService->getMasterBackupHistory();
+                jsonSuccess(['sessions' => $sessions]);
+            } catch (\Throwable $e) {
+                jsonError('MASTER_HISTORY_FAILED', $e->getMessage(), 500);
+            }
+            break;
+
         case 'delete_backup':
             if (!in_array($currentUser['role'] ?? '', ['admin', 'deployer'], true)) {
                 jsonError('FORBIDDEN', 'Insufficient permissions to delete backup files.', 403);

@@ -1,0 +1,9 @@
+{
+    "enabled": true,
+    "db_host": "127.0.0.1",
+    "db_port": 3306,
+    "db_user": "root",
+    "db_pass": "1021",
+    "last_tested_at": "2026-08-17 14:43:55",
+    "updated_at": "2026-08-17 14:29:20"
+}
