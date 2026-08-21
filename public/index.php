@@ -128,7 +128,7 @@ $csrfToken = Csrf::getToken();
                     <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
                 </svg>
                 <span class="brand-title">LIGHTDEPLOY</span>
-                <span class="badge badge-version">v1.2.3</span>
+                <span class="badge badge-version">v1.2.4</span>
             </div>
         </div>
 
@@ -175,7 +175,7 @@ $csrfToken = Csrf::getToken();
         <div class="section-header">
             <div>
                 <h2>Configured Websites</h2>
-                <p class="section-desc">Select a site to initiate controlled script deployment</p>
+                <p class="section-desc">Select a site to initiate controlled script deployment &bull; <span id="sitesCountLabel">0 sites</span></p>
             </div>
             <div class="section-actions">
                 <?php if (($user['role'] ?? '') === 'admin'): ?>
@@ -187,10 +187,41 @@ $csrfToken = Csrf::getToken();
             </div>
         </div>
 
+        <!-- Sites Toolbar: Search + View Toggle + Bulk Actions -->
+        <div class="sites-toolbar">
+            <div class="sites-toolbar-left">
+                <div class="sites-search-box">
+                    <svg class="sites-search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                    <input type="text" id="sitesSearchInput" class="sites-search-input" placeholder="Search sites by name, domain, or ID...">
+                    <span id="sitesSearchCount" class="sites-search-count hidden">0 results</span>
+                </div>
+                <?php if (in_array(($user['role'] ?? ''), ['admin', 'deployer'], true)): ?>
+                <div id="bulkActionsBar" class="bulk-actions-bar hidden">
+                    <label class="form-checkbox-label bulk-select-all-label">
+                        <input type="checkbox" id="bulkSelectAll">
+                        <span id="bulkSelectedCount">0 selected</span>
+                    </label>
+                    <button id="bulkDeployBtn" class="btn btn-primary btn-sm" disabled>🚀 Deploy Selected</button>
+                    <button id="bulkDeselectBtn" class="btn btn-secondary btn-sm">✕ Deselect</button>
+                </div>
+                <?php endif; ?>
+            </div>
+            <div class="sites-toolbar-right">
+                <div class="view-toggle-group" id="viewToggleGroup">
+                    <button id="viewCardBtn" class="view-toggle-btn active" title="Card View">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="3" width="7" height="7" rx="1"></rect><rect x="3" y="14" width="7" height="7" rx="1"></rect><rect x="14" y="14" width="7" height="7" rx="1"></rect></svg>
+                    </button>
+                    <button id="viewListBtn" class="view-toggle-btn" title="List View">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+
         <!-- Global Toast Alert Container -->
         <div id="toastContainer" class="toast-container"></div>
 
-        <!-- Sites Grid -->
+        <!-- Sites Grid / List Container -->
         <div id="sitesGrid" class="sites-grid">
             <div class="skeleton-card"></div>
             <div class="skeleton-card"></div>
@@ -798,7 +829,7 @@ $csrfToken = Csrf::getToken();
                 <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid var(--bg-card-border); padding: 16px; border-radius: var(--radius-md); margin-bottom: 16px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                         <span style="color: var(--text-muted); font-weight: 600; font-size: 0.85rem;">Installed Version</span>
-                        <span class="badge badge-version" style="font-size: 0.9rem;">v1.2.3</span>
+                        <span class="badge badge-version" style="font-size: 0.9rem;">v1.2.4</span>
                     </div>
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                         <span style="color: var(--text-muted); font-weight: 600; font-size: 0.85rem;">Latest GitHub Commit (`main`)</span>

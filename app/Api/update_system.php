@@ -24,7 +24,7 @@ if (($currentUser['role'] ?? '') !== 'admin') {
 $repoOwner = 'shalithamadhuwantha';
 $repoName = 'LIGHTDEPLOY';
 $repoUrl = "https://github.com/{$repoOwner}/{$repoName}";
-$currentVersion = 'v1.2.3';
+$currentVersion = 'v1.2.4';
 
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 
@@ -36,7 +36,7 @@ if ($method === 'GET') {
         CURLOPT_URL => $apiUrl,
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_TIMEOUT => 8,
-        CURLOPT_USERAGENT => 'LightDeploy-Updater/1.2.3',
+        CURLOPT_USERAGENT => 'LightDeploy-Updater/1.2.4',
         CURLOPT_SSL_VERIFYPEER => false,
         CURLOPT_SSL_VERIFYHOST => 0
     ]);
@@ -135,7 +135,7 @@ if ($method === 'POST') {
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_FOLLOWLOCATION => true,
             CURLOPT_TIMEOUT => 45,
-            CURLOPT_USERAGENT => 'LightDeploy-Updater/1.2.3',
+            CURLOPT_USERAGENT => 'LightDeploy-Updater/1.2.4',
             CURLOPT_SSL_VERIFYPEER => false,
             CURLOPT_SSL_VERIFYHOST => 0
         ]);

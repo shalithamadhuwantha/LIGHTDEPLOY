@@ -172,7 +172,7 @@ $csrfToken = Csrf::getToken();
                     <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
                 </svg>
                 <span class="brand-title">LIGHTDEPLOY</span>
-                <span class="badge badge-version">v1.2.3</span>
+                <span class="badge badge-version">v1.2.4</span>
             </a>
         </div>
 
@@ -390,7 +390,7 @@ $csrfToken = Csrf::getToken();
                 <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid var(--bg-card-border); padding: 16px; border-radius: var(--radius-md); margin-bottom: 16px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                         <span style="color: var(--text-muted); font-weight: 600; font-size: 0.85rem;">Installed Version</span>
-                        <span class="badge badge-version" style="font-size: 0.9rem;">v1.2.3</span>
+                        <span class="badge badge-version" style="font-size: 0.9rem;">v1.2.4</span>
                     </div>
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                         <span style="color: var(--text-muted); font-weight: 600; font-size: 0.85rem;">Latest GitHub Commit (`main`)</span>

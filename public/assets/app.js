@@ -131,6 +131,128 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // View Mode State
+    let currentViewMode = localStorage.getItem('lightdeploy_view_mode') || 'card';
+    let selectedSiteIds = new Set();
+    const sitesSearchInput = document.getElementById('sitesSearchInput');
+    const sitesSearchCount = document.getElementById('sitesSearchCount');
+    const sitesCountLabel = document.getElementById('sitesCountLabel');
+    const viewCardBtn = document.getElementById('viewCardBtn');
+    const viewListBtn = document.getElementById('viewListBtn');
+    const bulkActionsBar = document.getElementById('bulkActionsBar');
+    const bulkSelectAll = document.getElementById('bulkSelectAll');
+    const bulkSelectedCount = document.getElementById('bulkSelectedCount');
+    const bulkDeployBtn = document.getElementById('bulkDeployBtn');
+    const bulkDeselectBtn = document.getElementById('bulkDeselectBtn');
+
+    // Initialize view toggle state
+    function initViewToggle() {
+        if (currentViewMode === 'list') {
+            viewCardBtn?.classList.remove('active');
+            viewListBtn?.classList.add('active');
+        } else {
+            viewCardBtn?.classList.add('active');
+            viewListBtn?.classList.remove('active');
+        }
+    }
+    initViewToggle();
+
+    if (viewCardBtn) viewCardBtn.addEventListener('click', () => {
+        currentViewMode = 'card';
+        localStorage.setItem('lightdeploy_view_mode', 'card');
+        viewCardBtn.classList.add('active');
+        viewListBtn?.classList.remove('active');
+        renderSites();
+    });
+
+    if (viewListBtn) viewListBtn.addEventListener('click', () => {
+        currentViewMode = 'list';
+        localStorage.setItem('lightdeploy_view_mode', 'list');
+        viewListBtn.classList.add('active');
+        viewCardBtn?.classList.remove('active');
+        renderSites();
+    });
+
+    // Search — debounced filtering
+    let searchDebounce = null;
+    if (sitesSearchInput) {
+        sitesSearchInput.addEventListener('input', () => {
+            clearTimeout(searchDebounce);
+            searchDebounce = setTimeout(() => renderSites(), 150);
+        });
+    }
+
+    // Multi-select helpers
+    function updateBulkUI() {
+        const count = selectedSiteIds.size;
+        if (bulkSelectedCount) bulkSelectedCount.textContent = `${count} selected`;
+        if (bulkDeployBtn) bulkDeployBtn.disabled = count === 0;
+        if (bulkActionsBar) {
+            if (count > 0) {
+                bulkActionsBar.classList.remove('hidden');
+            } else {
+                bulkActionsBar.classList.add('hidden');
+            }
+        }
+        // Update card visuals
+        document.querySelectorAll('.site-card-checkbox').forEach(cb => {
+            const card = cb.closest('.site-card');
+            if (card) card.classList.toggle('card-selected', cb.checked);
+        });
+        document.querySelectorAll('.sites-list-table .list-row-checkbox').forEach(cb => {
+            const row = cb.closest('tr');
+            if (row) row.classList.toggle('site-row-selected', cb.checked);
+        });
+        // Sync select-all
+        const allIds = Object.keys(cachedSites);
+        if (bulkSelectAll) bulkSelectAll.checked = allIds.length > 0 && allIds.every(id => selectedSiteIds.has(id));
+    }
+
+    if (bulkSelectAll) {
+        bulkSelectAll.addEventListener('change', () => {
+            if (bulkSelectAll.checked) {
+                Object.keys(cachedSites).forEach(id => selectedSiteIds.add(id));
+            } else {
+                selectedSiteIds.clear();
+            }
+            // Sync all checkboxes
+            document.querySelectorAll('.site-card-checkbox, .list-row-checkbox').forEach(cb => {
+                cb.checked = bulkSelectAll.checked;
+            });
+            updateBulkUI();
+        });
+    }
+
+    if (bulkDeselectBtn) {
+        bulkDeselectBtn.addEventListener('click', () => {
+            selectedSiteIds.clear();
+            document.querySelectorAll('.site-card-checkbox, .list-row-checkbox').forEach(cb => {
+                cb.checked = false;
+            });
+            updateBulkUI();
+        });
+    }
+
+    if (bulkDeployBtn) {
+        bulkDeployBtn.addEventListener('click', async () => {
+            const ids = Array.from(selectedSiteIds);
+            if (ids.length === 0) return;
+            if (!confirm(`Deploy ${ids.length} selected site(s)?\n\n${ids.join(', ')}`)) return;
+
+            bulkDeployBtn.disabled = true;
+            bulkDeployBtn.textContent = '⏳ Deploying...';
+
+            for (const siteId of ids) {
+                await executeDeploymentDirect(siteId, 'deploy', currentUsername);
+            }
+
+            selectedSiteIds.clear();
+            updateBulkUI();
+            bulkDeployBtn.textContent = '🚀 Deploy Selected';
+            showToast(`Bulk deployment triggered for ${ids.length} site(s)`, 'success');
+        });
+    }
+
     // 2. Fetch & Render Configured Sites List
     async function loadSites() {
         const { ok, data } = await apiFetch('/api/sites.php');
@@ -140,17 +262,68 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         cachedSites = data.sites || {};
-        const sites = cachedSites;
-        sitesGrid.innerHTML = '';
+        renderSites();
+    }
 
-        if (Object.keys(sites).length === 0) {
+    // Render sites (supports both card + list views, and search filtering)
+    function renderSites() {
+        const sites = cachedSites;
+        const searchTerm = (sitesSearchInput?.value || '').trim().toLowerCase();
+        const totalCount = Object.keys(sites).length;
+
+        if (sitesCountLabel) sitesCountLabel.textContent = `${totalCount} site${totalCount !== 1 ? 's' : ''}`;
+
+        if (totalCount === 0) {
             sitesGrid.innerHTML = `<div class="alert-box alert-danger">No websites configured in config/sites.json.</div>`;
+            if (sitesSearchCount) sitesSearchCount.classList.add('hidden');
             return;
         }
 
-        for (const [siteId, site] of Object.entries(sites)) {
+        // Filter by search term
+        const filteredEntries = Object.entries(sites).filter(([siteId, site]) => {
+            if (!searchTerm) return true;
+            return siteId.toLowerCase().includes(searchTerm) ||
+                   (site.name || '').toLowerCase().includes(searchTerm) ||
+                   (site.domain || '').toLowerCase().includes(searchTerm);
+        });
+
+        // Show search result count
+        if (searchTerm) {
+            if (sitesSearchCount) {
+                sitesSearchCount.textContent = `${filteredEntries.length} of ${totalCount}`;
+                sitesSearchCount.classList.remove('hidden');
+            }
+        } else {
+            if (sitesSearchCount) sitesSearchCount.classList.add('hidden');
+        }
+
+        if (filteredEntries.length === 0) {
+            sitesGrid.className = 'sites-grid';
+            sitesGrid.innerHTML = `
+                <div class="sites-no-results">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line><line x1="8" y1="11" x2="14" y2="11"></line></svg>
+                    No sites match "<strong>${escapeHtml(searchTerm)}</strong>"
+                </div>`;
+            return;
+        }
+
+        if (currentViewMode === 'list') {
+            renderListView(filteredEntries);
+        } else {
+            renderCardView(filteredEntries);
+        }
+
+        attachSiteActionListeners();
+    }
+
+    // ── Card View Renderer ──────────────────────────────────────────────────
+    function renderCardView(entries) {
+        sitesGrid.className = 'sites-grid';
+        sitesGrid.innerHTML = '';
+
+        for (const [siteId, site] of entries) {
             const card = document.createElement('div');
-            card.className = 'site-card';
+            card.className = 'site-card' + (selectedSiteIds.has(siteId) ? ' card-selected' : '');
 
             const statusClass = site.is_locked ? 'badge-status-running' : (site.last_deployment ? `badge-status-${site.last_deployment.status}` : 'badge-status-idle');
             const statusLabel = site.is_locked ? 'RUNNING' : (site.last_deployment ? site.last_deployment.status.toUpperCase() : 'IDLE');
@@ -159,6 +332,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const canRollback = userRole === 'admin' && !site.is_locked && site.has_rollback && site.enabled;
 
             card.innerHTML = `
+                <input type="checkbox" class="site-card-checkbox" data-site-id="${siteId}" ${selectedSiteIds.has(siteId) ? 'checked' : ''}>
                 <div class="card-top">
                     <div class="card-title-row">
                         <span class="site-name">${escapeHtml(site.name)}</span>
@@ -219,7 +393,90 @@ document.addEventListener('DOMContentLoaded', () => {
             sitesGrid.appendChild(card);
         }
 
-        // Attach Card Action Listeners
+        // Checkbox event listeners
+        document.querySelectorAll('.site-card-checkbox').forEach(cb => {
+            cb.addEventListener('change', () => {
+                const id = cb.dataset.siteId;
+                if (cb.checked) selectedSiteIds.add(id);
+                else selectedSiteIds.delete(id);
+                updateBulkUI();
+            });
+        });
+    }
+
+    // ── List View Renderer ──────────────────────────────────────────────────
+    function renderListView(entries) {
+        sitesGrid.className = 'sites-grid view-list';
+
+        const checkboxCol = (userRole === 'admin' || userRole === 'deployer') ? '<th style="width:36px;"></th>' : '';
+
+        let rows = '';
+        for (const [siteId, site] of entries) {
+            const statusClass = site.is_locked ? 'badge-status-running' : (site.last_deployment ? `badge-status-${site.last_deployment.status}` : 'badge-status-idle');
+            const statusLabel = site.is_locked ? 'RUNNING' : (site.last_deployment ? site.last_deployment.status.toUpperCase() : 'IDLE');
+            const canDeploy = (userRole === 'admin' || userRole === 'deployer') && !site.is_locked && site.enabled;
+            const canRollback = userRole === 'admin' && !site.is_locked && site.has_rollback && site.enabled;
+            const isSelected = selectedSiteIds.has(siteId);
+
+            const checkboxTd = (userRole === 'admin' || userRole === 'deployer')
+                ? `<td><input type="checkbox" class="list-row-checkbox" data-site-id="${siteId}" ${isSelected ? 'checked' : ''} style="accent-color: var(--accent-blue); cursor: pointer;"></td>`
+                : '';
+
+            rows += `
+                <tr class="${isSelected ? 'site-row-selected' : ''}">
+                    ${checkboxTd}
+                    <td>
+                        <span class="list-site-name">${escapeHtml(site.name)}</span>
+                        <div class="list-site-domain">${escapeHtml(site.domain || siteId)}</div>
+                    </td>
+                    <td><span class="badge badge-status ${statusClass}">${statusLabel}</span></td>
+                    <td style="font-size:0.78rem; color: var(--text-muted);">${site.health_check_enabled ? '✅' : '—'}</td>
+                    <td style="font-size:0.78rem; color: var(--text-muted);">${site.pm2_enabled ? '⚡' : '—'}</td>
+                    <td style="font-size:0.78rem; color: var(--text-muted);">${site.has_rollback ? '↩️' : '—'}</td>
+                    <td style="font-size:0.78rem; font-family: var(--font-mono); color: var(--text-muted);">${site.last_deployment ? escapeHtml(site.last_deployment.start_time) : '—'}</td>
+                    <td>
+                        <div class="list-actions">
+                            <button class="btn btn-primary btn-sm btn-deploy" data-site-id="${siteId}" ${!canDeploy ? 'disabled' : ''}>${site.is_locked ? '⏳' : '🚀'}</button>
+                            ${site.has_rollback ? `<button class="btn btn-warning btn-sm btn-rollback" data-site-id="${siteId}" ${!canRollback ? 'disabled' : ''}>↩️</button>` : ''}
+                            ${site.last_deployment ? `<button class="btn btn-secondary btn-sm btn-view-log" data-dep-id="${site.last_deployment.deployment_id}" data-site-id="${siteId}">📋</button>` : ''}
+                            ${userRole === 'admin' ? `<button class="btn btn-secondary btn-sm btn-edit-site" data-site-id="${siteId}">⚙️</button>` : ''}
+                        </div>
+                    </td>
+                </tr>`;
+        }
+
+        sitesGrid.innerHTML = `
+            <div class="table-responsive">
+                <table class="sites-list-table">
+                    <thead>
+                        <tr>
+                            ${checkboxCol}
+                            <th>Site</th>
+                            <th>Status</th>
+                            <th>Health</th>
+                            <th>PM2</th>
+                            <th>Rollback</th>
+                            <th>Last Deploy</th>
+                            <th style="text-align: right;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            </div>`;
+
+        // Checkbox event listeners
+        document.querySelectorAll('.list-row-checkbox').forEach(cb => {
+            cb.addEventListener('change', () => {
+                const id = cb.dataset.siteId;
+                if (cb.checked) selectedSiteIds.add(id);
+                else selectedSiteIds.delete(id);
+                updateBulkUI();
+            });
+        });
+    }
+
+    // ── Attach action listeners to both views ───────────────────────────────
+    function attachSiteActionListeners() {
         document.querySelectorAll('#sitesGrid .btn-deploy').forEach(btn => {
             btn.addEventListener('click', () => triggerDeployment(btn.dataset.siteId));
         });
@@ -240,13 +497,11 @@ document.addEventListener('DOMContentLoaded', () => {
             btn.addEventListener('click', () => openPm2LogsModal(btn.dataset.pm2Target || btn.dataset.target));
         });
 
-        document.querySelectorAll('.btn-edit-site').forEach(btn => {
+        document.querySelectorAll('#sitesGrid .btn-edit-site').forEach(btn => {
             btn.addEventListener('click', () => {
                 const siteId = btn.dataset.siteId;
                 const site = cachedSites[siteId];
-                if (site) {
-                    openEditSiteModal(siteId, site);
-                }
+                if (site) openEditSiteModal(siteId, site);
             });
         });
     }
