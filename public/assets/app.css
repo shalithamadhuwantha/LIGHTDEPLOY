@@ -804,6 +804,109 @@ body {
 }
 
 /* =========================================================================
+   DEPLOYMENT SCRIPT GENERATOR
+   ========================================================================= */
+
+.scriptgen-layout {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    min-height: 500px;
+}
+
+.scriptgen-form-col {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.scriptgen-section-title {
+    margin: 16px 0 10px;
+    color: var(--accent-purple);
+    font-size: 0.92rem;
+    font-weight: 700;
+    border-bottom: 1px solid rgba(168, 85, 247, 0.2);
+    padding-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.scriptgen-section-title:first-child {
+    margin-top: 0;
+}
+
+.scriptgen-preview-col {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid rgba(168, 85, 247, 0.25);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    background: var(--bg-terminal);
+    position: sticky;
+    top: 0;
+    max-height: 72vh;
+}
+
+.scriptgen-preview-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px;
+    background: rgba(124, 58, 237, 0.12);
+    border-bottom: 1px solid rgba(168, 85, 247, 0.2);
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #c4b5fd;
+    flex-shrink: 0;
+}
+
+.scriptgen-preview-body {
+    padding: 16px;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    line-height: 1.55;
+    color: #c4b5fd;
+    overflow-y: auto;
+    white-space: pre;
+    word-break: normal;
+    flex: 1;
+    margin: 0;
+    tab-size: 4;
+}
+
+.scriptgen-preview-body .sg-comment {
+    color: #6b7280;
+}
+
+.scriptgen-preview-body .sg-variable {
+    color: #38bdf8;
+}
+
+.scriptgen-preview-body .sg-string {
+    color: #34d399;
+}
+
+.scriptgen-preview-body .sg-keyword {
+    color: #f472b6;
+}
+
+.scriptgen-preview-body .sg-function {
+    color: #fbbf24;
+}
+
+@media (max-width: 900px) {
+    .scriptgen-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .scriptgen-preview-col {
+        position: static;
+        max-height: 50vh;
+    }
+}
+
+/* =========================================================================
    MOBILE & TOUCH DEVICE RESPONSIVE SUITE
    ========================================================================= */
 

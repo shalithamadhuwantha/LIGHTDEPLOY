@@ -97,6 +97,26 @@ $csrfToken = Csrf::getToken();
                 modal.style.setProperty('display', 'none', 'important');
             }
         }
+        function openScriptGenModal() {
+            var modal = document.getElementById('scriptGenModal');
+            if (modal) {
+                modal.classList.remove('hidden');
+                modal.style.setProperty('display', 'flex', 'important');
+                modal.style.setProperty('visibility', 'visible', 'important');
+                modal.style.setProperty('opacity', '1', 'important');
+                modal.style.setProperty('z-index', '99999', 'important');
+            }
+            if (window.updateScriptPreview) {
+                window.updateScriptPreview();
+            }
+        }
+        function closeScriptGenModal() {
+            var modal = document.getElementById('scriptGenModal');
+            if (modal) {
+                modal.classList.add('hidden');
+                modal.style.setProperty('display', 'none', 'important');
+            }
+        }
     </script>
 </head>
 <body class="dashboard-body" data-user-role="<?= htmlspecialchars($user['role']) ?>" data-username="<?= htmlspecialchars($user['username']) ?>" data-csrf-token="<?= htmlspecialchars($csrfToken) ?>">
@@ -139,6 +159,7 @@ $csrfToken = Csrf::getToken();
             <a id="headerDbBackupsBtn" href="/databases.php" class="btn btn-secondary btn-sm btn-db-backups" style="margin-right: 6px; text-decoration: none;">🗄️ Database Backups</a>
             <button id="headerViewPortsBtn" class="btn btn-secondary btn-sm btn-view-ports" style="margin-right: 6px;" onclick="openVpsPortsModal()">🌐 VPS Ports</button>
             <?php if (($user['role'] ?? '') === 'admin'): ?>
+                <button id="headerScriptGenBtn" class="btn btn-primary btn-sm" style="margin-right: 6px; background: linear-gradient(135deg, #7c3aed, #a855f7);" onclick="openScriptGenModal()">📜 Script Generator</button>
                 <button id="headerUpdateSystemBtn" class="btn btn-primary btn-sm" style="margin-right: 6px; background: linear-gradient(135deg, #059669, #10b981);" onclick="openUpdateSystemModal()">🔄 Update System</button>
             <?php endif; ?>
             <div class="user-info">
@@ -803,6 +824,112 @@ $csrfToken = Csrf::getToken();
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" onclick="closeUpdateSystemModal()">Close</button>
                 <button type="button" id="executeSystemUpdateBtn" class="btn btn-primary" onclick="window.triggerSystemUpdate()" style="background: linear-gradient(135deg, #059669, #10b981);">🚀 Update Now from GitHub</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Deployment Script Generator Modal -->
+    <div id="scriptGenModal" class="modal-overlay hidden">
+        <div class="modal-card modal-xl" style="max-width: 1200px;">
+            <div class="modal-header">
+                <div>
+                    <h3>📜 Deployment Script Generator</h3>
+                    <div class="modal-sub-info">Generate production-grade deployment scripts with embedded configuration — GUI version of the CLI tool</div>
+                </div>
+                <button class="modal-close-btn" onclick="closeScriptGenModal()">&times;</button>
+            </div>
+            <div class="modal-body" style="max-height: 78vh; overflow-y: auto; padding: 20px 24px;">
+                <div class="scriptgen-layout">
+                    <!-- LEFT COLUMN: Configuration Form -->
+                    <div class="scriptgen-form-col">
+                        <!-- Section 1: Application -->
+                        <h4 class="scriptgen-section-title">📁 1. Application &amp; Repository</h4>
+                        <div class="form-group">
+                            <label for="sgAppDir" class="form-label">Application Directory *</label>
+                            <input type="text" id="sgAppDir" class="form-input" placeholder="e.g. /www/wwwroot/example.com" required>
+                            <small class="form-help">Target directory where the app will be deployed</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="sgRepoUrl" class="form-label">GitHub Repository URL *</label>
+                            <input type="text" id="sgRepoUrl" class="form-input" placeholder="e.g. https://github.com/user/repo.git" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="sgBranch" class="form-label">Git Branch</label>
+                            <input type="text" id="sgBranch" class="form-input" placeholder="main" value="main">
+                        </div>
+
+                        <!-- Section 2: Environment -->
+                        <h4 class="scriptgen-section-title">🔐 2. Environment Configuration</h4>
+                        <div class="form-group">
+                            <label for="sgEnvSource" class="form-label">Environment File Path (optional)</label>
+                            <input type="text" id="sgEnvSource" class="form-input" placeholder="e.g. /root/envfiles/.env.production">
+                            <small class="form-help">Will be copied to <code>$APP_DIR/.env</code> during deployment</small>
+                        </div>
+
+                        <!-- Section 3: Build Pipeline -->
+                        <h4 class="scriptgen-section-title">🔨 3. Build Pipeline</h4>
+                        <div style="display: flex; gap: 24px; flex-wrap: wrap;">
+                            <label class="form-checkbox-label">
+                                <input type="checkbox" id="sgHasNpm">
+                                Run <code>npm install</code>
+                            </label>
+                            <label class="form-checkbox-label">
+                                <input type="checkbox" id="sgHasBuild">
+                                Run <code>npm run build</code>
+                            </label>
+                        </div>
+
+                        <!-- Section 4: PM2 -->
+                        <h4 class="scriptgen-section-title">⚡ 4. PM2 Process Manager</h4>
+                        <label class="form-checkbox-label">
+                            <input type="checkbox" id="sgHasPm2">
+                            Enable PM2 restart / start after deployment
+                        </label>
+                        <div id="sgPm2Group" class="hidden" style="margin-top: 10px;">
+                            <div class="form-group">
+                                <label for="sgAppName" class="form-label">PM2 Application Name *</label>
+                                <input type="text" id="sgAppName" class="form-input" placeholder="e.g. my-node-api">
+                            </div>
+                        </div>
+
+                        <!-- Section 5: Server Ownership -->
+                        <h4 class="scriptgen-section-title">👤 5. Server Ownership</h4>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+                            <div class="form-group">
+                                <label for="sgSiteUser" class="form-label">Site User</label>
+                                <input type="text" id="sgSiteUser" class="form-input" value="www" placeholder="www">
+                            </div>
+                            <div class="form-group">
+                                <label for="sgSiteGroup" class="form-label">Site Group</label>
+                                <input type="text" id="sgSiteGroup" class="form-input" value="www" placeholder="www">
+                            </div>
+                        </div>
+
+                        <!-- Section 6: Output -->
+                        <h4 class="scriptgen-section-title">💾 6. Save to Server (optional)</h4>
+                        <div class="form-group">
+                            <label for="sgOutputPath" class="form-label">Server File Path</label>
+                            <input type="text" id="sgOutputPath" class="form-input" placeholder="e.g. /root/scripts/deploy-myapp.sh">
+                            <small class="form-help">Leave empty to download only. Must end with <code>.sh</code></small>
+                        </div>
+                    </div>
+
+                    <!-- RIGHT COLUMN: Live Preview -->
+                    <div class="scriptgen-preview-col">
+                        <div class="scriptgen-preview-header">
+                            <span>📄 Live Script Preview</span>
+                            <div style="display: flex; gap: 8px;">
+                                <button type="button" id="sgCopyBtn" class="btn btn-secondary btn-sm" style="padding: 4px 10px; font-size: 0.75rem;">📋 Copy</button>
+                            </div>
+                        </div>
+                        <pre id="sgPreviewOutput" class="scriptgen-preview-body">Fill in the configuration fields to generate a deployment script...</pre>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeScriptGenModal()">Close</button>
+                <button type="button" id="sgDownloadBtn" class="btn btn-primary" style="background: linear-gradient(135deg, #7c3aed, #a855f7);">📥 Download Script</button>
+                <button type="button" id="sgSaveBtn" class="btn btn-primary" style="background: linear-gradient(135deg, #059669, #10b981);">💾 Save to Server</button>
             </div>
         </div>
     </div>
