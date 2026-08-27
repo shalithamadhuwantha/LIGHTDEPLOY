@@ -16,8 +16,8 @@ use LightDeploy\PM2\PM2Manager;
 $securityLogger = new SecurityLogger($config['logs_dir'] . '/security');
 $authService = new AuthService($config['config_dir'] . '/users.json', $securityLogger);
 
-// Authentication Required
-$user = $authService->requireAuth();
+// Permission Required
+$user = $authService->requirePermission('pm2');
 session_write_close();
 
 $pm2 = new PM2Manager();

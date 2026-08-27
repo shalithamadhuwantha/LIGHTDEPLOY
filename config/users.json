@@ -3,17 +3,28 @@
         "admin": {
             "name": "System Administrator",
             "password_hash": "$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi",
-            "role": "admin"
+            "role": "admin",
+            "allowed_functions": [
+                "*"
+            ],
+            "allowed_systems": [
+                "*"
+            ]
         },
-        "deployer": {
-            "name": "Release Operator",
-            "password_hash": "$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi",
-            "role": "deployer"
-        },
-        "viewer": {
-            "name": "Auditor / Viewer",
-            "password_hash": "$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi",
-            "role": "viewer"
+        "shalitha": {
+            "name": "shalitha",
+            "password_hash": "$2y$12$Ujf02zM4tSqm0sp11vsgvOXgFbTeHn1bbRPP4AXUIqmRREC2BPOOa",
+            "role": "viewer",
+            "allowed_functions": [
+                "sites",
+                "pm2",
+                "vps_ports",
+                "deploy_history"
+            ],
+            "allowed_systems": [
+                "site-a",
+                "site-c"
+            ]
         }
     }
 }

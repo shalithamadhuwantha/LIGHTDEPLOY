@@ -12,11 +12,7 @@ use LightDeploy\Auth\AuthService;
 use LightDeploy\Backup\BackupService;
 use LightDeploy\Auth\Csrf;
 
-$authService = new AuthService($config['config_dir'] . '/users.json');
-if (!$authService->isAuthenticated()) {
-    jsonError('UNAUTHORIZED', 'Authentication required.', 401);
-}
-
+$authService->requirePermission('db_backups');
 $currentUser = $authService->getCurrentUser();
 $backupService = new BackupService(
     $config['config_dir'] . '/databases.json',

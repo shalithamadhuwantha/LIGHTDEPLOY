@@ -23,8 +23,8 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 $securityLogger = new SecurityLogger($config['logs_dir'] . '/security');
 $authService = new AuthService($config['config_dir'] . '/users.json', $securityLogger);
 
-// Admin Role Required
-$user = $authService->requireRole('admin');
+// Require script_gen permission
+$user = $authService->requirePermission('script_gen');
 session_write_close();
 
 $rawInput = file_get_contents('php://input');

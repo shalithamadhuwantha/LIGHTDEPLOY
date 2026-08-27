@@ -16,6 +16,11 @@ if (!$authService->isAuthenticated()) {
     exit;
 }
 
+if (!$authService->hasPermission('db_backups')) {
+    header('Location: /');
+    exit;
+}
+
 $user = $authService->getCurrentUser();
 $csrfToken = Csrf::getToken();
 ?>
@@ -163,7 +168,7 @@ $csrfToken = Csrf::getToken();
         }
     </script>
 </head>
-<body class="dashboard-body" data-user-role="<?= htmlspecialchars($user['role']) ?>" data-username="<?= htmlspecialchars($user['username']) ?>" data-csrf-token="<?= htmlspecialchars($csrfToken) ?>">
+<body class="dashboard-body" data-user-role="<?= htmlspecialchars($user['role']) ?>" data-username="<?= htmlspecialchars($user['username']) ?>" data-csrf-token="<?= htmlspecialchars($csrfToken) ?>" data-allowed-functions='<?= json_encode($user['allowed_functions'] ?? ['*']) ?>' data-allowed-systems='<?= json_encode($user['allowed_systems'] ?? ['*']) ?>'>
     <!-- Top Navigation Bar -->
     <header class="app-header">
         <div class="header-left">

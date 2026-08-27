@@ -26,8 +26,8 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 $securityLogger = new SecurityLogger($config['logs_dir'] . '/security');
 $authService = new AuthService($config['config_dir'] . '/users.json', $securityLogger);
 
-// Require admin or deployer role
-$user = $authService->requireRole(['admin', 'deployer']);
+// Require sites permission
+$user = $authService->requirePermission('sites');
 
 // Validate CSRF token
 if (!Csrf::validateHeaderOrPost()) {
@@ -50,6 +50,9 @@ $rawInput = file_get_contents('php://input');
 $input = json_decode($rawInput, true) ?: $_POST;
 
 $siteId = trim((string)($input['site_id'] ?? ''));
+
+// Check system access privilege for siteId
+$authService->requireSystemAccess($siteId);
 
 // Validate site exists in server-side configuration allowlist
 $sitesFile = $config['config_dir'] . '/sites.json';

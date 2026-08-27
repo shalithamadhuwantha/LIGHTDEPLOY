@@ -8,6 +8,31 @@ document.addEventListener('DOMContentLoaded', () => {
     const currentUsername = document.body.dataset.username || 'admin';
     const csrfToken = document.body.dataset.CsrfToken || document.body.dataset.csrfToken || '';
 
+    let allowedFunctions = ['*'];
+    let allowedSystems = ['*'];
+    try {
+        allowedFunctions = JSON.parse(document.body.dataset.allowedFunctions || '["*"]');
+    } catch (e) {
+        allowedFunctions = ['*'];
+    }
+    try {
+        allowedSystems = JSON.parse(document.body.dataset.allowedSystems || '["*"]');
+    } catch (e) {
+        allowedSystems = ['*'];
+    }
+
+    function hasPermission(funcKey) {
+        if (userRole === 'admin') return true;
+        if (allowedFunctions.includes('*')) return true;
+        return allowedFunctions.includes(funcKey);
+    }
+
+    function hasSystemAccess(siteId) {
+        if (userRole === 'admin') return true;
+        if (allowedSystems.includes('*')) return true;
+        return allowedSystems.includes(siteId);
+    }
+
     // State Variables
     let activeEventSource = null;
     let currentDeploymentId = null;
@@ -328,8 +353,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const statusClass = site.is_locked ? 'badge-status-running' : (site.last_deployment ? `badge-status-${site.last_deployment.status}` : 'badge-status-idle');
             const statusLabel = site.is_locked ? 'RUNNING' : (site.last_deployment ? site.last_deployment.status.toUpperCase() : 'IDLE');
 
-            const canDeploy = (userRole === 'admin' || userRole === 'deployer') && !site.is_locked && site.enabled;
-            const canRollback = userRole === 'admin' && !site.is_locked && site.has_rollback && site.enabled;
+            const canDeploy = hasPermission('sites') && hasSystemAccess(siteId) && !site.is_locked && site.enabled;
+            const canRollback = hasPermission('sites') && hasPermission('add_edit_sites') && hasSystemAccess(siteId) && !site.is_locked && site.has_rollback && site.enabled;
+            const canEdit = hasPermission('add_edit_sites') && hasSystemAccess(siteId);
 
             card.innerHTML = `
                 <input type="checkbox" class="site-card-checkbox" data-site-id="${siteId}" ${selectedSiteIds.has(siteId) ? 'checked' : ''}>
@@ -382,7 +408,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             📄 PM2 Logs
                         </button>
                     ` : ''}
-                    ${userRole === 'admin' ? `
+                    ${canEdit ? `
                         <button class="btn btn-secondary btn-sm btn-edit-site" data-site-id="${siteId}">
                             ⚙️ Edit
                         </button>
@@ -408,17 +434,18 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderListView(entries) {
         sitesGrid.className = 'sites-grid view-list';
 
-        const checkboxCol = (userRole === 'admin' || userRole === 'deployer') ? '<th style="width:36px;"></th>' : '';
+        const checkboxCol = hasPermission('sites') ? '<th style="width:36px;"></th>' : '';
 
         let rows = '';
         for (const [siteId, site] of entries) {
             const statusClass = site.is_locked ? 'badge-status-running' : (site.last_deployment ? `badge-status-${site.last_deployment.status}` : 'badge-status-idle');
             const statusLabel = site.is_locked ? 'RUNNING' : (site.last_deployment ? site.last_deployment.status.toUpperCase() : 'IDLE');
-            const canDeploy = (userRole === 'admin' || userRole === 'deployer') && !site.is_locked && site.enabled;
-            const canRollback = userRole === 'admin' && !site.is_locked && site.has_rollback && site.enabled;
+            const canDeploy = hasPermission('sites') && hasSystemAccess(siteId) && !site.is_locked && site.enabled;
+            const canRollback = hasPermission('sites') && hasPermission('add_edit_sites') && hasSystemAccess(siteId) && !site.is_locked && site.has_rollback && site.enabled;
+            const canEdit = hasPermission('add_edit_sites') && hasSystemAccess(siteId);
             const isSelected = selectedSiteIds.has(siteId);
 
-            const checkboxTd = (userRole === 'admin' || userRole === 'deployer')
+            const checkboxTd = hasPermission('sites')
                 ? `<td><input type="checkbox" class="list-row-checkbox" data-site-id="${siteId}" ${isSelected ? 'checked' : ''} style="accent-color: var(--accent-blue); cursor: pointer;"></td>`
                 : '';
 
@@ -439,7 +466,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             <button class="btn btn-primary btn-sm btn-deploy" data-site-id="${siteId}" ${!canDeploy ? 'disabled' : ''}>${site.is_locked ? '⏳' : '🚀'}</button>
                             ${site.has_rollback ? `<button class="btn btn-warning btn-sm btn-rollback" data-site-id="${siteId}" ${!canRollback ? 'disabled' : ''}>↩️</button>` : ''}
                             ${site.last_deployment ? `<button class="btn btn-secondary btn-sm btn-view-log" data-dep-id="${site.last_deployment.deployment_id}" data-site-id="${siteId}">📋</button>` : ''}
-                            ${userRole === 'admin' ? `<button class="btn btn-secondary btn-sm btn-edit-site" data-site-id="${siteId}">⚙️</button>` : ''}
+                            ${canEdit ? `<button class="btn btn-secondary btn-sm btn-edit-site" data-site-id="${siteId}">⚙️</button>` : ''}
                         </div>
                     </td>
                 </tr>`;
@@ -2987,6 +3014,260 @@ exit 0`;
             e.target.style.setProperty('display', 'none', 'important');
         }
     });
+
+    // ── USER MANAGEMENT MODULE ──────────────────────────────────────────────
+    async function loadUsersList() {
+        const tbody = document.getElementById('userMgmtTableBody');
+        if (!tbody) return;
+        
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 20px;">Loading user accounts...</td></tr>';
+        
+        const { ok, data } = await apiFetch('/api/users.php');
+        if (!ok || !data.success) {
+            tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #ef4444; padding: 20px;">Failed to load user list: ${escapeHtml(data.error?.message || 'Unauthorized')}</td></tr>`;
+            return;
+        }
+
+        const users = data.users || [];
+        if (users.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 20px;">No user accounts found.</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = users.map(u => {
+            const funcs = u.allowed_functions.includes('*') 
+                ? '<span class="perm-tag" style="background: rgba(16, 185, 129, 0.15); color: #34d399;">⭐ All Functions (*)</span>' 
+                : u.allowed_functions.map(f => `<span class="perm-tag">${escapeHtml(f)}</span>`).join('');
+                
+            const systems = u.allowed_systems.includes('*') 
+                ? '<span class="perm-tag" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8;">🌐 All Systems (*)</span>' 
+                : u.allowed_systems.map(s => `<span class="perm-tag">${escapeHtml(s)}</span>`).join('');
+
+            return `
+                <tr>
+                    <td style="font-weight: 600;">${escapeHtml(u.username)}</td>
+                    <td>${escapeHtml(u.name || u.username)}</td>
+                    <td><span class="badge badge-role badge-role-${escapeHtml(u.role)}">${escapeHtml(u.role.toUpperCase())}</span></td>
+                    <td><div style="max-width: 240px; display: flex; flex-wrap: wrap;">${funcs}</div></td>
+                    <td><div style="max-width: 240px; display: flex; flex-wrap: wrap;">${systems}</div></td>
+                    <td style="text-align: right;">
+                        <button class="btn btn-secondary btn-sm um-edit-btn" data-username="${escapeHtml(u.username)}" style="padding: 4px 10px; font-size: 0.75rem;">✏️ Edit</button>
+                        ${u.username !== currentUsername ? `
+                            <button class="btn btn-outline-danger btn-sm um-delete-btn" data-username="${escapeHtml(u.username)}" style="padding: 4px 10px; font-size: 0.75rem; margin-left: 4px;">🗑️ Delete</button>
+                        ` : ''}
+                    </td>
+                </tr>
+            `;
+        }).join('');
+
+        // Attach event listeners
+        tbody.querySelectorAll('.um-edit-btn').forEach(btn => {
+            btn.addEventListener('click', () => openUserEditModal(btn.dataset.username));
+        });
+
+        tbody.querySelectorAll('.um-delete-btn').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const targetUser = btn.dataset.username;
+                if (!confirm(`Are you sure you want to delete user account "${targetUser}"?`)) return;
+                
+                const { ok, data } = await apiFetch(`/api/users.php?username=${encodeURIComponent(targetUser)}`, {
+                    method: 'DELETE'
+                });
+
+                if (ok && data.success) {
+                    showToast(`User "${targetUser}" deleted successfully.`, 'success');
+                    loadUsersList();
+                } else {
+                    showToast(data.error?.message || 'Failed to delete user.', 'error');
+                }
+            });
+        });
+    }
+
+    window.loadUsersList = loadUsersList;
+
+    let editingUsername = null;
+
+    async function prepareUserEditModal(usernameToEdit = null) {
+        editingUsername = usernameToEdit;
+        const modalTitle = document.getElementById('userEditModalTitle');
+        const usernameInput = document.getElementById('umUsernameInput');
+        const nameInput = document.getElementById('umNameInput');
+        const passInput = document.getElementById('umPasswordInput');
+        const passHelp = document.getElementById('umPasswordHelpText');
+        const roleSelect = document.getElementById('umRoleSelect');
+        const allSystemsCheck = document.getElementById('umAllSystemsCheck');
+        const specificSystemsContainer = document.getElementById('umSpecificSystemsContainer');
+
+        // Populate dynamic sites checklist
+        if (specificSystemsContainer) {
+            specificSystemsContainer.innerHTML = '';
+            Object.keys(cachedSites).forEach(siteId => {
+                const site = cachedSites[siteId];
+                const label = document.createElement('label');
+                label.className = 'perm-card';
+                label.innerHTML = `
+                    <input type="checkbox" name="um_sys" value="${escapeHtml(siteId)}">
+                    <div class="perm-card-content">
+                        <div class="perm-card-title">${escapeHtml(site.name || siteId)}</div>
+                        <div class="perm-card-desc">${escapeHtml(site.domain || siteId)}</div>
+                    </div>
+                `;
+                specificSystemsContainer.appendChild(label);
+            });
+        }
+
+        if (editingUsername) {
+            if (modalTitle) modalTitle.textContent = `✏️ Edit User: ${editingUsername}`;
+            if (usernameInput) {
+                usernameInput.value = editingUsername;
+                usernameInput.readOnly = true;
+            }
+            if (passInput) passInput.value = '';
+            if (passHelp) passHelp.textContent = 'Leave blank to keep existing password.';
+
+            const { ok, data } = await apiFetch(`/api/users.php?username=${encodeURIComponent(editingUsername)}`);
+            if (ok && data.success && data.user) {
+                const u = data.user;
+                if (nameInput) nameInput.value = u.name || '';
+                if (roleSelect) roleSelect.value = u.role || 'viewer';
+
+                // Set functions checkboxes
+                const funcCheckboxes = document.querySelectorAll('input[name="um_func"]');
+                const isAllFuncs = u.allowed_functions.includes('*');
+                funcCheckboxes.forEach(cb => {
+                    cb.checked = isAllFuncs || u.allowed_functions.includes(cb.value);
+                });
+
+                // Set systems checkboxes
+                const isAllSystems = u.allowed_systems.includes('*');
+                if (allSystemsCheck) allSystemsCheck.checked = isAllSystems;
+                if (specificSystemsContainer) {
+                    if (isAllSystems) {
+                        specificSystemsContainer.classList.add('hidden');
+                    } else {
+                        specificSystemsContainer.classList.remove('hidden');
+                        const sysCheckboxes = document.querySelectorAll('input[name="um_sys"]');
+                        sysCheckboxes.forEach(cb => {
+                            cb.checked = u.allowed_systems.includes(cb.value);
+                        });
+                    }
+                }
+            }
+        } else {
+            if (modalTitle) modalTitle.textContent = '👤 Add New User Account';
+            if (usernameInput) {
+                usernameInput.value = '';
+                usernameInput.readOnly = false;
+            }
+            if (nameInput) nameInput.value = '';
+            if (passInput) passInput.value = '';
+            if (passHelp) passHelp.textContent = 'Password required for new account.';
+            if (roleSelect) {
+                roleSelect.value = 'viewer';
+                applyRolePreset('viewer');
+            }
+        }
+    }
+
+    window.prepareUserEditModal = prepareUserEditModal;
+
+    function applyRolePreset(role) {
+        const funcCheckboxes = document.querySelectorAll('input[name="um_func"]');
+        const allSystemsCheck = document.getElementById('umAllSystemsCheck');
+        const specificSystemsContainer = document.getElementById('umSpecificSystemsContainer');
+
+        if (role === 'admin') {
+            funcCheckboxes.forEach(cb => cb.checked = true);
+            if (allSystemsCheck) allSystemsCheck.checked = true;
+            if (specificSystemsContainer) specificSystemsContainer.classList.add('hidden');
+        } else if (role === 'deployer') {
+            const deployerFuncs = ['sites', 'add_edit_sites', 'pm2', 'db_backups', 'vps_ports', 'deploy_history'];
+            funcCheckboxes.forEach(cb => cb.checked = deployerFuncs.includes(cb.value));
+            if (allSystemsCheck) allSystemsCheck.checked = true;
+            if (specificSystemsContainer) specificSystemsContainer.classList.add('hidden');
+        } else if (role === 'viewer') {
+            const viewerFuncs = ['sites', 'pm2', 'vps_ports', 'deploy_history'];
+            funcCheckboxes.forEach(cb => cb.checked = viewerFuncs.includes(cb.value));
+            if (allSystemsCheck) allSystemsCheck.checked = true;
+            if (specificSystemsContainer) specificSystemsContainer.classList.add('hidden');
+        }
+    }
+
+    const umRoleSelect = document.getElementById('umRoleSelect');
+    if (umRoleSelect) {
+        umRoleSelect.addEventListener('change', (e) => {
+            if (e.target.value !== 'custom') {
+                applyRolePreset(e.target.value);
+            }
+        });
+    }
+
+    const umAllSystemsCheck = document.getElementById('umAllSystemsCheck');
+    if (umAllSystemsCheck) {
+        umAllSystemsCheck.addEventListener('change', (e) => {
+            const container = document.getElementById('umSpecificSystemsContainer');
+            if (container) {
+                if (e.target.checked) {
+                    container.classList.add('hidden');
+                } else {
+                    container.classList.remove('hidden');
+                }
+            }
+        });
+    }
+
+    const userEditForm = document.getElementById('userEditForm');
+    if (userEditForm) {
+        userEditForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const submitBtn = document.getElementById('umSaveSubmitBtn');
+            if (submitBtn) submitBtn.disabled = true;
+
+            const username = document.getElementById('umUsernameInput').value.trim();
+            const name = document.getElementById('umNameInput').value.trim();
+            const password = document.getElementById('umPasswordInput').value;
+            const role = document.getElementById('umRoleSelect').value;
+
+            const funcCbs = document.querySelectorAll('input[name="um_func"]:checked');
+            const allowedFunctions = Array.from(funcCbs).map(cb => cb.value);
+
+            let allowedSystems = ['*'];
+            const allSystems = document.getElementById('umAllSystemsCheck').checked;
+            if (!allSystems) {
+                const sysCbs = document.querySelectorAll('input[name="um_sys"]:checked');
+                allowedSystems = Array.from(sysCbs).map(cb => cb.value);
+            }
+
+            const payload = {
+                username,
+                name,
+                role,
+                allowed_functions: role === 'admin' ? ['*'] : allowedFunctions,
+                allowed_systems: role === 'admin' ? ['*'] : allowedSystems
+            };
+
+            if (password) {
+                payload.password = password;
+            }
+
+            const { ok, data } = await apiFetch('/api/users.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (submitBtn) submitBtn.disabled = false;
+
+            if (ok && data.success) {
+                showToast(`User "${username}" saved successfully!`, 'success');
+                if (window.closeUserEditModal) window.closeUserEditModal();
+                loadUsersList();
+            } else {
+                showToast(data.error?.message || 'Failed to save user account.', 'error');
+            }
+        });
+    }
 
     // Initial Execution
     window.loadVpsPorts = loadVpsPorts;

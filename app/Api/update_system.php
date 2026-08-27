@@ -11,15 +11,8 @@ $config = require_once dirname(__DIR__) . '/bootstrap.php';
 use LightDeploy\Auth\AuthService;
 use LightDeploy\Auth\Csrf;
 
-$authService = new AuthService($config['config_dir'] . '/users.json');
-if (!$authService->isAuthenticated()) {
-    jsonError('UNAUTHORIZED', 'Authentication required.', 401);
-}
-
+$authService->requirePermission('update_system');
 $currentUser = $authService->getCurrentUser();
-if (($currentUser['role'] ?? '') !== 'admin') {
-    jsonError('FORBIDDEN', 'Only Administrators can update the system.', 403);
-}
 
 $repoOwner = 'shalithamadhuwantha';
 $repoName = 'LIGHTDEPLOY';

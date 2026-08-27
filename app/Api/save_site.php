@@ -19,14 +19,18 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 $securityLogger = new SecurityLogger($config['logs_dir'] . '/security');
 $authService = new AuthService($config['config_dir'] . '/users.json', $securityLogger);
 
-// Admin Role Required
-$user = $authService->requireRole('admin');
+// Permission Required
+$user = $authService->requirePermission('add_edit_sites');
 session_write_close();
 
 $rawInput = file_get_contents('php://input');
 $input = json_decode($rawInput, true) ?: $_POST;
 
 $siteId = strtolower(trim((string)($input['site_id'] ?? '')));
+
+if (!empty($siteId)) {
+    $authService->requireSystemAccess($siteId);
+}
 $name = trim((string)($input['name'] ?? ''));
 $domain = trim((string)($input['domain'] ?? ''));
 $script = trim((string)($input['script'] ?? ''));

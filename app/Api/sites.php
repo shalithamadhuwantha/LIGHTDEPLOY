@@ -16,7 +16,7 @@ use LightDeploy\Deployment\DeploymentLog;
 $securityLogger = new SecurityLogger($config['logs_dir'] . '/security');
 $authService = new AuthService($config['config_dir'] . '/users.json', $securityLogger);
 
-$user = $authService->requireAuth();
+$user = $authService->requirePermission('sites');
 session_write_close();
 
 $sitesFile = $config['config_dir'] . '/sites.json';
@@ -31,6 +31,9 @@ $siteIdFilter = $_GET['id'] ?? null;
 
 $sanitizedSites = [];
 foreach ($configuredSites as $siteId => $siteMeta) {
+    if (!$authService->hasSystemAccess($siteId)) {
+        continue;
+    }
     if ($siteIdFilter !== null && $siteIdFilter !== $siteId) {
         continue;
     }

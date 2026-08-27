@@ -10,10 +10,7 @@ $config = require_once dirname(__DIR__) . '/bootstrap.php';
 
 use LightDeploy\Auth\AuthService;
 
-$authService = new AuthService($config['config_dir'] . '/users.json');
-if (!$authService->isAuthenticated()) {
-    jsonError('UNAUTHORIZED', 'Authentication required.', 401);
-}
+$authService->requirePermission('vps_ports');
 
 // 1. Fetch listening ports from Linux system using ss, netstat, or lsof
 $output = safeShellExec('ss -tulpn 2>/dev/null || netstat -tulpn 2>/dev/null || lsof -i -P -n 2>/dev/null') ?? '';

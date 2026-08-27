@@ -15,7 +15,7 @@ use LightDeploy\Deployment\DeploymentLog;
 $securityLogger = new SecurityLogger($config['logs_dir'] . '/security');
 $authService = new AuthService($config['config_dir'] . '/users.json', $securityLogger);
 
-$user = $authService->requireAuth();
+$user = $authService->requirePermission('deploy_history');
 session_write_close();
 
 $limit = isset($_GET['limit']) ? min(100, max(1, (int)$_GET['limit'])) : 50;
@@ -23,4 +23,12 @@ $limit = isset($_GET['limit']) ? min(100, max(1, (int)$_GET['limit'])) : 50;
 $deploymentLog = new DeploymentLog($config['logs_dir']);
 $history = $deploymentLog->getHistory($limit);
 
-jsonSuccess(['history' => $history]);
+$filteredHistory = [];
+foreach ($history as $item) {
+    $siteId = $item['site_id'] ?? '';
+    if (empty($siteId) || $authService->hasSystemAccess($siteId)) {
+        $filteredHistory[] = $item;
+    }
+}
+
+jsonSuccess(['history' => $filteredHistory]);

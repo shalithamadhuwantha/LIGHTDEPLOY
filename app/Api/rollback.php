@@ -26,8 +26,8 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 $securityLogger = new SecurityLogger($config['logs_dir'] . '/security');
 $authService = new AuthService($config['config_dir'] . '/users.json', $securityLogger);
 
-// Rollback requires admin privilege
-$user = $authService->requireRole('admin');
+// Require sites permission
+$user = $authService->requirePermission('sites');
 
 if (!Csrf::validateHeaderOrPost()) {
     $securityLogger->log('CSRF_FAILURE', ['endpoint' => 'rollback'], $user['username']);
@@ -38,6 +38,9 @@ $rawInput = file_get_contents('php://input');
 $input = json_decode($rawInput, true) ?: $_POST;
 
 $siteId = trim((string)($input['site_id'] ?? ''));
+
+// Check system access privilege for siteId
+$authService->requireSystemAccess($siteId);
 
 $sitesFile = $config['config_dir'] . '/sites.json';
 $sitesData = safeReadJson($sitesFile, ['sites' => []]);

@@ -30,6 +30,46 @@ $csrfToken = Csrf::getToken();
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <script>
+        function openUserMgmtModal() {
+            var modal = document.getElementById('userMgmtModal');
+            if (modal) {
+                modal.classList.remove('hidden');
+                modal.style.setProperty('display', 'flex', 'important');
+                modal.style.setProperty('visibility', 'visible', 'important');
+                modal.style.setProperty('opacity', '1', 'important');
+                modal.style.setProperty('z-index', '99999', 'important');
+            }
+            if (window.loadUsersList) {
+                window.loadUsersList();
+            }
+        }
+        function closeUserMgmtModal() {
+            var modal = document.getElementById('userMgmtModal');
+            if (modal) {
+                modal.classList.add('hidden');
+                modal.style.setProperty('display', 'none', 'important');
+            }
+        }
+        function openUserEditModal(usernameToEdit) {
+            var modal = document.getElementById('userEditModal');
+            if (modal) {
+                modal.classList.remove('hidden');
+                modal.style.setProperty('display', 'flex', 'important');
+                modal.style.setProperty('visibility', 'visible', 'important');
+                modal.style.setProperty('opacity', '1', 'important');
+                modal.style.setProperty('z-index', '100000', 'important');
+            }
+            if (window.prepareUserEditModal) {
+                window.prepareUserEditModal(usernameToEdit);
+            }
+        }
+        function closeUserEditModal() {
+            var modal = document.getElementById('userEditModal');
+            if (modal) {
+                modal.classList.add('hidden');
+                modal.style.setProperty('display', 'none', 'important');
+            }
+        }
         function openVpsPortsModal() {
             var modal = document.getElementById('portsModal');
             if (modal) {
@@ -119,7 +159,7 @@ $csrfToken = Csrf::getToken();
         }
     </script>
 </head>
-<body class="dashboard-body" data-user-role="<?= htmlspecialchars($user['role']) ?>" data-username="<?= htmlspecialchars($user['username']) ?>" data-csrf-token="<?= htmlspecialchars($csrfToken) ?>">
+<body class="dashboard-body" data-user-role="<?= htmlspecialchars($user['role']) ?>" data-username="<?= htmlspecialchars($user['username']) ?>" data-csrf-token="<?= htmlspecialchars($csrfToken) ?>" data-allowed-functions='<?= json_encode($user['allowed_functions'] ?? ['*']) ?>' data-allowed-systems='<?= json_encode($user['allowed_systems'] ?? ['*']) ?>'>
     <!-- Top Navigation Bar -->
     <header class="app-header">
         <div class="header-left">
@@ -156,11 +196,20 @@ $csrfToken = Csrf::getToken();
         </div>
 
         <div class="header-right">
-            <a id="headerDbBackupsBtn" href="/databases.php" class="btn btn-secondary btn-sm btn-db-backups" style="margin-right: 6px; text-decoration: none;">🗄️ Database Backups</a>
-            <button id="headerViewPortsBtn" class="btn btn-secondary btn-sm btn-view-ports" style="margin-right: 6px;" onclick="openVpsPortsModal()">🌐 VPS Ports</button>
-            <?php if (($user['role'] ?? '') === 'admin'): ?>
+            <?php if ($authService->hasPermission('db_backups')): ?>
+                <a id="headerDbBackupsBtn" href="/databases.php" class="btn btn-secondary btn-sm btn-db-backups" style="margin-right: 6px; text-decoration: none;">🗄️ Database Backups</a>
+            <?php endif; ?>
+            <?php if ($authService->hasPermission('vps_ports')): ?>
+                <button id="headerViewPortsBtn" class="btn btn-secondary btn-sm btn-view-ports" style="margin-right: 6px;" onclick="openVpsPortsModal()">🌐 VPS Ports</button>
+            <?php endif; ?>
+            <?php if ($authService->hasPermission('script_gen')): ?>
                 <button id="headerScriptGenBtn" class="btn btn-primary btn-sm" style="margin-right: 6px; background: linear-gradient(135deg, #7c3aed, #a855f7);" onclick="openScriptGenModal()">📜 Script Generator</button>
+            <?php endif; ?>
+            <?php if ($authService->hasPermission('update_system')): ?>
                 <button id="headerUpdateSystemBtn" class="btn btn-primary btn-sm" style="margin-right: 6px; background: linear-gradient(135deg, #059669, #10b981);" onclick="openUpdateSystemModal()">🔄 Update System</button>
+            <?php endif; ?>
+            <?php if ($authService->hasPermission('user_mgmt')): ?>
+                <button id="headerUserMgmtBtn" class="btn btn-secondary btn-sm" style="margin-right: 6px; background: linear-gradient(135deg, #4f46e5, #6366f1); color: #fff; border: none;" onclick="openUserMgmtModal()">👥 Manage Users</button>
             <?php endif; ?>
             <div class="user-info">
                 <span class="user-name"><?= htmlspecialchars($user['name']) ?></span>
@@ -178,12 +227,16 @@ $csrfToken = Csrf::getToken();
                 <p class="section-desc">Select a site to initiate controlled script deployment &bull; <span id="sitesCountLabel">0 sites</span></p>
             </div>
             <div class="section-actions">
-                <?php if (($user['role'] ?? '') === 'admin'): ?>
+                <?php if ($authService->hasPermission('add_edit_sites')): ?>
                     <button id="addSiteBtn" class="btn btn-primary btn-sm">+ Add New Site</button>
                 <?php endif; ?>
                 <button id="refreshSitesBtn" class="btn btn-secondary btn-sm">Refresh List</button>
-                <button id="viewPortsBtn" class="btn btn-secondary btn-sm btn-view-ports" onclick="openVpsPortsModal()">🌐 VPS Open Ports</button>
-                <button id="viewHistoryBtn" class="btn btn-secondary btn-sm">Deployment History</button>
+                <?php if ($authService->hasPermission('vps_ports')): ?>
+                    <button id="viewPortsBtn" class="btn btn-secondary btn-sm btn-view-ports" onclick="openVpsPortsModal()">🌐 VPS Open Ports</button>
+                <?php endif; ?>
+                <?php if ($authService->hasPermission('deploy_history')): ?>
+                    <button id="viewHistoryBtn" class="btn btn-secondary btn-sm">Deployment History</button>
+                <?php endif; ?>
             </div>
         </div>
 
@@ -962,6 +1015,184 @@ $csrfToken = Csrf::getToken();
                 <button type="button" id="sgDownloadBtn" class="btn btn-primary" style="background: linear-gradient(135deg, #7c3aed, #a855f7);">📥 Download Script</button>
                 <button type="button" id="sgSaveBtn" class="btn btn-primary" style="background: linear-gradient(135deg, #059669, #10b981);">💾 Save to Server</button>
             </div>
+        </div>
+    </div>
+
+    <!-- Manage Users List Modal -->
+    <div id="userMgmtModal" class="modal-overlay hidden">
+        <div class="modal-card modal-xl" style="max-width: 1000px;">
+            <div class="modal-header">
+                <div>
+                    <h3>👥 User Accounts & Dashboard Privileges</h3>
+                    <div class="modal-sub-info">Create user accounts, set role templates, and configure allowed dashboard functions & system privileges</div>
+                </div>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <button class="btn btn-primary btn-sm" style="background: linear-gradient(135deg, #059669, #10b981);" onclick="openUserEditModal()">+ Add New User</button>
+                    <button class="modal-close-btn" onclick="closeUserMgmtModal()">&times;</button>
+                </div>
+            </div>
+            <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
+                <div class="table-responsive">
+                    <table class="history-table">
+                        <thead>
+                            <tr>
+                                <th>Username</th>
+                                <th>Display Name</th>
+                                <th>Role Template</th>
+                                <th>Allowed Functions</th>
+                                <th>Allowed Systems</th>
+                                <th style="text-align: right;">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="userMgmtTableBody">
+                            <tr>
+                                <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 20px;">Loading user accounts...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeUserMgmtModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add / Edit User Modal -->
+    <div id="userEditModal" class="modal-overlay hidden">
+        <div class="modal-card" style="max-width: 680px;">
+            <div class="modal-header">
+                <div>
+                    <h3 id="userEditModalTitle">👤 Add New User Account</h3>
+                    <div class="modal-sub-info">Configure user login details, role preset, dashboard functions, and system access</div>
+                </div>
+                <button class="modal-close-btn" onclick="closeUserEditModal()">&times;</button>
+            </div>
+            <form id="userEditForm">
+                <div class="modal-body" style="max-height: 72vh; overflow-y: auto;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div class="form-group">
+                            <label for="umUsernameInput" class="form-label">Username *</label>
+                            <input type="text" id="umUsernameInput" class="form-input" placeholder="e.g. jared_dev" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="umNameInput" class="form-label">Display Full Name *</label>
+                            <input type="text" id="umNameInput" class="form-input" placeholder="e.g. Jared Vance" required>
+                        </div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px;">
+                        <div class="form-group">
+                            <label for="umPasswordInput" class="form-label">Account Password</label>
+                            <input type="password" id="umPasswordInput" class="form-input" placeholder="••••••••">
+                            <small id="umPasswordHelpText" class="form-help">Required for new user. Leave blank to keep existing password when editing.</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="umRoleSelect" class="form-label">Role Template Preset</label>
+                            <select id="umRoleSelect" class="form-input">
+                                <option value="admin">⭐ Administrator (Full Access)</option>
+                                <option value="deployer">🚀 Release Operator (Deployer)</option>
+                                <option value="viewer" selected>👁️ Auditor / Viewer (Read-only)</option>
+                                <option value="custom">⚙️ Custom Granular Privileges</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Dashboard Allowed Functions Grid -->
+                    <div style="margin-top: 18px;">
+                        <label class="form-label" style="display: flex; justify-content: space-between; align-items: center;">
+                            <span>🔒 Allowed Dashboard Functions</span>
+                            <small style="color: var(--text-muted);">Unchecked functions will be completely hidden from the user UI</small>
+                        </label>
+                        <div class="perm-grid">
+                            <label class="perm-card">
+                                <input type="checkbox" name="um_func" value="sites" checked>
+                                <div class="perm-card-content">
+                                    <div class="perm-card-title">🚀 Configured Websites</div>
+                                    <div class="perm-card-desc">View dashboard & trigger site deployments</div>
+                                </div>
+                            </label>
+                            <label class="perm-card">
+                                <input type="checkbox" name="um_func" value="add_edit_sites">
+                                <div class="perm-card-content">
+                                    <div class="perm-card-title">➕ Add & Edit Sites</div>
+                                    <div class="perm-card-desc">Add, modify, and delete website configurations</div>
+                                </div>
+                            </label>
+                            <label class="perm-card">
+                                <input type="checkbox" name="um_func" value="pm2">
+                                <div class="perm-card-content">
+                                    <div class="perm-card-title">⚡ PM2 Process Manager</div>
+                                    <div class="perm-card-desc">Monitor & control PM2 Node/Python daemons</div>
+                                </div>
+                            </label>
+                            <label class="perm-card">
+                                <input type="checkbox" name="um_func" value="db_backups">
+                                <div class="perm-card-content">
+                                    <div class="perm-card-title">🗄️ Database Backups</div>
+                                    <div class="perm-card-desc">Access MySQL database dumps & downloads</div>
+                                </div>
+                            </label>
+                            <label class="perm-card">
+                                <input type="checkbox" name="um_func" value="vps_ports">
+                                <div class="perm-card-content">
+                                    <div class="perm-card-title">🌐 VPS Open Ports</div>
+                                    <div class="perm-card-desc">View listening ports & system process scanner</div>
+                                </div>
+                            </label>
+                            <label class="perm-card">
+                                <input type="checkbox" name="um_func" value="deploy_history">
+                                <div class="perm-card-content">
+                                    <div class="perm-card-title">📜 Deployment Audit History</div>
+                                    <div class="perm-card-desc">View past deployment execution logs</div>
+                                </div>
+                            </label>
+                            <label class="perm-card">
+                                <input type="checkbox" name="um_func" value="script_gen">
+                                <div class="perm-card-content">
+                                    <div class="perm-card-title">📄 Script Generator</div>
+                                    <div class="perm-card-desc">Access bash deployment script builder GUI</div>
+                                </div>
+                            </label>
+                            <label class="perm-card">
+                                <input type="checkbox" name="um_func" value="update_system">
+                                <div class="perm-card-content">
+                                    <div class="perm-card-title">🔄 Update System</div>
+                                    <div class="perm-card-desc">Trigger 1-Click software updates from GitHub</div>
+                                </div>
+                            </label>
+                            <label class="perm-card">
+                                <input type="checkbox" name="um_func" value="user_mgmt">
+                                <div class="perm-card-content">
+                                    <div class="perm-card-title">👥 Manage Users</div>
+                                    <div class="perm-card-desc">Admin tool: Manage user accounts & permissions</div>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- System / Site Privileges Selector -->
+                    <div style="margin-top: 18px;">
+                        <label class="form-label" style="display: flex; justify-content: space-between; align-items: center;">
+                            <span>🌐 System / Site Privileges</span>
+                            <small style="color: var(--text-muted);">Choose which website systems user is authorized to manage</small>
+                        </label>
+                        <div style="margin-bottom: 8px;">
+                            <label class="form-checkbox-label">
+                                <input type="checkbox" id="umAllSystemsCheck" checked>
+                                <strong>All Systems / Sites (Full Access - <code>*</code>)</strong>
+                            </label>
+                        </div>
+                        <div id="umSpecificSystemsContainer" class="perm-grid hidden" style="grid-template-columns: repeat(2, 1fr);">
+                            <!-- Dynamically populated configured site options -->
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeUserEditModal()">Cancel</button>
+                    <button type="submit" id="umSaveSubmitBtn" class="btn btn-primary">Save User Account</button>
+                </div>
+            </form>
         </div>
     </div>
 
