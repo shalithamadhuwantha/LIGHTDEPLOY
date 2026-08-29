@@ -37,7 +37,7 @@ $csrfToken = Csrf::getToken();
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LightDeploy - Lightweight Secure Web Deployment Panel</title>
+    <title>LightDeploy by Blue Octopus - Secure Web Deployment Panel</title>
     <link rel="stylesheet" href="/assets/app.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -54,7 +54,8 @@ $csrfToken = Csrf::getToken();
                     </svg>
                 </div>
                 <h1>LIGHTDEPLOY</h1>
-                <p>Secure Lightweight Web Deployment Panel</p>
+                <p style="color: #c4b5fd; font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-top: 4px;">By Blue Octopus Company</p>
+                <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 2px;">Secure Lightweight Web Deployment Panel</p>
             </div>
 
             <div id="alertBox" class="alert-box <?= empty($errorMsg) ? 'hidden' : 'alert-danger' ?>">
@@ -85,7 +86,7 @@ $csrfToken = Csrf::getToken();
             </form>
 
             <div class="login-footer">
-                <span>aaPanel &bull; PHP 8.x &bull; SSE Engine</span>
+                <span>Blue Octopus Company &bull; aaPanel &bull; PHP 8.x &bull; SSE Engine</span>
             </div>
         </div>
     </div>

@@ -32,6 +32,10 @@ $input = json_decode($rawInput, true) ?: $_POST;
 
 // ── Extract and sanitize inputs ──────────────────────────────────────────────
 
+$scriptType = trim((string)($input['script_type'] ?? 'bash'));
+
+// ── Extract and sanitize inputs ──────────────────────────────────────────────
+
 $action = trim((string)($input['action'] ?? 'generate'));
 $appDir = trim((string)($input['app_dir'] ?? ''));
 $repoUrl = trim((string)($input['repo_url'] ?? ''));
@@ -43,56 +47,97 @@ $hasPm2 = !empty($input['has_pm2']);
 $appName = trim((string)($input['app_name'] ?? ''));
 $siteUser = trim((string)($input['site_user'] ?? 'www'));
 $siteGroup = trim((string)($input['site_group'] ?? 'www'));
-$outputPath = trim((string)($input['output_path'] ?? ''));
+// ── Action Read (Load existing script from disk) ─────────────────────────────
+if ($action === 'read') {
+    $filePath = trim((string)($input['file_path'] ?? $input['output_path'] ?? ''));
+    if (empty($filePath)) {
+        jsonError('INVALID_INPUT', 'File path is required for read action.', 400);
+    }
+    if (strpos($filePath, '..') !== false) {
+        jsonError('INVALID_INPUT', 'Path traversal characters are not permitted.', 400);
+    }
+    if (!file_exists($filePath)) {
+        jsonError('NOT_FOUND', "File does not exist on server: {$filePath}", 404);
+    }
+    if (!is_readable($filePath)) {
+        jsonError('READ_FAILED', "File is not readable: {$filePath}", 403);
+    }
+    $content = file_get_contents($filePath);
+    jsonResponse([
+        'success' => true,
+        'file_path' => $filePath,
+        'content' => $content,
+        'message' => 'Script loaded successfully from server.'
+    ]);
+    exit;
+}
 
 // ── Validation ───────────────────────────────────────────────────────────────
 
-if (empty($appDir)) {
-    jsonError('INVALID_INPUT', 'Application directory is required.', 400);
-}
+if ($scriptType === 'pm2_ecosystem') {
+    if (empty($appName)) {
+        jsonError('INVALID_INPUT', 'PM2 Application Name is required.', 400);
+    }
+} else {
+    if (empty($appDir)) {
+        jsonError('INVALID_INPUT', 'Application directory is required.', 400);
+    }
 
-if (empty($repoUrl)) {
-    jsonError('INVALID_INPUT', 'GitHub repository URL is required.', 400);
-}
+    if (empty($repoUrl)) {
+        jsonError('INVALID_INPUT', 'GitHub repository URL is required.', 400);
+    }
 
-if (!preg_match('#^https://github\.com/.+\.git$#', $repoUrl)) {
-    jsonError('INVALID_INPUT', 'Repository URL must be a valid GitHub HTTPS URL ending with .git', 400);
-}
+    if (!preg_match('#^https://github\.com/.+\.git$#', $repoUrl)) {
+        jsonError('INVALID_INPUT', 'Repository URL must be a valid GitHub HTTPS URL ending with .git', 400);
+    }
 
-if (empty($branch) || !preg_match('/^[a-zA-Z0-9._\/-]+$/', $branch)) {
-    jsonError('INVALID_INPUT', 'Branch name contains invalid characters.', 400);
-}
+    if (empty($branch) || !preg_match('/^[a-zA-Z0-9._\/-]+$/', $branch)) {
+        jsonError('INVALID_INPUT', 'Branch name contains invalid characters.', 400);
+    }
 
-if ($hasPm2 && empty($appName)) {
-    jsonError('INVALID_INPUT', 'PM2 application name is required when PM2 is enabled.', 400);
-}
+    if ($hasPm2 && empty($appName)) {
+        jsonError('INVALID_INPUT', 'PM2 application name is required when PM2 is enabled.', 400);
+    }
 
-if (!preg_match('/^[a-zA-Z0-9_-]+$/', $siteUser) || !preg_match('/^[a-zA-Z0-9_-]+$/', $siteGroup)) {
-    jsonError('INVALID_INPUT', 'Site user/group must contain only alphanumeric characters, hyphens, or underscores.', 400);
+    if (!preg_match('/^[a-zA-Z0-9_-]+$/', $siteUser) || !preg_match('/^[a-zA-Z0-9_-]+$/', $siteGroup)) {
+        jsonError('INVALID_INPUT', 'Site user/group must contain only alphanumeric characters, hyphens, or underscores.', 400);
+    }
 }
 
 if ($action === 'save' && empty($outputPath)) {
     jsonError('INVALID_INPUT', 'Output file path is required for save action.', 400);
 }
 
-// ── Generate the deployment script ───────────────────────────────────────────
+// ── Generate script ─────────────────────────────────────────────────────────
 
-$hasNpmStr = $hasNpm ? 'true' : 'false';
-$hasBuildStr = $hasBuild ? 'true' : 'false';
-$hasPm2Str = $hasPm2 ? 'true' : 'false';
+if ($scriptType === 'pm2_ecosystem') {
+    $scriptContent = generatePm2EcosystemScript($input);
+    $defaultFilename = "ecosystem.{$appName}.config.js";
+} else {
+    $hasNpmStr = $hasNpm ? 'true' : 'false';
+    $hasBuildStr = $hasBuild ? 'true' : 'false';
+    $hasPm2Str = $hasPm2 ? 'true' : 'false';
 
-$scriptContent = generateDeploymentScript(
-    $appDir, $repoUrl, $branch, $envSource,
-    $hasNpmStr, $hasBuildStr, $hasPm2Str,
-    $appName, $siteUser, $siteGroup
-);
+    $scriptContent = generateDeploymentScript(
+        $appDir, $repoUrl, $branch, $envSource,
+        $hasNpmStr, $hasBuildStr, $hasPm2Str,
+        $appName, $siteUser, $siteGroup
+    );
+    $defaultFilename = 'deploy-' . (basename($appDir) ?: 'app') . '.sh';
+}
 
 // ── Handle action ────────────────────────────────────────────────────────────
 
 if ($action === 'save') {
-    // Validate output path ends with .sh
-    if (pathinfo($outputPath, PATHINFO_EXTENSION) !== 'sh') {
-        jsonError('INVALID_INPUT', 'Output path must end with .sh extension.', 400);
+    $ext = pathinfo($outputPath, PATHINFO_EXTENSION);
+    if ($scriptType === 'pm2_ecosystem') {
+        if (!in_array($ext, ['js', 'json', 'cjs'], true)) {
+            jsonError('INVALID_INPUT', 'PM2 ecosystem output path must end with .js, .config.js, or .cjs extension.', 400);
+        }
+    } else {
+        if ($ext !== 'sh') {
+            jsonError('INVALID_INPUT', 'Deployment script output path must end with .sh extension.', 400);
+        }
     }
 
     // Ensure parent directory exists
@@ -115,13 +160,13 @@ if ($action === 'save') {
     @chmod($outputPath, 0755);
 
     $securityLogger->log('SCRIPT_GENERATED_SAVED', [
+        'script_type' => $scriptType,
         'output_path' => $outputPath,
-        'app_dir' => $appDir,
-        'repo_url' => $repoUrl,
+        'app_name' => $appName,
     ], $user['username']);
 
     jsonSuccess([
-        'message' => "Deployment script saved successfully to: {$outputPath}",
+        'message' => "Script saved successfully to: {$outputPath}",
         'output_path' => $outputPath,
         'size_bytes' => $written,
     ]);
@@ -129,20 +174,104 @@ if ($action === 'save') {
 
 // Default: generate and return content
 $securityLogger->log('SCRIPT_GENERATED', [
-    'app_dir' => $appDir,
-    'repo_url' => $repoUrl,
+    'script_type' => $scriptType,
+    'app_name' => $appName,
 ], $user['username']);
 
 jsonSuccess([
-    'message' => 'Deployment script generated successfully.',
+    'message' => 'Script generated successfully.',
     'script_content' => $scriptContent,
-    'filename' => 'deploy-' . basename($appDir) . '.sh',
+    'filename' => $defaultFilename,
 ]);
 
 
 // ══════════════════════════════════════════════════════════════════════════════
 // SCRIPT TEMPLATE GENERATOR
 // ══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Generate PM2 Ecosystem JS configuration script based on user specification
+ */
+function generatePm2EcosystemScript(array $input): string {
+    $appName = trim((string)($input['app_name'] ?? 'solar-backend')) ?: 'solar-backend';
+    $script = trim((string)($input['pm2_script'] ?? 'src/index.ts')) ?: 'src/index.ts';
+    $interpreter = trim((string)($input['pm2_interpreter'] ?? 'node')) ?: 'node';
+    $interpreterArgs = trim((string)($input['pm2_interpreter_args'] ?? '--require esbuild-register'));
+    $cwd = trim((string)($input['app_dir'] ?? ($input['cwd'] ?? '/www/wwwroot/apisolar.blueoctopus.site'))) ?: '/www/wwwroot/apisolar.blueoctopus.site';
+    $instances = isset($input['pm2_instances']) && is_numeric($input['pm2_instances']) ? (int)$input['pm2_instances'] : 1;
+    $execMode = trim((string)($input['pm2_exec_mode'] ?? 'fork')) ?: 'fork';
+    $watch = !empty($input['pm2_watch']);
+    $maxMemoryRestart = trim((string)($input['pm2_max_memory_restart'] ?? '1G')) ?: '1G';
+    
+    $nodeEnv = trim((string)($input['pm2_node_env'] ?? 'production')) ?: 'production';
+    $port = isset($input['pm2_port']) && is_numeric($input['pm2_port']) ? (int)$input['pm2_port'] : 3000;
+    
+    $errorFile = trim((string)($input['pm2_error_file'] ?? "/var/log/{$appName}-error.log")) ?: "/var/log/{$appName}-error.log";
+    $outFile = trim((string)($input['pm2_out_file'] ?? "/var/log/{$appName}-out.log")) ?: "/var/log/{$appName}-out.log";
+    $logFile = trim((string)($input['pm2_log_file'] ?? "/var/log/{$appName}-combined.log")) ?: "/var/log/{$appName}-combined.log";
+    
+    $time = isset($input['pm2_time']) ? !empty($input['pm2_time']) : true;
+    $autorestart = isset($input['pm2_autorestart']) ? !empty($input['pm2_autorestart']) : true;
+    $maxRestarts = isset($input['pm2_max_restarts']) && is_numeric($input['pm2_max_restarts']) ? (int)$input['pm2_max_restarts'] : 10;
+    $minUptime = trim((string)($input['pm2_min_uptime'] ?? '10s')) ?: '10s';
+    
+    $killTimeout = isset($input['pm2_kill_timeout']) && is_numeric($input['pm2_kill_timeout']) ? (int)$input['pm2_kill_timeout'] : 5000;
+    $listenTimeout = isset($input['pm2_listen_timeout']) && is_numeric($input['pm2_listen_timeout']) ? (int)$input['pm2_listen_timeout'] : 3000;
+    $mergeLogs = isset($input['pm2_merge_logs']) ? !empty($input['pm2_merge_logs']) : true;
+
+    $watchStr = $watch ? 'true' : 'false';
+    $timeStr = $time ? 'true' : 'false';
+    $autorestartStr = $autorestart ? 'true' : 'false';
+    $mergeLogsStr = $mergeLogs ? 'true' : 'false';
+
+    $code = "module.exports = {\n";
+    $code .= "  apps: [{\n";
+    $code .= "    name: " . json_encode($appName) . ",\n";
+    $code .= "    script: " . json_encode($script) . ",\n";
+    $code .= "    interpreter: " . json_encode($interpreter) . ",\n";
+    if (!empty($interpreterArgs)) {
+        $code .= "    interpreter_args: " . json_encode($interpreterArgs) . ",\n";
+    }
+    $code .= "    cwd: " . json_encode($cwd) . ",\n";
+    $code .= "    \n";
+    $code .= "    instances: {$instances},\n";
+    $code .= "    exec_mode: " . json_encode($execMode) . ",\n";
+    $code .= "    watch: {$watchStr},\n";
+    $code .= "    max_memory_restart: " . json_encode($maxMemoryRestart) . ",\n";
+    $code .= "    \n";
+    $code .= "    env: {\n";
+    $code .= "      NODE_ENV: " . json_encode($nodeEnv) . ",\n";
+    $code .= "      PORT: {$port},\n";
+
+    if (!empty($input['pm2_custom_env']) && is_array($input['pm2_custom_env'])) {
+        foreach ($input['pm2_custom_env'] as $k => $v) {
+            $kClean = preg_replace('/[^a-zA-Z0-9_]/', '', (string)$k);
+            if (!empty($kClean) && !in_array($kClean, ['NODE_ENV', 'PORT'], true)) {
+                $code .= "      {$kClean}: " . json_encode((string)$v) . ",\n";
+            }
+        }
+    }
+
+    $code .= "    },\n";
+    $code .= "    \n";
+    $code .= "    error_file: " . json_encode($errorFile) . ",\n";
+    $code .= "    out_file: " . json_encode($outFile) . ",\n";
+    $code .= "    log_file: " . json_encode($logFile) . ",\n";
+    $code .= "    time: {$timeStr},\n";
+    $code .= "    \n";
+    $code .= "    autorestart: {$autorestartStr},\n";
+    $code .= "    max_restarts: {$maxRestarts},\n";
+    $code .= "    min_uptime: " . json_encode($minUptime) . ",\n";
+    $code .= "    \n";
+    $code .= "    kill_timeout: {$killTimeout},\n";
+    $code .= "    listen_timeout: {$listenTimeout},\n";
+    $code .= "    \n";
+    $code .= "    merge_logs: {$mergeLogsStr},\n";
+    $code .= "  }]\n";
+    $code .= "};\n";
+
+    return $code;
+}
 
 function generateDeploymentScript(
     string $appDir, string $repoUrl, string $branch, string $envSource,

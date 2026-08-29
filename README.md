@@ -1,6 +1,6 @@
-# LIGHTDEPLOY
+# LIGHTDEPLOY BY BLUE OCTOPUS
 
-> **Lightweight Secure Web Deployment Panel**
+> **Lightweight Secure Web Deployment Panel by Blue Octopus Company**
 > High-performance, zero-database, zero-daemon deployment panel designed specifically for resource-constrained Linux servers running aaPanel, Nginx, or Apache with PHP 8.x.
 
 ---

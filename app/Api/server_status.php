@@ -90,7 +90,12 @@ if ($appRssKb === 0 && file_exists('/proc/self/status')) {
 $appRssMb = $appRssKb > 0 ? round($appRssKb / 1024, 2) : round($appMemoryBytes / (1024 * 1024), 2);
 $appPeakMb = round($appPeakMemoryBytes / (1024 * 1024), 2);
 
+// Overall Resource Load calculation (composite index of CPU, RAM, Disk)
+$cpuVal = min(100, max(0, (float)($load[0] ?? 0)));
+$overallLoad = round(($cpuVal * 0.45) + ($memPercentage * 0.45) + ($diskPercentage * 0.10), 1);
+
 jsonSuccess([
+    'overall_load' => $overallLoad,
     'cpu' => [
         'load_1m' => $load[0] ?? 0,
         'load_5m' => $load[1] ?? 0,

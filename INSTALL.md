@@ -36,7 +36,7 @@ LightDeploy can be run in two modes:
 
 ```bash
 # Navigate to project directory
-cd /home/shalith/Documents/CYBERnetic/project
+cd /path/to/lightdeploy
 
 # Run local setup wizard
 ./install.sh --local

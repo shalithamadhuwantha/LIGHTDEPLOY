@@ -24,7 +24,7 @@ $csrfToken = Csrf::getToken();
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard - LightDeploy</title>
+    <title>Dashboard - LightDeploy by Blue Octopus</title>
     <link rel="stylesheet" href="/assets/app.css?v=<?= time() ?>">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -137,7 +137,7 @@ $csrfToken = Csrf::getToken();
                 modal.style.setProperty('display', 'none', 'important');
             }
         }
-        function openScriptGenModal() {
+        function openScriptGenModal(mode) {
             var modal = document.getElementById('scriptGenModal');
             if (modal) {
                 modal.classList.remove('hidden');
@@ -146,7 +146,12 @@ $csrfToken = Csrf::getToken();
                 modal.style.setProperty('opacity', '1', 'important');
                 modal.style.setProperty('z-index', '99999', 'important');
             }
-            if (window.updateScriptPreview) {
+            if (window.populateSgSiteDropdown) {
+                window.populateSgSiteDropdown();
+            }
+            if (window.setScriptGenMode) {
+                window.setScriptGenMode(mode || 'bash');
+            } else if (window.updateScriptPreview) {
                 window.updateScriptPreview();
             }
         }
@@ -167,31 +172,15 @@ $csrfToken = Csrf::getToken();
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                     <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
                 </svg>
-                <span class="brand-title">LIGHTDEPLOY</span>
-                <span class="badge badge-version">v1.2.4</span>
+                <span class="brand-title">LIGHTDEPLOY <span style="font-size: 0.62rem; color: #a855f7; font-weight: 600; letter-spacing: 0.5px; background: rgba(168, 85, 247, 0.15); padding: 2px 7px; border-radius: 4px; margin-left: 4px; border: 1px solid rgba(168, 85, 247, 0.3); text-transform: uppercase;">BY BLUE OCTOPUS</span></span>
+                <span class="badge badge-version">v1.2.5</span>
             </div>
         </div>
 
-        <div class="header-center" id="serverMetricsWidget">
-            <div class="metric-pill" id="metricAppRam" style="border-color: rgba(56, 189, 248, 0.4); background: rgba(56, 189, 248, 0.08);" title="LightDeploy App Resource Footprint">
-                <span class="metric-label" style="color: #38bdf8;">LIGHTDEPLOY RAM</span>
-                <span class="metric-value" id="metricAppRamVal" style="color: #38bdf8;">-- MB</span>
-            </div>
-            <div class="metric-pill" id="metricCpu">
-                <span class="metric-label">SYS CPU</span>
-                <span class="metric-value">--%</span>
-            </div>
-            <div class="metric-pill" id="metricRam">
-                <span class="metric-label">SYS RAM</span>
-                <span class="metric-value">--%</span>
-            </div>
-            <div class="metric-pill" id="metricDisk">
-                <span class="metric-label">DISK</span>
-                <span class="metric-value">--%</span>
-            </div>
-            <div class="metric-pill" id="metricUptime">
-                <span class="metric-label">UPTIME</span>
-                <span class="metric-value">--</span>
+        <div class="header-center">
+            <div class="header-status-pill" title="Live Server Status">
+                <span class="status-pulse"></span>
+                <span style="font-size: 0.75rem; font-weight: 700; color: #6ee7b7; letter-spacing: 0.5px;">SYSTEM ONLINE</span>
             </div>
         </div>
 
@@ -221,6 +210,91 @@ $csrfToken = Csrf::getToken();
 
     <!-- Main Content Container -->
     <main class="app-content">
+        <!-- Server Performance & Resource Meters Card (Horizontal Meter System) -->
+        <section class="server-status-banner">
+            <div class="status-banner-header">
+                <div class="status-banner-title">
+                    <span class="status-pulse"></span>
+                    <h3>Server Performance &amp; Resource Status</h3>
+                </div>
+                <div class="status-banner-meta">
+                    <span class="badge badge-version">VPS NODE</span>
+                    <span class="uptime-label" style="font-size: 0.8rem; color: var(--text-muted);">UPTIME: <strong id="bodyUptimeVal" style="color: #6ee7b7; font-family: var(--font-mono);">--</strong></span>
+                </div>
+            </div>
+            <div class="server-meters-grid" id="serverMetricsWidget">
+                <!-- 1. OVERALL LOAD -->
+                <div class="body-metric-card meter-overall" id="metricOverall" title="Unified System Load Index (CPU + RAM + DISK)">
+                    <div class="body-metric-header">
+                        <div class="body-metric-title">
+                            <span class="body-metric-icon">⚡</span>
+                            <span class="body-metric-name" style="color: #c4b5fd;">OVERALL LOAD</span>
+                        </div>
+                        <span class="body-metric-val metric-value" style="color: #a855f7;">--%</span>
+                    </div>
+                    <div class="meter-track">
+                        <div class="meter-fill meter-overall" style="width: 0%;"></div>
+                    </div>
+                </div>
+
+                <!-- 2. CPU USAGE -->
+                <div class="body-metric-card meter-cpu" id="metricCpu" title="Server CPU Load Average">
+                    <div class="body-metric-header">
+                        <div class="body-metric-title">
+                            <span class="body-metric-icon">💻</span>
+                            <span class="body-metric-name">CPU USAGE</span>
+                        </div>
+                        <span class="body-metric-val metric-value">--%</span>
+                    </div>
+                    <div class="meter-track">
+                        <div class="meter-fill meter-cpu" style="width: 0%;"></div>
+                    </div>
+                </div>
+
+                <!-- 3. RAM USAGE -->
+                <div class="body-metric-card meter-ram" id="metricRam" title="System Memory Usage">
+                    <div class="body-metric-header">
+                        <div class="body-metric-title">
+                            <span class="body-metric-icon">🧠</span>
+                            <span class="body-metric-name">RAM USAGE</span>
+                        </div>
+                        <span class="body-metric-val metric-value">--%</span>
+                    </div>
+                    <div class="meter-track">
+                        <div class="meter-fill meter-ram" style="width: 0%;"></div>
+                    </div>
+                </div>
+
+                <!-- 4. DISK SPACE -->
+                <div class="body-metric-card meter-disk" id="metricDisk" title="Disk Space Usage">
+                    <div class="body-metric-header">
+                        <div class="body-metric-title">
+                            <span class="body-metric-icon">💾</span>
+                            <span class="body-metric-name">DISK SPACE</span>
+                        </div>
+                        <span class="body-metric-val metric-value">--%</span>
+                    </div>
+                    <div class="meter-track">
+                        <div class="meter-fill meter-disk" style="width: 0%;"></div>
+                    </div>
+                </div>
+
+                <!-- 5. APP RAM FOOTPRINT -->
+                <div class="body-metric-card meter-app" id="metricAppRam" title="LightDeploy App Memory Footprint">
+                    <div class="body-metric-header">
+                        <div class="body-metric-title">
+                            <span class="body-metric-icon">🚀</span>
+                            <span class="body-metric-name" style="color: #38bdf8;">APP RAM</span>
+                        </div>
+                        <span class="body-metric-val metric-value" id="metricAppRamVal" style="color: #38bdf8;">-- MB</span>
+                    </div>
+                    <div class="meter-track">
+                        <div class="meter-fill meter-app" style="width: 20%;"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
         <div class="section-header">
             <div>
                 <h2>Configured Websites</h2>
@@ -291,8 +365,11 @@ $csrfToken = Csrf::getToken();
                 <p class="section-desc">Monitor and control Node.js, Python, and background daemon processes live</p>
             </div>
             <div class="section-actions">
-                <?php if (in_array(($user['role'] ?? ''), ['admin', 'deployer'], true)): ?>
+                <?php if ($authService->hasPermission('pm2')): ?>
                     <button id="startPm2AppBtn" class="btn btn-primary btn-sm">+ Launch App in PM2</button>
+                <?php endif; ?>
+                <?php if ($authService->hasPermission('script_gen')): ?>
+                    <button id="createPm2ScriptBtn" class="btn btn-secondary btn-sm" onclick="openScriptGenModal('pm2_ecosystem')" style="border-color: rgba(168, 85, 247, 0.4); color: #c4b5fd;">📜 + Create PM2 Script</button>
                 <?php endif; ?>
                 <button id="refreshPm2Btn" class="btn btn-secondary btn-sm">Refresh PM2</button>
             </div>
@@ -435,7 +512,10 @@ $csrfToken = Csrf::getToken();
 
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin-top: 10px;">
                         <div class="form-group">
-                            <label for="siteScriptInput" class="form-label">Deployment Script Path</label>
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
+                                <label for="siteScriptInput" class="form-label" style="margin-bottom: 0;">Deployment Script Path</label>
+                                <button type="button" id="editDeployScriptBtn" class="btn btn-secondary btn-sm" style="font-size: 0.72rem; padding: 2px 8px; border-color: rgba(124, 58, 237, 0.4); color: #c4b5fd;">✏️ Edit in Generator</button>
+                            </div>
                             <input type="text" id="siteScriptInput" name="script" class="form-input" placeholder="e.g. scripts/site-d.sh (auto-created if empty)">
                             <small class="form-help">Auto-generated in <code>scripts/</code> if left blank.</small>
                         </div>
@@ -476,23 +556,44 @@ $csrfToken = Csrf::getToken();
                     </div>
 
                     <div class="form-group hidden" id="pm2OptionsGroup" style="margin-top: 12px;">
-                        <label for="pm2EcosystemInput" class="form-label">📋 PM2 Ecosystem Config Script (<code>ecosystem.config.js</code>)</label>
-                        <textarea id="pm2EcosystemInput" name="pm2_ecosystem" class="form-input" rows="14" style="font-family: var(--font-mono); font-size: 0.83rem; line-height: 1.5; resize: vertical; background: rgba(15, 23, 42, 0.7); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); white-space: pre; tab-size: 2; overflow-x: auto; border-radius: var(--radius-md);" placeholder="module.exports = {
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; gap: 8px; flex-wrap: wrap;">
+                            <label for="pm2EcosystemInput" class="form-label" style="margin-bottom: 0;">📋 PM2 Ecosystem Config Script (<code>ecosystem.config.js</code>)</label>
+                            <div style="display: flex; gap: 6px;">
+                                <button type="button" id="openInPm2GenBtn" class="btn btn-primary btn-sm" style="font-size: 0.75rem; padding: 3px 10px; background: linear-gradient(135deg, #7c3aed, #a855f7);">✏️ Edit in Generator</button>
+                                <button type="button" id="loadPm2TemplateBtn" class="btn btn-secondary btn-sm" style="font-size: 0.75rem; padding: 3px 10px; border-color: rgba(168, 85, 247, 0.4); color: #c4b5fd;">🪄 Load Base PM2 Template</button>
+                            </div>
+                        </div>
+                        <textarea id="pm2EcosystemInput" name="pm2_ecosystem" class="form-input" rows="16" style="font-family: var(--font-mono); font-size: 0.83rem; line-height: 1.5; resize: vertical; background: rgba(15, 23, 42, 0.7); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); white-space: pre; tab-size: 2; overflow-x: auto; border-radius: var(--radius-md);" placeholder="module.exports = {
   apps: [{
     name: 'solar-backend',
     script: 'src/index.ts',
     interpreter: 'node',
     interpreter_args: '--require esbuild-register',
+    cwd: '/www/wwwroot/apisolar.blueoctopus.site',
+    
     instances: 1,
     exec_mode: 'fork',
     watch: false,
     max_memory_restart: '1G',
+    
     env: {
       NODE_ENV: 'production',
       PORT: 3000,
     },
-    cwd: '/www/wwwroot/apisolar.cyberneticde.site',
+    
+    error_file: '/var/log/solar-backend-error.log',
+    out_file: '/var/log/solar-backend-out.log',
+    log_file: '/var/log/solar-backend-combined.log',
+    time: true,
+    
     autorestart: true,
+    max_restarts: 10,
+    min_uptime: '10s',
+    
+    kill_timeout: 5000,
+    listen_timeout: 3000,
+    
+    merge_logs: true,
   }]
 };"></textarea>
                         <small class="form-help">Paste your full <code>module.exports = { apps: [...] }</code> PM2 ecosystem config. LightDeploy will save this script and execute <code>pm2 start ecosystem.config.js</code> automatically during deployment.</small>
@@ -882,7 +983,7 @@ $csrfToken = Csrf::getToken();
                 <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid var(--bg-card-border); padding: 16px; border-radius: var(--radius-md); margin-bottom: 16px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                         <span style="color: var(--text-muted); font-weight: 600; font-size: 0.85rem;">Installed Version</span>
-                        <span class="badge badge-version" style="font-size: 0.9rem;">v1.2.4</span>
+                        <span class="badge badge-version" style="font-size: 0.9rem;">v1.2.5</span>
                     </div>
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                         <span style="color: var(--text-muted); font-weight: 600; font-size: 0.85rem;">Latest GitHub Commit (`main`)</span>
@@ -912,101 +1013,258 @@ $csrfToken = Csrf::getToken();
         </div>
     </div>
 
-    <!-- Deployment Script Generator Modal -->
+    <!-- Deployment & PM2 Script Generator Modal -->
     <div id="scriptGenModal" class="modal-overlay hidden">
         <div class="modal-card modal-xl" style="max-width: 1200px;">
             <div class="modal-header">
                 <div>
-                    <h3>📜 Deployment Script Generator</h3>
-                    <div class="modal-sub-info">Generate production-grade deployment scripts with embedded configuration — GUI version of the CLI tool</div>
+                    <h3 id="scriptGenTitle">📜 Script Generator</h3>
+                    <div class="modal-sub-info" id="scriptGenSubInfo">Generate production-grade deployment scripts or PM2 ecosystem configurations</div>
                 </div>
                 <button class="modal-close-btn" onclick="closeScriptGenModal()">&times;</button>
             </div>
             <div class="modal-body" style="max-height: 78vh; overflow-y: auto; padding: 20px 24px;">
+                <!-- Script Type Switcher -->
+                <div style="display: flex; gap: 10px; margin-bottom: 14px; background: rgba(15, 23, 42, 0.7); padding: 6px; border-radius: var(--radius-md); border: 1px solid var(--bg-card-border);">
+                    <button id="sgTypeBashBtn" type="button" class="btn btn-primary btn-sm" style="flex: 1; border-radius: 6px;">📜 Bash Deployment Script (.sh)</button>
+                    <button id="sgTypePm2Btn" type="button" class="btn btn-secondary btn-sm" style="flex: 1; border-radius: 6px;">⚡ PM2 Ecosystem Script (ecosystem.config.js)</button>
+                </div>
+
+                <!-- Site Quick Select for Editing Existing Configurations -->
+                <div style="margin-bottom: 16px; display: flex; align-items: center; gap: 10px; background: rgba(30, 41, 59, 0.5); padding: 10px 14px; border-radius: var(--radius-md); border: 1px dashed rgba(124, 58, 237, 0.4);">
+                    <label for="sgSiteQuickSelect" style="font-weight: 600; font-size: 0.85rem; color: #c4b5fd; white-space: nowrap; margin-bottom: 0;">✏️ Load Existing Site Config to Edit:</label>
+                    <select id="sgSiteQuickSelect" class="form-input" style="font-size: 0.83rem; padding: 4px 10px; background: rgba(15, 23, 42, 0.8);">
+                        <option value="">-- Choose an Existing Site to Load &amp; Edit --</option>
+                    </select>
+                </div>
+
                 <div class="scriptgen-layout">
                     <!-- LEFT COLUMN: Configuration Form -->
                     <div class="scriptgen-form-col">
-                        <!-- Section 1: Application -->
-                        <h4 class="scriptgen-section-title">📁 1. Application &amp; Repository</h4>
-                        <div class="form-group">
-                            <label for="sgAppDir" class="form-label">Application Directory *</label>
-                            <input type="text" id="sgAppDir" class="form-input" placeholder="e.g. /www/wwwroot/example.com" required>
-                            <small class="form-help">Target directory where the app will be deployed</small>
-                        </div>
-                        <div class="form-group">
-                            <label for="sgRepoUrl" class="form-label">GitHub Repository URL *</label>
-                            <input type="text" id="sgRepoUrl" class="form-input" placeholder="e.g. https://github.com/user/repo.git" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="sgBranch" class="form-label">Git Branch</label>
-                            <input type="text" id="sgBranch" class="form-input" placeholder="main" value="main">
-                        </div>
+                        <!-- BASH SCRIPT FORM CONTAINER -->
+                        <div id="sgBashFormContainer">
+                            <!-- Section 1: Application -->
+                            <h4 class="scriptgen-section-title">📁 1. Application &amp; Repository</h4>
+                            <div class="form-group">
+                                <label for="sgAppDir" class="form-label">Application Directory *</label>
+                                <input type="text" id="sgAppDir" class="form-input" placeholder="e.g. /www/wwwroot/example.com" required>
+                                <small class="form-help">Target directory where the app will be deployed</small>
+                            </div>
+                            <div class="form-group">
+                                <label for="sgRepoUrl" class="form-label">GitHub Repository URL *</label>
+                                <input type="text" id="sgRepoUrl" class="form-input" placeholder="e.g. https://github.com/user/repo.git" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="sgBranch" class="form-label">Git Branch</label>
+                                <input type="text" id="sgBranch" class="form-input" placeholder="main" value="main">
+                            </div>
 
-                        <!-- Section 2: Environment -->
-                        <h4 class="scriptgen-section-title">🔐 2. Environment Configuration</h4>
-                        <div class="form-group">
-                            <label for="sgEnvSource" class="form-label">Environment File Path (optional)</label>
-                            <input type="text" id="sgEnvSource" class="form-input" placeholder="e.g. /root/envfiles/.env.production">
-                            <small class="form-help">Will be copied to <code>$APP_DIR/.env</code> during deployment</small>
-                        </div>
+                            <!-- Section 2: Environment -->
+                            <h4 class="scriptgen-section-title">🔐 2. Environment Configuration</h4>
+                            <div class="form-group">
+                                <label for="sgEnvSource" class="form-label">Environment File Path (optional)</label>
+                                <input type="text" id="sgEnvSource" class="form-input" placeholder="e.g. /root/envfiles/.env.production">
+                                <small class="form-help">Will be copied to <code>$APP_DIR/.env</code> during deployment</small>
+                            </div>
 
-                        <!-- Section 3: Build Pipeline -->
-                        <h4 class="scriptgen-section-title">🔨 3. Build Pipeline</h4>
-                        <div style="display: flex; gap: 24px; flex-wrap: wrap;">
+                            <!-- Section 3: Build Pipeline -->
+                            <h4 class="scriptgen-section-title">🔨 3. Build Pipeline</h4>
+                            <div style="display: flex; gap: 24px; flex-wrap: wrap;">
+                                <label class="form-checkbox-label">
+                                    <input type="checkbox" id="sgHasNpm">
+                                    Run <code>npm install</code>
+                                </label>
+                                <label class="form-checkbox-label">
+                                    <input type="checkbox" id="sgHasBuild">
+                                    Run <code>npm run build</code>
+                                </label>
+                            </div>
+
+                            <!-- Section 4: PM2 -->
+                            <h4 class="scriptgen-section-title">⚡ 4. PM2 Process Manager</h4>
                             <label class="form-checkbox-label">
-                                <input type="checkbox" id="sgHasNpm">
-                                Run <code>npm install</code>
+                                <input type="checkbox" id="sgHasPm2">
+                                Enable PM2 restart / start after deployment
                             </label>
-                            <label class="form-checkbox-label">
-                                <input type="checkbox" id="sgHasBuild">
-                                Run <code>npm run build</code>
-                            </label>
-                        </div>
+                            <div id="sgPm2Group" class="hidden" style="margin-top: 10px;">
+                                <div class="form-group">
+                                    <label for="sgAppName" class="form-label">PM2 Application Name *</label>
+                                    <input type="text" id="sgAppName" class="form-input" placeholder="e.g. my-node-api">
+                                </div>
+                            </div>
 
-                        <!-- Section 4: PM2 -->
-                        <h4 class="scriptgen-section-title">⚡ 4. PM2 Process Manager</h4>
-                        <label class="form-checkbox-label">
-                            <input type="checkbox" id="sgHasPm2">
-                            Enable PM2 restart / start after deployment
-                        </label>
-                        <div id="sgPm2Group" class="hidden" style="margin-top: 10px;">
+                            <!-- Section 5: Server Ownership -->
+                            <h4 class="scriptgen-section-title">👤 5. Server Ownership</h4>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+                                <div class="form-group">
+                                    <label for="sgSiteUser" class="form-label">Site User</label>
+                                    <input type="text" id="sgSiteUser" class="form-input" value="www" placeholder="www">
+                                </div>
+                                <div class="form-group">
+                                    <label for="sgSiteGroup" class="form-label">Site Group</label>
+                                    <input type="text" id="sgSiteGroup" class="form-input" value="www" placeholder="www">
+                                </div>
+                            </div>
+
+                            <!-- Section 6: Output & Edit Existing -->
+                            <h4 class="scriptgen-section-title">💾 6. Save or Edit Existing Script on Server</h4>
                             <div class="form-group">
-                                <label for="sgAppName" class="form-label">PM2 Application Name *</label>
-                                <input type="text" id="sgAppName" class="form-input" placeholder="e.g. my-node-api">
+                                <label for="sgOutputPath" class="form-label">Server File Path</label>
+                                <div style="display: flex; gap: 8px;">
+                                    <input type="text" id="sgOutputPath" class="form-input" placeholder="e.g. /root/scripts/deploy-myapp.sh" style="flex: 1;">
+                                    <button type="button" id="sgLoadBashBtn" class="btn btn-secondary btn-sm" style="white-space: nowrap; border-color: rgba(124, 58, 237, 0.4); color: #c4b5fd;">📖 Read &amp; Edit File</button>
+                                </div>
+                                <small class="form-help">Must end with <code>.sh</code>. Click "Read &amp; Edit File" to load an existing script from disk.</small>
                             </div>
                         </div>
 
-                        <!-- Section 5: Server Ownership -->
-                        <h4 class="scriptgen-section-title">👤 5. Server Ownership</h4>
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
-                            <div class="form-group">
-                                <label for="sgSiteUser" class="form-label">Site User</label>
-                                <input type="text" id="sgSiteUser" class="form-input" value="www" placeholder="www">
+                        <!-- PM2 ECOSYSTEM FORM CONTAINER -->
+                        <div id="sgPm2FormContainer" class="hidden">
+                            <!-- Section 1: PM2 Application Config -->
+                            <h4 class="scriptgen-section-title">⚡ 1. PM2 Application &amp; Entry Point</h4>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                                <div class="form-group">
+                                    <label for="sgPm2AppNameInput" class="form-label">Application Name *</label>
+                                    <input type="text" id="sgPm2AppNameInput" class="form-input" value="solar-backend" placeholder="e.g. solar-backend" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="sgPm2ScriptInput" class="form-label">Entry Script *</label>
+                                    <input type="text" id="sgPm2ScriptInput" class="form-input" value="src/index.ts" placeholder="e.g. src/index.ts or dist/index.js" required>
+                                </div>
                             </div>
-                            <div class="form-group">
-                                <label for="sgSiteGroup" class="form-label">Site Group</label>
-                                <input type="text" id="sgSiteGroup" class="form-input" value="www" placeholder="www">
-                            </div>
-                        </div>
 
-                        <!-- Section 6: Output -->
-                        <h4 class="scriptgen-section-title">💾 6. Save to Server (optional)</h4>
-                        <div class="form-group">
-                            <label for="sgOutputPath" class="form-label">Server File Path</label>
-                            <input type="text" id="sgOutputPath" class="form-input" placeholder="e.g. /root/scripts/deploy-myapp.sh">
-                            <small class="form-help">Leave empty to download only. Must end with <code>.sh</code></small>
+                            <div class="form-group">
+                                <label for="sgPm2CwdInput" class="form-label">Working Directory (cwd) *</label>
+                                <input type="text" id="sgPm2CwdInput" class="form-input" value="/www/wwwroot/apisolar.blueoctopus.site" placeholder="e.g. /www/wwwroot/apisolar.blueoctopus.site" required>
+                            </div>
+
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                                <div class="form-group">
+                                    <label for="sgPm2InterpreterInput" class="form-label">Interpreter</label>
+                                    <input type="text" id="sgPm2InterpreterInput" class="form-input" value="node" placeholder="node, python, php, etc.">
+                                </div>
+                                <div class="form-group">
+                                    <label for="sgPm2InterpreterArgsInput" class="form-label">Interpreter Args</label>
+                                    <input type="text" id="sgPm2InterpreterArgsInput" class="form-input" value="--require esbuild-register" placeholder="e.g. --require esbuild-register">
+                                </div>
+                            </div>
+
+                            <!-- Section 2: Execution & Scaling -->
+                            <h4 class="scriptgen-section-title">⚙️ 2. Execution &amp; Scaling Settings</h4>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;">
+                                <div class="form-group">
+                                    <label for="sgPm2InstancesInput" class="form-label">Instances</label>
+                                    <input type="number" id="sgPm2InstancesInput" class="form-input" value="1" min="1" max="64">
+                                </div>
+                                <div class="form-group">
+                                    <label for="sgPm2ExecModeInput" class="form-label">Exec Mode</label>
+                                    <select id="sgPm2ExecModeInput" class="form-input">
+                                        <option value="fork" selected>fork</option>
+                                        <option value="cluster">cluster</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="sgPm2MaxMemInput" class="form-label">Max Memory Restart</label>
+                                    <input type="text" id="sgPm2MaxMemInput" class="form-input" value="1G" placeholder="1G, 512M">
+                                </div>
+                            </div>
+
+                            <div style="display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 12px;">
+                                <label class="form-checkbox-label">
+                                    <input type="checkbox" id="sgPm2WatchCheck">
+                                    Watch File Changes (<code>watch</code>)
+                                </label>
+                                <label class="form-checkbox-label">
+                                    <input type="checkbox" id="sgPm2TimeCheck" checked>
+                                    Timestamp Logs (<code>time</code>)
+                                </label>
+                                <label class="form-checkbox-label">
+                                    <input type="checkbox" id="sgPm2MergeLogsCheck" checked>
+                                    Merge Logs (<code>merge_logs</code>)
+                                </label>
+                            </div>
+
+                            <!-- Section 3: Environment Variables -->
+                            <h4 class="scriptgen-section-title">🌐 3. Environment Variables</h4>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                                <div class="form-group">
+                                    <label for="sgPm2NodeEnvInput" class="form-label">NODE_ENV</label>
+                                    <input type="text" id="sgPm2NodeEnvInput" class="form-input" value="production" placeholder="production">
+                                </div>
+                                <div class="form-group">
+                                    <label for="sgPm2PortInput" class="form-label">PORT</label>
+                                    <input type="number" id="sgPm2PortInput" class="form-input" value="3000" placeholder="3000">
+                                </div>
+                            </div>
+
+                            <!-- Section 4: Log Files Configuration -->
+                            <h4 class="scriptgen-section-title">📊 4. Log Files Configuration</h4>
+                            <div class="form-group">
+                                <label for="sgPm2ErrorFileInput" class="form-label">Error Log Path (<code>error_file</code>)</label>
+                                <input type="text" id="sgPm2ErrorFileInput" class="form-input" value="/var/log/solar-backend-error.log" placeholder="/var/log/app-error.log">
+                            </div>
+                            <div class="form-group">
+                                <label for="sgPm2OutFileInput" class="form-label">Output Log Path (<code>out_file</code>)</label>
+                                <input type="text" id="sgPm2OutFileInput" class="form-input" value="/var/log/solar-backend-out.log" placeholder="/var/log/app-out.log">
+                            </div>
+                            <div class="form-group">
+                                <label for="sgPm2LogFileInput" class="form-label">Combined Log Path (<code>log_file</code>)</label>
+                                <input type="text" id="sgPm2LogFileInput" class="form-input" value="/var/log/solar-backend-combined.log" placeholder="/var/log/app-combined.log">
+                            </div>
+
+                            <!-- Section 5: Lifecycle & Resiliency -->
+                            <h4 class="scriptgen-section-title">🛡️ 5. Resiliency &amp; Timeouts</h4>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                                <div class="form-group">
+                                    <label for="sgPm2MaxRestartsInput" class="form-label">Max Restarts</label>
+                                    <input type="number" id="sgPm2MaxRestartsInput" class="form-input" value="10" min="1">
+                                </div>
+                                <div class="form-group">
+                                    <label for="sgPm2MinUptimeInput" class="form-label">Min Uptime</label>
+                                    <input type="text" id="sgPm2MinUptimeInput" class="form-input" value="10s" placeholder="10s">
+                                </div>
+                            </div>
+
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                                <div class="form-group">
+                                    <label for="sgPm2KillTimeoutInput" class="form-label">Kill Timeout (ms)</label>
+                                    <input type="number" id="sgPm2KillTimeoutInput" class="form-input" value="5000" placeholder="5000">
+                                </div>
+                                <div class="form-group">
+                                    <label for="sgPm2ListenTimeoutInput" class="form-label">Listen Timeout (ms)</label>
+                                    <input type="number" id="sgPm2ListenTimeoutInput" class="form-input" value="3000" placeholder="3000">
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-checkbox-label">
+                                    <input type="checkbox" id="sgPm2AutorestartCheck" checked>
+                                    Enable Auto Restart (<code>autorestart</code>)
+                                </label>
+                            </div>
+
+                            <!-- Section 6: Save PM2 Ecosystem to Server -->
+                            <h4 class="scriptgen-section-title">💾 6. Save or Edit PM2 Script on Server</h4>
+                            <div class="form-group">
+                                <label for="sgPm2OutputPathInput" class="form-label">Server File Path</label>
+                                <div style="display: flex; gap: 8px;">
+                                    <input type="text" id="sgPm2OutputPathInput" class="form-input" placeholder="e.g. /www/wwwroot/apisolar.blueoctopus.site/ecosystem.config.js" style="flex: 1;">
+                                    <button type="button" id="sgLoadPm2Btn" class="btn btn-secondary btn-sm" style="white-space: nowrap; border-color: rgba(168, 85, 247, 0.4); color: #c4b5fd;">📖 Read &amp; Edit File</button>
+                                </div>
+                                <small class="form-help">Must end with <code>.config.js</code> or <code>.js</code>. Click "Read &amp; Edit File" to load an existing ecosystem script from disk.</small>
+                            </div>
                         </div>
                     </div>
 
                     <!-- RIGHT COLUMN: Live Preview -->
                     <div class="scriptgen-preview-col">
                         <div class="scriptgen-preview-header">
-                            <span>📄 Live Script Preview</span>
+                            <span id="sgPreviewTitle">📄 Live Script Preview</span>
                             <div style="display: flex; gap: 8px;">
                                 <button type="button" id="sgCopyBtn" class="btn btn-secondary btn-sm" style="padding: 4px 10px; font-size: 0.75rem;">📋 Copy</button>
                             </div>
                         </div>
-                        <pre id="sgPreviewOutput" class="scriptgen-preview-body">Fill in the configuration fields to generate a deployment script...</pre>
+                        <pre id="sgPreviewOutput" class="scriptgen-preview-body">Fill in the configuration fields to generate a script preview...</pre>
                     </div>
                 </div>
             </div>

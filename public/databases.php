@@ -29,7 +29,7 @@ $csrfToken = Csrf::getToken();
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Database Backups - LightDeploy</title>
+    <title>Database Backups - LightDeploy by Blue Octopus</title>
     <link rel="stylesheet" href="/assets/app.css?v=<?= time() ?>">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -176,31 +176,15 @@ $csrfToken = Csrf::getToken();
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                     <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
                 </svg>
-                <span class="brand-title">LIGHTDEPLOY</span>
-                <span class="badge badge-version">v1.2.4</span>
+                <span class="brand-title">LIGHTDEPLOY <span style="font-size: 0.62rem; color: #a855f7; font-weight: 600; letter-spacing: 0.5px; background: rgba(168, 85, 247, 0.15); padding: 2px 7px; border-radius: 4px; margin-left: 4px; border: 1px solid rgba(168, 85, 247, 0.3); text-transform: uppercase;">BY BLUE OCTOPUS</span></span>
+                <span class="badge badge-version">v1.2.5</span>
             </a>
         </div>
 
-        <div class="header-center" id="serverMetricsWidget">
-            <div class="metric-pill" id="metricAppRam" style="border-color: rgba(56, 189, 248, 0.4); background: rgba(56, 189, 248, 0.08);" title="LightDeploy App Resource Footprint">
-                <span class="metric-label" style="color: #38bdf8;">LIGHTDEPLOY RAM</span>
-                <span class="metric-value" id="metricAppRamVal" style="color: #38bdf8;">-- MB</span>
-            </div>
-            <div class="metric-pill" id="metricCpu">
-                <span class="metric-label">SYS CPU</span>
-                <span class="metric-value">--%</span>
-            </div>
-            <div class="metric-pill" id="metricRam">
-                <span class="metric-label">SYS RAM</span>
-                <span class="metric-value">--%</span>
-            </div>
-            <div class="metric-pill" id="metricDisk">
-                <span class="metric-label">DISK</span>
-                <span class="metric-value">--%</span>
-            </div>
-            <div class="metric-pill" id="metricUptime">
-                <span class="metric-label">UPTIME</span>
-                <span class="metric-value">--</span>
+        <div class="header-center">
+            <div class="header-status-pill" title="Live Server Status">
+                <span class="status-pulse"></span>
+                <span style="font-size: 0.75rem; font-weight: 700; color: #6ee7b7; letter-spacing: 0.5px;">SYSTEM ONLINE</span>
             </div>
         </div>
 
@@ -220,6 +204,91 @@ $csrfToken = Csrf::getToken();
 
     <!-- Main Content Container -->
     <main class="app-content">
+        <!-- Server Performance & Resource Meters Card (Horizontal Meter System) -->
+        <section class="server-status-banner">
+            <div class="status-banner-header">
+                <div class="status-banner-title">
+                    <span class="status-pulse"></span>
+                    <h3>Server Performance &amp; Resource Status</h3>
+                </div>
+                <div class="status-banner-meta">
+                    <span class="badge badge-version">VPS NODE</span>
+                    <span class="uptime-label" style="font-size: 0.8rem; color: var(--text-muted);">UPTIME: <strong id="bodyUptimeVal" style="color: #6ee7b7; font-family: var(--font-mono);">--</strong></span>
+                </div>
+            </div>
+            <div class="server-meters-grid" id="serverMetricsWidget">
+                <!-- 1. OVERALL LOAD -->
+                <div class="body-metric-card meter-overall" id="metricOverall" title="Unified System Load Index (CPU + RAM + DISK)">
+                    <div class="body-metric-header">
+                        <div class="body-metric-title">
+                            <span class="body-metric-icon">⚡</span>
+                            <span class="body-metric-name" style="color: #c4b5fd;">OVERALL LOAD</span>
+                        </div>
+                        <span class="body-metric-val metric-value" style="color: #a855f7;">--%</span>
+                    </div>
+                    <div class="meter-track">
+                        <div class="meter-fill meter-overall" style="width: 0%;"></div>
+                    </div>
+                </div>
+
+                <!-- 2. CPU USAGE -->
+                <div class="body-metric-card meter-cpu" id="metricCpu" title="Server CPU Load Average">
+                    <div class="body-metric-header">
+                        <div class="body-metric-title">
+                            <span class="body-metric-icon">💻</span>
+                            <span class="body-metric-name">CPU USAGE</span>
+                        </div>
+                        <span class="body-metric-val metric-value">--%</span>
+                    </div>
+                    <div class="meter-track">
+                        <div class="meter-fill meter-cpu" style="width: 0%;"></div>
+                    </div>
+                </div>
+
+                <!-- 3. RAM USAGE -->
+                <div class="body-metric-card meter-ram" id="metricRam" title="System Memory Usage">
+                    <div class="body-metric-header">
+                        <div class="body-metric-title">
+                            <span class="body-metric-icon">🧠</span>
+                            <span class="body-metric-name">RAM USAGE</span>
+                        </div>
+                        <span class="body-metric-val metric-value">--%</span>
+                    </div>
+                    <div class="meter-track">
+                        <div class="meter-fill meter-ram" style="width: 0%;"></div>
+                    </div>
+                </div>
+
+                <!-- 4. DISK SPACE -->
+                <div class="body-metric-card meter-disk" id="metricDisk" title="Disk Space Usage">
+                    <div class="body-metric-header">
+                        <div class="body-metric-title">
+                            <span class="body-metric-icon">💾</span>
+                            <span class="body-metric-name">DISK SPACE</span>
+                        </div>
+                        <span class="body-metric-val metric-value">--%</span>
+                    </div>
+                    <div class="meter-track">
+                        <div class="meter-fill meter-disk" style="width: 0%;"></div>
+                    </div>
+                </div>
+
+                <!-- 5. APP RAM FOOTPRINT -->
+                <div class="body-metric-card meter-app" id="metricAppRam" title="LightDeploy App Memory Footprint">
+                    <div class="body-metric-header">
+                        <div class="body-metric-title">
+                            <span class="body-metric-icon">🚀</span>
+                            <span class="body-metric-name" style="color: #38bdf8;">APP RAM</span>
+                        </div>
+                        <span class="body-metric-val metric-value" id="metricAppRamVal" style="color: #38bdf8;">-- MB</span>
+                    </div>
+                    <div class="meter-track">
+                        <div class="meter-fill meter-app" style="width: 20%;"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
         <div class="section-header">
             <div>
                 <h2>🗄️ MySQL Database Backup & Automated Retention Manager</h2>
@@ -395,7 +464,7 @@ $csrfToken = Csrf::getToken();
                 <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid var(--bg-card-border); padding: 16px; border-radius: var(--radius-md); margin-bottom: 16px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                         <span style="color: var(--text-muted); font-weight: 600; font-size: 0.85rem;">Installed Version</span>
-                        <span class="badge badge-version" style="font-size: 0.9rem;">v1.2.4</span>
+                        <span class="badge badge-version" style="font-size: 0.9rem;">v1.2.5</span>
                     </div>
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                         <span style="color: var(--text-muted); font-weight: 600; font-size: 0.85rem;">Latest GitHub Commit (`main`)</span>

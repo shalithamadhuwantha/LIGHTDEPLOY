@@ -142,15 +142,61 @@ document.addEventListener('DOMContentLoaded', () => {
         const { ok, data } = await apiFetch('/api/server_status.php');
         if (ok && data.success) {
             const m = data;
-            document.getElementById('metricCpu').querySelector('.metric-value').textContent = `${m.cpu.load_1m}%`;
-            document.getElementById('metricRam').querySelector('.metric-value').textContent = `${m.memory.percentage}%`;
-            document.getElementById('metricDisk').querySelector('.metric-value').textContent = `${m.disk.percentage}%`;
-            document.getElementById('metricUptime').querySelector('.metric-value').textContent = m.uptime;
+
+            const setMeter = (meterId, valNum, valText) => {
+                const meter = document.getElementById(meterId);
+                if (!meter) return;
+                const valEl = meter.querySelector('.metric-value');
+                const fillBar = meter.querySelector('.meter-fill');
+                
+                if (valEl && meterId !== 'metricAppRam') valEl.textContent = valText;
+
+                if (fillBar) {
+                    const pct = Math.min(100, Math.max(0, valNum));
+                    fillBar.style.width = `${pct}%`;
+
+                    fillBar.classList.remove('meter-green', 'meter-warning', 'meter-danger');
+                    if (pct < 50) {
+                        fillBar.classList.add('meter-green');
+                    } else if (pct < 80) {
+                        fillBar.classList.add('meter-warning');
+                    } else {
+                        fillBar.classList.add('meter-danger');
+                    }
+                }
+            };
+
+            const cpuVal = parseFloat(m.cpu?.load_1m) || 0;
+            const ramVal = parseFloat(m.memory?.percentage) || 0;
+            const diskVal = parseFloat(m.disk?.percentage) || 0;
+            const overallVal = typeof m.overall_load !== 'undefined' ? parseFloat(m.overall_load) : Math.round((cpuVal * 0.45) + (ramVal * 0.45) + (diskVal * 0.10));
+
+            setMeter('metricOverall', overallVal, `${overallVal}%`);
+            setMeter('metricCpu', cpuVal, `${m.cpu?.load_1m ?? 0}%`);
+            setMeter('metricRam', ramVal, `${m.memory?.percentage ?? 0}%`);
+            setMeter('metricDisk', diskVal, `${m.disk?.percentage ?? 0}%`);
+
+            const uptimeVal = document.getElementById('bodyUptimeVal');
+            if (uptimeVal) uptimeVal.textContent = m.uptime;
+
+            const uptimeMeter = document.getElementById('metricUptime');
+            if (uptimeMeter) {
+                const valEl = uptimeMeter.querySelector('.metric-value');
+                if (valEl) valEl.textContent = m.uptime;
+            }
 
             if (m.app_resources) {
                 const appRamVal = document.getElementById('metricAppRamVal');
-                if (appRamVal) {
-                    appRamVal.textContent = `${m.app_resources.rss_mb} MB`;
+                const appMeter = document.getElementById('metricAppRam');
+                if (appRamVal) appRamVal.textContent = `${m.app_resources.rss_mb} MB`;
+                if (appMeter) {
+                    const mb = parseFloat(m.app_resources.rss_mb) || 0;
+                    const pct = Math.min(100, Math.max(10, (mb / 500) * 100));
+                    const fillCircle = appMeter.querySelector('.circle-chart-fill');
+                    if (fillCircle) {
+                        const circumference = 113.1;
+                        fillCircle.style.strokeDashoffset = circumference - (circumference * pct / 100);
+                    }
                 }
             }
         }
@@ -977,6 +1023,54 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const pm2EcosystemInput = document.getElementById('pm2EcosystemInput');
         if (pm2EcosystemInput) pm2EcosystemInput.value = site.pm2_ecosystem || '';
+
+        const loadPm2TemplateBtn = document.getElementById('loadPm2TemplateBtn');
+        if (loadPm2TemplateBtn) {
+            loadPm2TemplateBtn.addEventListener('click', () => {
+                const siteIdInput = document.getElementById('siteIdInput');
+                const siteNameInput = document.getElementById('siteNameInput');
+                const siteId = siteIdInput?.value.trim() || 'solar-backend';
+                const siteName = siteNameInput?.value.trim() || siteId;
+                
+                const template = `module.exports = {
+  apps: [{
+    name: ${JSON.stringify(siteName)},
+    script: 'src/index.ts',
+    interpreter: 'node',
+    interpreter_args: '--require esbuild-register',
+    cwd: '/www/wwwroot/${siteId}',
+    
+    instances: 1,
+    exec_mode: 'fork',
+    watch: false,
+    max_memory_restart: '1G',
+    
+    env: {
+      NODE_ENV: 'production',
+      PORT: 3000,
+    },
+    
+    error_file: '/var/log/${siteId}-error.log',
+    out_file: '/var/log/${siteId}-out.log',
+    log_file: '/var/log/${siteId}-combined.log',
+    time: true,
+    
+    autorestart: true,
+    max_restarts: 10,
+    min_uptime: '10s',
+    
+    kill_timeout: 5000,
+    listen_timeout: 3000,
+    
+    merge_logs: true,
+  }]
+};`;
+                if (pm2EcosystemInput) {
+                    pm2EcosystemInput.value = template;
+                    showToast('Loaded base PM2 ecosystem script template!', 'success');
+                }
+            });
+        }
 
         const deleteBtn = document.getElementById('deleteSiteModalBtn');
         if (deleteBtn) deleteBtn.classList.remove('hidden');
@@ -2389,6 +2483,16 @@ document.addEventListener('DOMContentLoaded', () => {
     // =========================================================================
 
     (function initScriptGenerator() {
+        let currentScriptType = 'bash'; // 'bash' or 'pm2_ecosystem'
+
+        const sgTypeBashBtn = document.getElementById('sgTypeBashBtn');
+        const sgTypePm2Btn = document.getElementById('sgTypePm2Btn');
+        const sgBashFormContainer = document.getElementById('sgBashFormContainer');
+        const sgPm2FormContainer = document.getElementById('sgPm2FormContainer');
+        const scriptGenTitle = document.getElementById('scriptGenTitle');
+        const scriptGenSubInfo = document.getElementById('scriptGenSubInfo');
+        const sgPreviewTitle = document.getElementById('sgPreviewTitle');
+
         const sgFields = {
             appDir: document.getElementById('sgAppDir'),
             repoUrl: document.getElementById('sgRepoUrl'),
@@ -2402,6 +2506,32 @@ document.addEventListener('DOMContentLoaded', () => {
             siteGroup: document.getElementById('sgSiteGroup'),
             outputPath: document.getElementById('sgOutputPath'),
         };
+
+        const sgPm2Fields = {
+            appName: document.getElementById('sgPm2AppNameInput'),
+            script: document.getElementById('sgPm2ScriptInput'),
+            cwd: document.getElementById('sgPm2CwdInput'),
+            interpreter: document.getElementById('sgPm2InterpreterInput'),
+            interpreterArgs: document.getElementById('sgPm2InterpreterArgsInput'),
+            instances: document.getElementById('sgPm2InstancesInput'),
+            execMode: document.getElementById('sgPm2ExecModeInput'),
+            maxMem: document.getElementById('sgPm2MaxMemInput'),
+            watch: document.getElementById('sgPm2WatchCheck'),
+            time: document.getElementById('sgPm2TimeCheck'),
+            mergeLogs: document.getElementById('sgPm2MergeLogsCheck'),
+            nodeEnv: document.getElementById('sgPm2NodeEnvInput'),
+            port: document.getElementById('sgPm2PortInput'),
+            errorFile: document.getElementById('sgPm2ErrorFileInput'),
+            outFile: document.getElementById('sgPm2OutFileInput'),
+            logFile: document.getElementById('sgPm2LogFileInput'),
+            maxRestarts: document.getElementById('sgPm2MaxRestartsInput'),
+            minUptime: document.getElementById('sgPm2MinUptimeInput'),
+            killTimeout: document.getElementById('sgPm2KillTimeoutInput'),
+            listenTimeout: document.getElementById('sgPm2ListenTimeoutInput'),
+            autorestart: document.getElementById('sgPm2AutorestartCheck'),
+            outputPath: document.getElementById('sgPm2OutputPathInput'),
+        };
+
         const sgPreview = document.getElementById('sgPreviewOutput');
         const sgPm2Group = document.getElementById('sgPm2Group');
         const sgCopyBtn = document.getElementById('sgCopyBtn');
@@ -2409,6 +2539,33 @@ document.addEventListener('DOMContentLoaded', () => {
         const sgSaveBtn = document.getElementById('sgSaveBtn');
 
         if (!sgPreview) return; // Not on dashboard page
+
+        function setScriptGenMode(mode) {
+            currentScriptType = mode === 'pm2_ecosystem' ? 'pm2_ecosystem' : 'bash';
+            if (currentScriptType === 'pm2_ecosystem') {
+                if (sgTypeBashBtn) sgTypeBashBtn.className = 'btn btn-secondary btn-sm';
+                if (sgTypePm2Btn) sgTypePm2Btn.className = 'btn btn-primary btn-sm';
+                if (sgBashFormContainer) sgBashFormContainer.classList.add('hidden');
+                if (sgPm2FormContainer) sgPm2FormContainer.classList.remove('hidden');
+                if (scriptGenTitle) scriptGenTitle.textContent = '⚡ PM2 Ecosystem Script Creator';
+                if (scriptGenSubInfo) scriptGenSubInfo.textContent = 'Configure and generate production PM2 ecosystem.config.js configurations';
+                if (sgPreviewTitle) sgPreviewTitle.textContent = '📄 Live ecosystem.config.js Preview';
+            } else {
+                if (sgTypeBashBtn) sgTypeBashBtn.className = 'btn btn-primary btn-sm';
+                if (sgTypePm2Btn) sgTypePm2Btn.className = 'btn btn-secondary btn-sm';
+                if (sgBashFormContainer) sgBashFormContainer.classList.remove('hidden');
+                if (sgPm2FormContainer) sgPm2FormContainer.classList.add('hidden');
+                if (scriptGenTitle) scriptGenTitle.textContent = '📜 Deployment Script Generator';
+                if (scriptGenSubInfo) scriptGenSubInfo.textContent = 'Generate production-grade deployment scripts with embedded configuration';
+                if (sgPreviewTitle) sgPreviewTitle.textContent = '📄 Live deploy-*.sh Script Preview';
+            }
+            updateScriptPreview();
+        }
+
+        window.setScriptGenMode = setScriptGenMode;
+
+        if (sgTypeBashBtn) sgTypeBashBtn.addEventListener('click', () => setScriptGenMode('bash'));
+        if (sgTypePm2Btn) sgTypePm2Btn.addEventListener('click', () => setScriptGenMode('pm2_ecosystem'));
 
         // PM2 toggle visibility
         if (sgFields.hasPm2) {
@@ -2418,6 +2575,69 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 updateScriptPreview();
             });
+        }
+
+        // Generate PM2 script content client-side
+        function generatePm2ScriptContent() {
+            const appName = sgPm2Fields.appName?.value.trim() || 'solar-backend';
+            const script = sgPm2Fields.script?.value.trim() || 'src/index.ts';
+            const interpreter = sgPm2Fields.interpreter?.value.trim() || 'node';
+            const interpreterArgs = sgPm2Fields.interpreterArgs?.value.trim() || '';
+            const cwd = sgPm2Fields.cwd?.value.trim() || '/www/wwwroot/apisolar.blueoctopus.site';
+            const instances = parseInt(sgPm2Fields.instances?.value) || 1;
+            const execMode = sgPm2Fields.execMode?.value || 'fork';
+            const watch = !!sgPm2Fields.watch?.checked;
+            const maxMem = sgPm2Fields.maxMem?.value.trim() || '1G';
+            const nodeEnv = sgPm2Fields.nodeEnv?.value.trim() || 'production';
+            const port = parseInt(sgPm2Fields.port?.value) || 3000;
+            const errorFile = sgPm2Fields.errorFile?.value.trim() || `/var/log/${appName}-error.log`;
+            const outFile = sgPm2Fields.outFile?.value.trim() || `/var/log/${appName}-out.log`;
+            const logFile = sgPm2Fields.logFile?.value.trim() || `/var/log/${appName}-combined.log`;
+            const time = !!sgPm2Fields.time?.checked;
+            const autorestart = !!sgPm2Fields.autorestart?.checked;
+            const maxRestarts = parseInt(sgPm2Fields.maxRestarts?.value) || 10;
+            const minUptime = sgPm2Fields.minUptime?.value.trim() || '10s';
+            const killTimeout = parseInt(sgPm2Fields.killTimeout?.value) || 5000;
+            const listenTimeout = parseInt(sgPm2Fields.listenTimeout?.value) || 3000;
+            const mergeLogs = !!sgPm2Fields.mergeLogs?.checked;
+
+            let code = `module.exports = {\n`;
+            code += `  apps: [{\n`;
+            code += `    name: ${JSON.stringify(appName)},\n`;
+            code += `    script: ${JSON.stringify(script)},\n`;
+            code += `    interpreter: ${JSON.stringify(interpreter)},\n`;
+            if (interpreterArgs) {
+                code += `    interpreter_args: ${JSON.stringify(interpreterArgs)},\n`;
+            }
+            code += `    cwd: ${JSON.stringify(cwd)},\n`;
+            code += `    \n`;
+            code += `    instances: ${instances},\n`;
+            code += `    exec_mode: ${JSON.stringify(execMode)},\n`;
+            code += `    watch: ${watch},\n`;
+            code += `    max_memory_restart: ${JSON.stringify(maxMem)},\n`;
+            code += `    \n`;
+            code += `    env: {\n`;
+            code += `      NODE_ENV: ${JSON.stringify(nodeEnv)},\n`;
+            code += `      PORT: ${port},\n`;
+            code += `    },\n`;
+            code += `    \n`;
+            code += `    error_file: ${JSON.stringify(errorFile)},\n`;
+            code += `    out_file: ${JSON.stringify(outFile)},\n`;
+            code += `    log_file: ${JSON.stringify(logFile)},\n`;
+            code += `    time: ${time},\n`;
+            code += `    \n`;
+            code += `    autorestart: ${autorestart},\n`;
+            code += `    max_restarts: ${maxRestarts},\n`;
+            code += `    min_uptime: ${JSON.stringify(minUptime)},\n`;
+            code += `    \n`;
+            code += `    kill_timeout: ${killTimeout},\n`;
+            code += `    listen_timeout: ${listenTimeout},\n`;
+            code += `    \n`;
+            code += `    merge_logs: ${mergeLogs},\n`;
+            code += `  }]\n`;
+            code += `};\n`;
+
+            return code;
         }
 
         // Collect current form values
@@ -2837,7 +3057,7 @@ echo "============================================================"
 exit 0`;
         }
 
-        // Syntax highlight the script preview
+        // Syntax highlight the script preview for Bash
         function highlightBash(text) {
             const escaped = text
                 .replace(/&/g, '&amp;')
@@ -2859,18 +3079,38 @@ exit 0`;
                 .replace(/^(\s*[a-z_][a-z_0-9]*)\(\)/gm, '<span class="sg-function">$1</span>()');
         }
 
+        // Syntax highlight the script preview for JavaScript / PM2 Ecosystem
+        function highlightJs(text) {
+            const escaped = text
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;');
+
+            return escaped
+                .replace(/(\/\/.+$|\/\*[\s\S]*?\*\/)/gm, '<span class="sg-comment">$1</span>')
+                .replace(/("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')/g, '<span class="sg-string">$1</span>')
+                .replace(/\b(module|exports|apps|true|false|null|undefined)\b/g, '<span class="sg-keyword">$1</span>')
+                .replace(/\b([a-zA-Z_][a-zA-Z0-9_]*)(?=\s*:)/g, '<span class="sg-variable">$1</span>')
+                .replace(/\b(\d+)\b/g, '<span class="sg-function">$1</span>');
+        }
+
         // Update preview with current form data
         function updateScriptPreview() {
-            const c = getConfig();
-            const hasRequired = sgFields.appDir?.value.trim() && sgFields.repoUrl?.value.trim();
+            if (currentScriptType === 'pm2_ecosystem') {
+                const raw = generatePm2ScriptContent();
+                sgPreview.innerHTML = highlightJs(raw);
+            } else {
+                const c = getConfig();
+                const hasRequired = sgFields.appDir?.value.trim() && sgFields.repoUrl?.value.trim();
 
-            if (!hasRequired) {
-                sgPreview.innerHTML = '<span class="sg-comment"># Fill in the Application Directory and Repository URL\n# to generate a deployment script preview...</span>';
-                return;
+                if (!hasRequired) {
+                    sgPreview.innerHTML = '<span class="sg-comment"># Fill in the Application Directory and Repository URL\n# to generate a deployment script preview...</span>';
+                    return;
+                }
+
+                const raw = generateScriptContent(c);
+                sgPreview.innerHTML = highlightBash(raw);
             }
-
-            const raw = generateScriptContent(c);
-            sgPreview.innerHTML = highlightBash(raw);
         }
 
         // Expose globally for modal open trigger
@@ -2883,10 +3123,10 @@ exit 0`;
             sgDebounce = setTimeout(updateScriptPreview, 200);
         }
 
-        // Attach input listeners for live preview
-        Object.values(sgFields).forEach(el => {
+        // Attach input listeners for live preview across both forms
+        Object.values(sgFields).concat(Object.values(sgPm2Fields)).forEach(el => {
             if (!el) return;
-            if (el.type === 'checkbox') {
+            if (el.type === 'checkbox' || el.tagName === 'SELECT') {
                 el.addEventListener('change', debouncedUpdate);
             } else {
                 el.addEventListener('input', debouncedUpdate);
@@ -2896,8 +3136,7 @@ exit 0`;
         // Copy to clipboard
         if (sgCopyBtn) {
             sgCopyBtn.addEventListener('click', () => {
-                const c = getConfig();
-                const raw = generateScriptContent(c);
+                const raw = currentScriptType === 'pm2_ecosystem' ? generatePm2ScriptContent() : generateScriptContent(getConfig());
                 navigator.clipboard.writeText(raw).then(() => {
                     sgCopyBtn.textContent = '✅ Copied!';
                     showToast('Script copied to clipboard!', 'success');
@@ -2911,83 +3150,278 @@ exit 0`;
         // Download as file
         if (sgDownloadBtn) {
             sgDownloadBtn.addEventListener('click', () => {
-                const c = getConfig();
-                if (!sgFields.appDir?.value.trim() || !sgFields.repoUrl?.value.trim()) {
-                    showToast('Please fill in Application Directory and Repository URL.', 'warning');
-                    return;
+                if (currentScriptType === 'pm2_ecosystem') {
+                    const appName = sgPm2Fields.appName?.value.trim() || 'solar-backend';
+                    const raw = generatePm2ScriptContent();
+                    const filename = `ecosystem.${appName}.config.js`;
+                    const blob = new Blob([raw], { type: 'application/javascript' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = filename;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    showToast(`PM2 script downloaded as ${filename}`, 'success');
+                } else {
+                    const c = getConfig();
+                    if (!sgFields.appDir?.value.trim() || !sgFields.repoUrl?.value.trim()) {
+                        showToast('Please fill in Application Directory and Repository URL.', 'warning');
+                        return;
+                    }
+                    const raw = generateScriptContent(c);
+                    const appBasename = c.appDir.split('/').filter(Boolean).pop() || 'app';
+                    const filename = `deploy-${appBasename}.sh`;
+                    const blob = new Blob([raw], { type: 'application/x-sh' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = filename;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    showToast(`Script downloaded as ${filename}`, 'success');
                 }
-                const raw = generateScriptContent(c);
-                const appBasename = c.appDir.split('/').filter(Boolean).pop() || 'app';
-                const filename = `deploy-${appBasename}.sh`;
-                const blob = new Blob([raw], { type: 'application/x-sh' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = filename;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-                showToast(`Script downloaded as ${filename}`, 'success');
             });
         }
 
         // Save to server
         if (sgSaveBtn) {
             sgSaveBtn.addEventListener('click', async () => {
-                const outputPath = sgFields.outputPath?.value.trim();
-                if (!outputPath) {
-                    showToast('Enter a server file path in Section 6 to save.', 'warning');
-                    return;
-                }
-                if (!outputPath.endsWith('.sh')) {
-                    showToast('Output path must end with .sh extension.', 'warning');
-                    return;
-                }
-                if (!sgFields.appDir?.value.trim() || !sgFields.repoUrl?.value.trim()) {
-                    showToast('Please fill in Application Directory and Repository URL.', 'warning');
-                    return;
-                }
-
-                sgSaveBtn.disabled = true;
-                sgSaveBtn.textContent = '⏳ Saving...';
-
-                const c = getConfig();
-                const payload = {
-                    action: 'save',
-                    app_dir: c.appDir,
-                    repo_url: c.repoUrl,
-                    branch: c.branch,
-                    env_source: c.envSource,
-                    has_npm: c.hasNpm === 'true',
-                    has_build: c.hasBuild === 'true',
-                    has_pm2: c.hasPm2 === 'true',
-                    app_name: c.appName,
-                    site_user: c.siteUser,
-                    site_group: c.siteGroup,
-                    output_path: outputPath,
-                };
-
-                try {
-                    const { ok, data } = await apiFetch('/api/generate_script.php', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload),
-                    });
-
-                    if (ok && data.success) {
-                        showToast(data.message || 'Script saved to server!', 'success');
-                    } else {
-                        showToast(data.error?.message || 'Failed to save script.', 'error');
+                if (currentScriptType === 'pm2_ecosystem') {
+                    const outputPath = sgPm2Fields.outputPath?.value.trim();
+                    if (!outputPath) {
+                        showToast('Enter a server file path in Section 6 to save.', 'warning');
+                        return;
                     }
-                } catch (err) {
-                    showToast('Network error while saving script.', 'error');
-                }
+                    if (!outputPath.endsWith('.js') && !outputPath.endsWith('.cjs')) {
+                        showToast('Output path must end with .config.js or .js extension.', 'warning');
+                        return;
+                    }
 
-                sgSaveBtn.disabled = false;
-                sgSaveBtn.textContent = '💾 Save to Server';
+                    sgSaveBtn.disabled = true;
+                    sgSaveBtn.textContent = '⏳ Saving...';
+
+                    const payload = {
+                        action: 'save',
+                        script_type: 'pm2_ecosystem',
+                        app_name: sgPm2Fields.appName?.value.trim() || 'solar-backend',
+                        pm2_script: sgPm2Fields.script?.value.trim() || 'src/index.ts',
+                        pm2_interpreter: sgPm2Fields.interpreter?.value.trim() || 'node',
+                        pm2_interpreter_args: sgPm2Fields.interpreterArgs?.value.trim() || '',
+                        app_dir: sgPm2Fields.cwd?.value.trim() || '',
+                        pm2_instances: parseInt(sgPm2Fields.instances?.value) || 1,
+                        pm2_exec_mode: sgPm2Fields.execMode?.value || 'fork',
+                        pm2_watch: !!sgPm2Fields.watch?.checked,
+                        pm2_max_memory_restart: sgPm2Fields.maxMem?.value.trim() || '1G',
+                        pm2_node_env: sgPm2Fields.nodeEnv?.value.trim() || 'production',
+                        pm2_port: parseInt(sgPm2Fields.port?.value) || 3000,
+                        pm2_error_file: sgPm2Fields.errorFile?.value.trim() || '',
+                        pm2_out_file: sgPm2Fields.outFile?.value.trim() || '',
+                        pm2_log_file: sgPm2Fields.logFile?.value.trim() || '',
+                        pm2_time: !!sgPm2Fields.time?.checked,
+                        pm2_autorestart: !!sgPm2Fields.autorestart?.checked,
+                        pm2_max_restarts: parseInt(sgPm2Fields.maxRestarts?.value) || 10,
+                        pm2_min_uptime: sgPm2Fields.minUptime?.value.trim() || '10s',
+                        pm2_kill_timeout: parseInt(sgPm2Fields.killTimeout?.value) || 5000,
+                        pm2_listen_timeout: parseInt(sgPm2Fields.listenTimeout?.value) || 3000,
+                        pm2_merge_logs: !!sgPm2Fields.mergeLogs?.checked,
+                        output_path: outputPath,
+                    };
+
+                    try {
+                        const { ok, data } = await apiFetch('/api/generate_script.php', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload),
+                        });
+
+                        if (ok && data.success) {
+                            showToast(data.message || 'PM2 Ecosystem script saved to server!', 'success');
+                        } else {
+                            showToast(data.error?.message || 'Failed to save script.', 'error');
+                        }
+                    } catch (err) {
+                        showToast('Network error while saving script.', 'error');
+                    }
+
+                    sgSaveBtn.disabled = false;
+                    sgSaveBtn.textContent = '💾 Save to Server';
+                } else {
+                    const outputPath = sgFields.outputPath?.value.trim();
+                    if (!outputPath) {
+                        showToast('Enter a server file path in Section 6 to save.', 'warning');
+                        return;
+                    }
+                    if (!outputPath.endsWith('.sh')) {
+                        showToast('Output path must end with .sh extension.', 'warning');
+                        return;
+                    }
+                    if (!sgFields.appDir?.value.trim() || !sgFields.repoUrl?.value.trim()) {
+                        showToast('Please fill in Application Directory and Repository URL.', 'warning');
+                        return;
+                    }
+
+                    sgSaveBtn.disabled = true;
+                    sgSaveBtn.textContent = '⏳ Saving...';
+
+                    const c = getConfig();
+                    const payload = {
+                        action: 'save',
+                        script_type: 'bash',
+                        app_dir: c.appDir,
+                        repo_url: c.repoUrl,
+                        branch: c.branch,
+                        env_source: c.envSource,
+                        has_npm: c.hasNpm === 'true',
+                        has_build: c.hasBuild === 'true',
+                        has_pm2: c.hasPm2 === 'true',
+                        app_name: c.appName,
+                        site_user: c.siteUser,
+                        site_group: c.siteGroup,
+                        output_path: outputPath,
+                    };
+
+                    try {
+                        const { ok, data } = await apiFetch('/api/generate_script.php', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload),
+                        });
+
+                        if (ok && data.success) {
+                            showToast(data.message || 'Script saved to server!', 'success');
+                        } else {
+                            showToast(data.error?.message || 'Failed to save script.', 'error');
+                        }
+                    } catch (err) {
+                        showToast('Network error while saving script.', 'error');
+                    }
+
+                    sgSaveBtn.disabled = false;
+                    sgSaveBtn.textContent = '💾 Save to Server';
+                }
             });
         }
+
+        // Load Script from server file path
+        async function loadScriptFromFile(filePath, type) {
+            if (!filePath) {
+                showToast('Please enter a valid file path to read.', 'warning');
+                return;
+            }
+            showToast(`Loading ${type === 'pm2_ecosystem' ? 'PM2 Ecosystem' : 'Deployment'} script from server...`, 'info');
+            try {
+                const { ok, data } = await apiFetch('/api/generate_script.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'read', file_path: filePath })
+                });
+
+                if (ok && data.success && data.content) {
+                    showToast(`Script successfully loaded from ${filePath}!`, 'success');
+                    if (type === 'pm2_ecosystem') {
+                        sgPreview.innerHTML = highlightJs(data.content);
+                    } else {
+                        sgPreview.innerHTML = highlightBash(data.content);
+                    }
+                } else {
+                    showToast(data.error?.message || 'Failed to load script file from server.', 'error');
+                }
+            } catch (err) {
+                showToast('Network error while reading script file.', 'error');
+            }
+        }
+
+        const sgLoadBashBtn = document.getElementById('sgLoadBashBtn');
+        if (sgLoadBashBtn) {
+            sgLoadBashBtn.addEventListener('click', () => {
+                const path = sgFields.outputPath?.value.trim();
+                loadScriptFromFile(path, 'bash');
+            });
+        }
+
+        const sgLoadPm2Btn = document.getElementById('sgLoadPm2Btn');
+        if (sgLoadPm2Btn) {
+            sgLoadPm2Btn.addEventListener('click', () => {
+                const path = sgPm2Fields.outputPath?.value.trim();
+                loadScriptFromFile(path, 'pm2_ecosystem');
+            });
+        }
+
+        // Site Quick Select Dropdown for loading existing site configs
+        function populateSgSiteDropdown() {
+            const dropdown = document.getElementById('sgSiteQuickSelect');
+            if (!dropdown) return;
+            dropdown.innerHTML = '<option value="">-- Choose an Existing Site to Load & Edit --</option>';
+            if (typeof cachedSites === 'object') {
+                for (const [siteId, site] of Object.entries(cachedSites)) {
+                    const opt = document.createElement('option');
+                    opt.value = siteId;
+                    opt.textContent = `${site.name || siteId} (${site.domain || siteId})`;
+                    dropdown.appendChild(opt);
+                }
+            }
+        }
+
+        const sgSiteQuickSelect = document.getElementById('sgSiteQuickSelect');
+        if (sgSiteQuickSelect) {
+            sgSiteQuickSelect.addEventListener('change', (e) => {
+                const siteId = e.target.value;
+                if (!siteId || !cachedSites[siteId]) return;
+                const site = cachedSites[siteId];
+
+                if (currentScriptType === 'bash') {
+                    if (sgFields.appDir) sgFields.appDir.value = site.deploy_path || `/www/wwwroot/${site.domain || siteId}`;
+                    if (sgFields.repoUrl) sgFields.repoUrl.value = site.repo_url || '';
+                    if (sgFields.branch) sgFields.branch.value = site.branch || 'main';
+                    if (sgFields.appName) sgFields.appName.value = site.name || siteId;
+                    const scriptPath = site.deploy_script_path || `/www/wwwroot/${site.domain || siteId}/deploy.sh`;
+                    if (sgFields.outputPath) sgFields.outputPath.value = scriptPath;
+                    updateScriptPreview();
+                    if (scriptPath) loadScriptFromFile(scriptPath, 'bash');
+                } else {
+                    if (sgPm2Fields.appName) sgPm2Fields.appName.value = site.name || siteId;
+                    if (sgPm2Fields.cwd) sgPm2Fields.cwd.value = site.deploy_path || `/www/wwwroot/${site.domain || siteId}`;
+                    const configPath = `/www/wwwroot/${site.domain || siteId}/ecosystem.config.js`;
+                    if (sgPm2Fields.outputPath) sgPm2Fields.outputPath.value = configPath;
+                    if (site.pm2_ecosystem) {
+                        sgPreview.innerHTML = highlightJs(site.pm2_ecosystem);
+                    } else {
+                        updateScriptPreview();
+                        loadScriptFromFile(configPath, 'pm2_ecosystem');
+                    }
+                }
+            });
+        }
+
+        // Add Site Modal: Edit in Generator buttons
+        const editDeployScriptBtn = document.getElementById('editDeployScriptBtn');
+        if (editDeployScriptBtn) {
+            editDeployScriptBtn.addEventListener('click', () => {
+                const scriptPath = document.getElementById('siteScriptInput')?.value.trim() || '';
+                if (window.openScriptGenModal) window.openScriptGenModal('bash');
+                if (scriptPath && sgFields.outputPath) {
+                    sgFields.outputPath.value = scriptPath;
+                    loadScriptFromFile(scriptPath, 'bash');
+                }
+            });
+        }
+
+        const openInPm2GenBtn = document.getElementById('openInPm2GenBtn');
+        if (openInPm2GenBtn) {
+            openInPm2GenBtn.addEventListener('click', () => {
+                const pm2Content = document.getElementById('pm2EcosystemInput')?.value.trim() || '';
+                if (window.openScriptGenModal) window.openScriptGenModal('pm2_ecosystem');
+                if (pm2Content) {
+                    sgPreview.innerHTML = highlightJs(pm2Content);
+                }
+            });
+        }
+
+        window.populateSgSiteDropdown = populateSgSiteDropdown;
     })();
 
     // Global Modal Escape key listener and Window helpers
@@ -3182,7 +3616,7 @@ exit 0`;
             if (allSystemsCheck) allSystemsCheck.checked = true;
             if (specificSystemsContainer) specificSystemsContainer.classList.add('hidden');
         } else if (role === 'deployer') {
-            const deployerFuncs = ['sites', 'add_edit_sites', 'pm2', 'db_backups', 'vps_ports', 'deploy_history'];
+            const deployerFuncs = ['sites', 'add_edit_sites', 'pm2', 'script_gen', 'db_backups', 'vps_ports', 'deploy_history'];
             funcCheckboxes.forEach(cb => cb.checked = deployerFuncs.includes(cb.value));
             if (allSystemsCheck) allSystemsCheck.checked = true;
             if (specificSystemsContainer) specificSystemsContainer.classList.add('hidden');

@@ -271,18 +271,25 @@ body {
    DASHBOARD HEADER & NAVIGATION
    ========================================================================== */
 
+/* ==========================================================================
+   DASHBOARD HEADER & NAVIGATION (RESPONSIVE METER SYSTEM)
+   ========================================================================== */
+
 .app-header {
-    height: 64px;
+    min-height: 64px;
+    height: auto;
     background: var(--bg-header);
     border-bottom: 1px solid var(--bg-card-border);
     backdrop-filter: blur(12px);
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0 28px;
+    padding: 12px 24px;
     position: sticky;
     top: 0;
     z-index: 100;
+    gap: 16px;
+    flex-wrap: wrap;
 }
 
 .brand {
@@ -290,6 +297,7 @@ body {
     align-items: center;
     gap: 10px;
     color: var(--accent-blue);
+    flex-shrink: 0;
 }
 
 .brand-title {
@@ -297,39 +305,255 @@ body {
     font-size: 1.15rem;
     letter-spacing: 1.5px;
     color: #ffffff;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px;
 }
 
 .header-center {
     display: flex;
     align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+/* Server Health & Performance Banner (Body Gauge Widget Card) */
+.server-status-banner {
+    background: rgba(15, 23, 42, 0.65);
+    border: 1px solid var(--bg-card-border);
+    border-radius: var(--radius-lg);
+    padding: 16px 20px;
+    margin-bottom: 24px;
+    backdrop-filter: blur(12px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.status-banner-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.status-banner-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.status-banner-title h3 {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0;
+    letter-spacing: 0.3px;
+}
+
+.status-banner-meta {
+    display: flex;
+    align-items: center;
     gap: 12px;
 }
 
-.metric-pill {
-    background: rgba(15, 23, 42, 0.6);
-    border: 1px solid var(--bg-card-border);
-    padding: 4px 12px;
-    border-radius: 20px;
-    font-size: 0.75rem;
+.header-status-pill {
     display: flex;
-    gap: 6px;
+    align-items: center;
+    gap: 8px;
+    background: rgba(16, 185, 129, 0.1);
+    border: 1px solid rgba(16, 185, 129, 0.25);
+    padding: 6px 14px;
+    border-radius: 20px;
 }
 
-.metric-label {
+.server-meters-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 14px;
+}
+
+.body-metric-card {
+    background: rgba(15, 23, 42, 0.75);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: var(--radius-md);
+    padding: 12px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    backdrop-filter: blur(10px);
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.body-metric-card:hover {
+    border-color: rgba(56, 189, 248, 0.35);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35), 0 0 14px rgba(56, 189, 248, 0.15);
+}
+
+.body-metric-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.body-metric-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.body-metric-icon {
+    font-size: 1rem;
+}
+
+.body-metric-name {
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.5px;
     color: var(--text-muted);
-    font-weight: 600;
+    text-transform: uppercase;
 }
 
-.metric-value {
-    color: var(--accent-blue);
+.body-metric-val {
+    font-size: 0.88rem;
+    font-weight: 800;
     font-family: var(--font-mono);
-    font-weight: 600;
+}
+
+.meter-track {
+    width: 100%;
+    height: 7px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 6px;
+    overflow: hidden;
+    position: relative;
+}
+
+.meter-fill {
+    height: 100%;
+    width: 0%;
+    border-radius: 6px;
+    transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1), background 0.3s ease;
+    background: linear-gradient(90deg, #38bdf8, #818cf8);
+    box-shadow: 0 0 10px rgba(56, 189, 248, 0.4);
+}
+
+.meter-fill.meter-green {
+    background: linear-gradient(90deg, #10b981, #34d399);
+    box-shadow: 0 0 10px rgba(16, 185, 129, 0.4);
+}
+
+.meter-fill.meter-warning {
+    background: linear-gradient(90deg, #f59e0b, #fbbf24);
+    box-shadow: 0 0 10px rgba(245, 158, 11, 0.4);
+}
+
+.meter-fill.meter-danger {
+    background: linear-gradient(90deg, #ef4444, #f87171);
+    box-shadow: 0 0 10px rgba(239, 68, 68, 0.5);
+}
+
+.circle-chart-bg {
+    stroke: rgba(255, 255, 255, 0.08);
+}
+
+.circle-chart-fill {
+    stroke-linecap: round;
+    transition: stroke-dashoffset 0.6s cubic-bezier(0.4, 0, 0.2, 1), stroke 0.4s ease;
+    transform-origin: center;
+}
+
+.circle-chart-value {
+    position: absolute;
+    font-size: 0.65rem;
+    font-weight: 700;
+    font-family: var(--font-mono);
+    color: #ffffff;
+    text-align: center;
+    line-height: 1;
+}
+
+.circle-chart-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.circle-chart-label {
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+}
+
+.circle-chart-subtext {
+    font-size: 0.72rem;
+    font-weight: 700;
+    font-family: var(--font-mono);
+    color: var(--accent-blue);
+    line-height: 1.1;
+}
+
+/* Gauge Ring Default Colors */
+.meter-overall .circle-chart-fill { stroke: #a855f7; }
+.meter-cpu .circle-chart-fill { stroke: #38bdf8; }
+.meter-ram .circle-chart-fill { stroke: #818cf8; }
+.meter-disk .circle-chart-fill { stroke: #10b981; }
+.meter-app .circle-chart-fill { stroke: #38bdf8; }
+
+/* Dynamic Load Threshold Colors */
+.stroke-green { stroke: #10b981 !important; }
+.stroke-warning { stroke: #f59e0b !important; }
+.stroke-danger { stroke: #ef4444 !important; }
+
+.meter-fill.meter-green {
+    background: linear-gradient(90deg, #10b981, #34d399);
+    box-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
+}
+
+.meter-fill.meter-warning {
+    background: linear-gradient(90deg, #f59e0b, #fbbf24);
+    box-shadow: 0 0 8px rgba(245, 158, 11, 0.4);
+}
+
+.meter-fill.meter-danger {
+    background: linear-gradient(90deg, #ef4444, #f87171);
+    box-shadow: 0 0 8px rgba(239, 68, 68, 0.5);
+}
+
+.metric-uptime-meter {
+    min-width: 115px;
+    justify-content: center;
+}
+
+.status-pulse {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #10b981;
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+    animation: statusPulse 1.8s infinite;
+}
+
+@keyframes statusPulse {
+    0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+    70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+    100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
 }
 
 .header-right {
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: 8px;
+    flex-wrap: wrap;
 }
 
 .user-info {
@@ -1538,4 +1762,101 @@ html {
     color: var(--text-secondary);
     border: 1px solid rgba(255, 255, 255, 0.08);
     margin: 2px;
+}
+
+/* =========================================================================
+   MOBILE & TABLET RESPONSIVE OVERHAUL
+   ========================================================================= */
+
+@media (max-width: 1200px) {
+    .app-header {
+        padding: 12px 18px;
+    }
+    .header-center {
+        order: 3;
+        width: 100%;
+        justify-content: flex-start;
+        margin-top: 4px;
+        padding-top: 8px;
+        border-top: 1px solid rgba(255, 255, 255, 0.06);
+        gap: 8px;
+    }
+    .metric-meter {
+        flex: 1;
+        min-width: 100px;
+    }
+}
+
+@media (max-width: 768px) {
+    .app-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+        padding: 12px;
+    }
+    .header-left {
+        justify-content: space-between;
+        width: 100%;
+    }
+    .header-right {
+        width: 100%;
+        justify-content: flex-start;
+        overflow-x: auto;
+        padding-bottom: 4px;
+        -webkit-overflow-scrolling: touch;
+        gap: 6px;
+    }
+    .header-right .btn {
+        flex-shrink: 0;
+        font-size: 0.76rem;
+        padding: 6px 10px;
+    }
+    .user-info {
+        margin-left: auto;
+        flex-shrink: 0;
+    }
+    .header-center {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+    }
+    .metric-uptime-meter {
+        grid-column: span 2;
+    }
+    .app-content {
+        padding: 16px 12px;
+    }
+    .sites-grid {
+        grid-template-columns: 1fr;
+    }
+    .sites-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+    }
+    .sites-toolbar-left, .sites-toolbar-right {
+        width: 100%;
+        justify-content: space-between;
+    }
+}
+
+@media (max-width: 480px) {
+    .header-center {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    .metric-uptime-meter {
+        grid-column: span 2;
+    }
+    .brand-title {
+        font-size: 1rem;
+    }
+    .site-card {
+        padding: 16px;
+    }
+    .card-actions {
+        flex-direction: column;
+    }
+    .card-actions .btn {
+        width: 100%;
+    }
 }

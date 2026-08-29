@@ -40,7 +40,7 @@ class AuthService
                         if ($role === 'admin') {
                             $allowedFunctions = ['*'];
                         } elseif ($role === 'deployer') {
-                            $allowedFunctions = ['sites', 'pm2', 'db_backups', 'vps_ports', 'deploy_history'];
+                            $allowedFunctions = ['sites', 'add_edit_sites', 'pm2', 'script_gen', 'db_backups', 'vps_ports', 'deploy_history'];
                         } else {
                             $allowedFunctions = ['sites', 'pm2', 'vps_ports', 'deploy_history'];
                         }
@@ -177,7 +177,7 @@ class AuthService
             if ($role === 'admin') {
                 $allowedFunctions = ['*'];
             } elseif ($role === 'deployer') {
-                $allowedFunctions = ['sites', 'pm2', 'db_backups', 'vps_ports', 'deploy_history'];
+                $allowedFunctions = ['sites', 'add_edit_sites', 'pm2', 'script_gen', 'db_backups', 'vps_ports', 'deploy_history'];
             } else {
                 $allowedFunctions = ['sites', 'pm2', 'vps_ports', 'deploy_history'];
             }
@@ -322,7 +322,7 @@ class AuthService
                 if ($role === 'admin') {
                     $allowedFunctions = ['*'];
                 } elseif ($role === 'deployer') {
-                    $allowedFunctions = ['sites', 'pm2', 'db_backups', 'vps_ports', 'deploy_history'];
+                    $allowedFunctions = ['sites', 'add_edit_sites', 'pm2', 'script_gen', 'db_backups', 'vps_ports', 'deploy_history'];
                 } else {
                     $allowedFunctions = ['sites', 'pm2', 'vps_ports', 'deploy_history'];
                 }
