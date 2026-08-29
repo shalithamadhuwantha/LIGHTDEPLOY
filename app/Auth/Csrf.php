@@ -24,11 +24,28 @@ class Csrf
 
     public static function validateHeaderOrPost(): bool
     {
-        $token = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? ($_POST['csrf_token'] ?? null);
+        $token = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? null;
 
-        if (!$token && strpos($_SERVER['CONTENT_TYPE'] ?? '', 'application/json') !== false) {
-            $input = json_decode(file_get_contents('php://input'), true);
-            $token = $input['csrf_token'] ?? null;
+        if (!$token && function_exists('getallheaders')) {
+            $headers = getallheaders();
+            foreach ($headers as $key => $val) {
+                if (strtolower((string)$key) === 'x-csrf-token') {
+                    $token = (string)$val;
+                    break;
+                }
+            }
+        }
+
+        if (!$token && str_contains(strtolower($_SERVER['CONTENT_TYPE'] ?? ''), 'application/json')) {
+            $rawInput = file_get_contents('php://input');
+            if ($rawInput) {
+                $input = json_decode($rawInput, true);
+                $token = $input['csrf_token'] ?? null;
+            }
+        }
+
+        if (!$token && isset($_POST['csrf_token'])) {
+            $token = (string)$_POST['csrf_token'];
         }
 
         return self::validateToken($token);

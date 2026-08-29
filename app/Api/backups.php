@@ -8,9 +8,13 @@ declare(strict_types=1);
 
 $config = require_once dirname(__DIR__) . '/bootstrap.php';
 
+use LightDeploy\Security\SecurityLogger;
 use LightDeploy\Auth\AuthService;
 use LightDeploy\Backup\BackupService;
 use LightDeploy\Auth\Csrf;
+
+$securityLogger = new SecurityLogger($config['logs_dir'] . '/security');
+$authService = new AuthService($config['config_dir'] . '/users.json', $securityLogger);
 
 $authService->requirePermission('db_backups');
 $currentUser = $authService->getCurrentUser();

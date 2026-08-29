@@ -8,8 +8,12 @@ declare(strict_types=1);
 
 $config = require_once dirname(__DIR__) . '/bootstrap.php';
 
+use LightDeploy\Security\SecurityLogger;
 use LightDeploy\Auth\AuthService;
 use LightDeploy\Auth\Csrf;
+
+$securityLogger = new SecurityLogger($config['logs_dir'] . '/security');
+$authService = new AuthService($config['config_dir'] . '/users.json', $securityLogger);
 
 $authService->requirePermission('update_system');
 $currentUser = $authService->getCurrentUser();
@@ -22,13 +26,13 @@ $currentVersion = 'v1.2.5';
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 
 if ($method === 'GET') {
-    // Check GitHub for latest commit info
-    $apiUrl = "https://api.github.com/repos/{$repoOwner}/{$repoName}/commits/main";
+    // Check GitHub for latest commit info (lightweight query)
+    $apiUrl = "https://api.github.com/repos/{$repoOwner}/{$repoName}/commits?per_page=1";
     $ch = curl_init();
     curl_setopt_array($ch, [
         CURLOPT_URL => $apiUrl,
         CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT => 8,
+        CURLOPT_TIMEOUT => 6,
         CURLOPT_USERAGENT => 'LightDeploy-Updater/1.2.5',
         CURLOPT_SSL_VERIFYPEER => false,
         CURLOPT_SSL_VERIFYHOST => 0
@@ -41,13 +45,14 @@ if ($method === 'GET') {
     $latestCommit = null;
     if ($httpCode === 200 && !empty($response)) {
         $data = json_decode($response, true);
-        if (isset($data['sha'])) {
+        if (is_array($data) && isset($data[0]['sha'])) {
+            $c = $data[0];
             $latestCommit = [
-                'sha' => substr($data['sha'], 0, 7),
-                'full_sha' => $data['sha'],
-                'message' => $data['commit']['message'] ?? '',
-                'author' => $data['commit']['author']['name'] ?? '',
-                'date' => $data['commit']['author']['date'] ?? ''
+                'sha' => substr($c['sha'], 0, 7),
+                'full_sha' => $c['sha'],
+                'message' => $c['commit']['message'] ?? '',
+                'author' => $c['commit']['author']['name'] ?? '',
+                'date' => $c['commit']['author']['date'] ?? ''
             ];
         }
     }
@@ -72,11 +77,9 @@ if ($method === 'GET') {
 }
 
 if ($method === 'POST') {
-    // CSRF Check
-    $headers = getallheaders();
-    $token = $headers['X-CSRF-Token'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? $_POST['csrf_token'] ?? '';
-    if (!Csrf::validateToken((string)$token)) {
-        jsonError('CSRF_INVALID', 'Invalid CSRF token.', 403);
+    // Robust CSRF check supporting Headers, JSON body, and POST fields
+    if (!Csrf::validateHeaderOrPost()) {
+        jsonError('CSRF_INVALID', 'Invalid security token or session expired.', 403);
     }
 
     $rootDir = dirname(__DIR__, 2);
@@ -142,7 +145,15 @@ if ($method === 'POST') {
 
             @mkdir($tmpExtract, 0755, true);
             $unzipOut = safeShellExec("unzip -q -o " . escapeshellarg($tmpZip) . " -d " . escapeshellarg($tmpExtract) . " 2>&1");
-            if ($unzipOut) $logs[] = trim($unzipOut);
+            
+            // ZipArchive fallback if shell unzip failed
+            if (!is_dir($tmpExtract . '/' . $repoName . '-main') && class_exists('ZipArchive')) {
+                $zip = new \ZipArchive();
+                if ($zip->open($tmpZip) === true) {
+                    $zip->extractTo($tmpExtract);
+                    $zip->close();
+                }
+            }
 
             $extractedSubdir = $tmpExtract . '/' . $repoName . '-main';
             if (!is_dir($extractedSubdir)) {
