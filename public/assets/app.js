@@ -1325,7 +1325,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             <button class="btn btn-secondary btn-sm btn-pm2-edit" data-name="${escapeHtml(proc.name)}" title="Ecosystem Settings">⚙️</button>
                         ` : ''}
                         <button class="btn btn-secondary btn-sm btn-pm2-logs" data-target="${escapeHtml(proc.name)}" data-pm2-target="${escapeHtml(proc.name)}" title="View Logs">📜</button>
-                        ${userRole === 'admin' ? `
+                        ${canControl ? `
                             <button class="btn btn-danger btn-sm btn-pm2-action" data-action="delete" data-target="${proc.id}" title="Delete">🗑️</button>
                         ` : ''}
                     </div>
