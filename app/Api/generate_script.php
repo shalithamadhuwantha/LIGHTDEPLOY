@@ -37,6 +37,7 @@ $scriptType = trim((string)($input['script_type'] ?? 'bash'));
 // ── Extract and sanitize inputs ──────────────────────────────────────────────
 
 $action = trim((string)($input['action'] ?? 'generate'));
+$outputPath = trim((string)($input['output_path'] ?? $input['file_path'] ?? ''));
 $appDir = trim((string)($input['app_dir'] ?? ''));
 $repoUrl = trim((string)($input['repo_url'] ?? ''));
 $branch = trim((string)($input['branch'] ?? 'main'));
@@ -104,8 +105,13 @@ if ($scriptType === 'pm2_ecosystem') {
     }
 }
 
-if ($action === 'save' && empty($outputPath)) {
-    jsonError('INVALID_INPUT', 'Output file path is required for save action.', 400);
+if ($action === 'save') {
+    if (empty($outputPath)) {
+        jsonError('INVALID_INPUT', 'Output file path is required for save action.', 400);
+    }
+    if (strpos($outputPath, '..') !== false) {
+        jsonError('INVALID_INPUT', 'Path traversal characters are not permitted.', 400);
+    }
 }
 
 // ── Generate script ─────────────────────────────────────────────────────────
