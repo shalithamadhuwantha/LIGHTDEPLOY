@@ -957,6 +957,32 @@ document.addEventListener('DOMContentLoaded', () => {
     const healthCheckEnableInput = document.getElementById('healthCheckEnableInput');
     const healthCheckUrlGroup = document.getElementById('healthCheckUrlGroup');
 
+    function updatePm2EcosystemMode(mode) {
+        const pm2TypeManualRadio = document.getElementById('pm2TypeManualRadio');
+        const pm2TypePathRadio = document.getElementById('pm2TypePathRadio');
+        const pm2ManualCodeContainer = document.getElementById('pm2ManualCodeContainer');
+        const pm2FilePathContainer = document.getElementById('pm2FilePathContainer');
+
+        if (mode === 'path') {
+            if (pm2TypePathRadio) pm2TypePathRadio.checked = true;
+            if (pm2ManualCodeContainer) pm2ManualCodeContainer.classList.add('hidden');
+            if (pm2FilePathContainer) pm2FilePathContainer.classList.remove('hidden');
+        } else {
+            if (pm2TypeManualRadio) pm2TypeManualRadio.checked = true;
+            if (pm2ManualCodeContainer) pm2ManualCodeContainer.classList.remove('hidden');
+            if (pm2FilePathContainer) pm2FilePathContainer.classList.add('hidden');
+        }
+    }
+
+    const pm2TypeManualRadio = document.getElementById('pm2TypeManualRadio');
+    const pm2TypePathRadio = document.getElementById('pm2TypePathRadio');
+    if (pm2TypeManualRadio) {
+        pm2TypeManualRadio.addEventListener('change', () => updatePm2EcosystemMode('code'));
+    }
+    if (pm2TypePathRadio) {
+        pm2TypePathRadio.addEventListener('change', () => updatePm2EcosystemMode('path'));
+    }
+
     if (addSiteBtn) {
         addSiteBtn.addEventListener('click', () => {
             if (addSiteForm) addSiteForm.reset();
@@ -971,6 +997,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const pm2OptionsGroup = document.getElementById('pm2OptionsGroup');
             if (pm2EnableInput) pm2EnableInput.checked = false;
             if (pm2OptionsGroup) pm2OptionsGroup.classList.add('hidden');
+
+            updatePm2EcosystemMode('code');
+            const pm2EcosystemPathInput = document.getElementById('pm2EcosystemPathInput');
+            if (pm2EcosystemPathInput) pm2EcosystemPathInput.value = '';
 
             const pm2EcosystemInput = document.getElementById('pm2EcosystemInput');
             if (pm2EcosystemInput) pm2EcosystemInput.value = '';
@@ -1020,6 +1050,12 @@ document.addEventListener('DOMContentLoaded', () => {
             if (site.pm2_enabled) pm2OptionsGroup.classList.remove('hidden');
             else pm2OptionsGroup.classList.add('hidden');
         }
+
+        const ecoType = site.pm2_ecosystem_type === 'path' ? 'path' : 'code';
+        updatePm2EcosystemMode(ecoType);
+
+        const pm2EcosystemPathInput = document.getElementById('pm2EcosystemPathInput');
+        if (pm2EcosystemPathInput) pm2EcosystemPathInput.value = site.pm2_ecosystem_path || '';
 
         const pm2EcosystemInput = document.getElementById('pm2EcosystemInput');
         if (pm2EcosystemInput) pm2EcosystemInput.value = site.pm2_ecosystem || '';
@@ -1151,6 +1187,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const submitBtn = document.getElementById('saveSiteSubmitBtn');
             if (submitBtn) submitBtn.disabled = true;
 
+            const pm2TypePathRadio = document.getElementById('pm2TypePathRadio');
+            const pm2EcosystemType = (pm2TypePathRadio && pm2TypePathRadio.checked) ? 'path' : 'code';
+
             const payload = {
                 site_id: document.getElementById('siteIdInput').value.trim(),
                 name: document.getElementById('siteNameInput').value.trim(),
@@ -1160,6 +1199,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 health_check_enabled: document.getElementById('healthCheckEnableInput').checked,
                 health_check: document.getElementById('siteHealthCheckInput').value.trim(),
                 pm2_enabled: document.getElementById('pm2EnableInput')?.checked || false,
+                pm2_ecosystem_type: pm2EcosystemType,
+                pm2_ecosystem_path: document.getElementById('pm2EcosystemPathInput')?.value.trim() || '',
                 pm2_ecosystem: document.getElementById('pm2EcosystemInput')?.value || ''
             };
 
@@ -1306,7 +1347,7 @@ document.addEventListener('DOMContentLoaded', () => {
             else if (proc.status === 'stopped') statusClass = 'badge-status-cancelled';
             else if (proc.status === 'errored') statusClass = 'badge-status-failed';
 
-            const canControl = userRole === 'admin' || userRole === 'deployer';
+            const canControl = userRole === 'admin' || userRole === 'deployer' || userRole === 'developer' || hasPermission('pm2');
 
             tr.innerHTML = `
                 <td><code>${proc.id}</code></td>

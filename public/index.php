@@ -556,14 +556,30 @@ $csrfToken = Csrf::getToken();
                     </div>
 
                     <div class="form-group hidden" id="pm2OptionsGroup" style="margin-top: 12px;">
-                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; gap: 8px; flex-wrap: wrap;">
-                            <label for="pm2EcosystemInput" class="form-label" style="margin-bottom: 0;">📋 PM2 Ecosystem Config Script (<code>ecosystem.config.js</code>)</label>
-                            <div style="display: flex; gap: 6px;">
-                                <button type="button" id="openInPm2GenBtn" class="btn btn-primary btn-sm" style="font-size: 0.75rem; padding: 3px 10px; background: linear-gradient(135deg, #7c3aed, #a855f7);">✏️ Edit in Generator</button>
-                                <button type="button" id="loadPm2TemplateBtn" class="btn btn-secondary btn-sm" style="font-size: 0.75rem; padding: 3px 10px; border-color: rgba(168, 85, 247, 0.4); color: #c4b5fd;">🪄 Load Base PM2 Template</button>
+                        <div class="form-group" style="margin-bottom: 12px; background: rgba(30, 41, 59, 0.5); padding: 10px 14px; border-radius: var(--radius-md); border: 1px solid rgba(255, 255, 255, 0.08);">
+                            <label class="form-label" style="margin-bottom: 6px; font-weight: 600; color: #c4b5fd;">PM2 Ecosystem Configuration Source</label>
+                            <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+                                <label class="form-checkbox-label" style="cursor: pointer; font-size: 0.88rem;">
+                                    <input type="radio" name="pm2_ecosystem_type" id="pm2TypeManualRadio" value="code" checked>
+                                    📝 Manual Code / Inline Script
+                                </label>
+                                <label class="form-checkbox-label" style="cursor: pointer; font-size: 0.88rem;">
+                                    <input type="radio" name="pm2_ecosystem_type" id="pm2TypePathRadio" value="path">
+                                    📁 Given Ecosystem File Path
+                                </label>
                             </div>
                         </div>
-                        <textarea id="pm2EcosystemInput" name="pm2_ecosystem" class="form-input" rows="16" style="font-family: var(--font-mono); font-size: 0.83rem; line-height: 1.5; resize: vertical; background: rgba(15, 23, 42, 0.7); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); white-space: pre; tab-size: 2; overflow-x: auto; border-radius: var(--radius-md);" placeholder="module.exports = {
+
+                        <!-- Option A: Manual Code Container -->
+                        <div id="pm2ManualCodeContainer">
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; gap: 8px; flex-wrap: wrap;">
+                                <label for="pm2EcosystemInput" class="form-label" style="margin-bottom: 0;">📋 PM2 Ecosystem Config Script (<code>ecosystem.config.js</code>)</label>
+                                <div style="display: flex; gap: 6px;">
+                                    <button type="button" id="openInPm2GenBtn" class="btn btn-primary btn-sm" style="font-size: 0.75rem; padding: 3px 10px; background: linear-gradient(135deg, #7c3aed, #a855f7);">✏️ Edit in Generator</button>
+                                    <button type="button" id="loadPm2TemplateBtn" class="btn btn-secondary btn-sm" style="font-size: 0.75rem; padding: 3px 10px; border-color: rgba(168, 85, 247, 0.4); color: #c4b5fd;">🪄 Load Base PM2 Template</button>
+                                </div>
+                            </div>
+                            <textarea id="pm2EcosystemInput" name="pm2_ecosystem" class="form-input" rows="16" style="font-family: var(--font-mono); font-size: 0.83rem; line-height: 1.5; resize: vertical; background: rgba(15, 23, 42, 0.7); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); white-space: pre; tab-size: 2; overflow-x: auto; border-radius: var(--radius-md);" placeholder="module.exports = {
   apps: [
     {
       name: 'coop-api',
@@ -601,7 +617,17 @@ $csrfToken = Csrf::getToken();
     }
   ]
 };"></textarea>
-                        <small class="form-help">Paste your full <code>module.exports = { apps: [...] }</code> PM2 ecosystem config. LightDeploy will save this script and execute <code>pm2 start ecosystem.config.js</code> automatically during deployment.</small>
+                            <small class="form-help">Paste your full <code>module.exports = { apps: [...] }</code> PM2 ecosystem config. LightDeploy will save this script and execute <code>pm2 start ecosystem.config.js</code> automatically during deployment.</small>
+                        </div>
+
+                        <!-- Option B: Ecosystem File Path Container -->
+                        <div id="pm2FilePathContainer" class="hidden">
+                            <div class="form-group">
+                                <label for="pm2EcosystemPathInput" class="form-label">Ecosystem File Path on Server</label>
+                                <input type="text" id="pm2EcosystemPathInput" name="pm2_ecosystem_path" class="form-input" placeholder="e.g. /www/wwwroot/coop-api/ecosystem.config.js">
+                                <small class="form-help">Provide an absolute path to an existing <code>ecosystem.config.js</code> file on the server. LightDeploy will execute <code>pm2 reload /path/to/ecosystem.config.js || pm2 start /path/to/ecosystem.config.js</code> directly during deployment.</small>
+                            </div>
+                        </div>
                     </div>
                 </div>
 

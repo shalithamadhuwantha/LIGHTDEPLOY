@@ -38,6 +38,11 @@ $rollbackScript = trim((string)($input['rollback_script'] ?? ''));
 $healthCheck = trim((string)($input['health_check'] ?? ''));
 $healthCheckEnabled = !empty($input['health_check_enabled']);
 $pm2Enabled = !empty($input['pm2_enabled']);
+$pm2EcosystemType = trim((string)($input['pm2_ecosystem_type'] ?? 'code'));
+if (!in_array($pm2EcosystemType, ['code', 'path'], true)) {
+    $pm2EcosystemType = 'code';
+}
+$pm2EcosystemPath = trim((string)($input['pm2_ecosystem_path'] ?? ''));
 $pm2Script = trim((string)($input['pm2_script'] ?? ''));
 $pm2Name = trim((string)($input['pm2_name'] ?? $siteId));
 $pm2Ecosystem = trim((string)($input['pm2_ecosystem'] ?? ''));
@@ -61,16 +66,19 @@ if (empty($script)) {
 // PM2 Ecosystem file saving & auto-launch if enabled
 $ecosystemFilePath = null;
 if ($pm2Enabled) {
-    $ecosystemFileName = "ecosystem.{$siteId}.config.js";
-    $ecosystemFilePath = $config['config_dir'] . '/' . $ecosystemFileName;
-
-    if (!empty($pm2Ecosystem)) {
-        @file_put_contents($ecosystemFilePath, $pm2Ecosystem, LOCK_EX);
+    if ($pm2EcosystemType === 'path' && !empty($pm2EcosystemPath)) {
+        $ecosystemFilePath = $pm2EcosystemPath;
+    } else {
+        $ecosystemFileName = "ecosystem.{$siteId}.config.js";
+        $ecosystemFilePath = $config['config_dir'] . '/' . $ecosystemFileName;
+        if (!empty($pm2Ecosystem)) {
+            @file_put_contents($ecosystemFilePath, $pm2Ecosystem, LOCK_EX);
+        }
     }
 
     $pm2Manager = new \LightDeploy\PM2\PM2Manager();
     if ($pm2Manager->isInstalled()) {
-        if (!empty($pm2Ecosystem) && file_exists($ecosystemFilePath)) {
+        if (!empty($ecosystemFilePath) && file_exists($ecosystemFilePath)) {
             $pm2Manager->startApp($ecosystemFilePath);
         } elseif (!empty($pm2Script)) {
             $pm2Manager->startApp($pm2Script, $pm2Name);
@@ -83,7 +91,9 @@ $scriptFullPath = $config['scripts_dir'] . '/' . basename($script);
 if (!file_exists($scriptFullPath)) {
     $pm2Step = "";
     if ($pm2Enabled) {
-        if (!empty($pm2Ecosystem) && file_exists($ecosystemFilePath)) {
+        if ($pm2EcosystemType === 'path' && !empty($pm2EcosystemPath)) {
+            $pm2Step = "echo \"[PM2] Reloading PM2 ecosystem config {$pm2EcosystemPath}...\"\nif command -v pm2 >/dev/null 2>&1; then pm2 reload {$pm2EcosystemPath} || pm2 start {$pm2EcosystemPath}; fi\n";
+        } elseif (!empty($pm2Ecosystem) && file_exists($ecosystemFilePath)) {
             $pm2Step = "echo \"[PM2] Reloading PM2 ecosystem config {$ecosystemFileName}...\"\nif command -v pm2 >/dev/null 2>&1; then pm2 reload {$ecosystemFilePath} || pm2 start {$ecosystemFilePath}; fi\n";
         } else {
             $pm2Step = "echo \"[PM2] Reloading PM2 process {$pm2Name}...\"\nif command -v pm2 >/dev/null 2>&1; then pm2 reload {$pm2Name} || pm2 start {$pm2Script} --name {$pm2Name}; fi\n";
@@ -134,6 +144,8 @@ $sitesData['sites'][$siteId] = [
     'health_check' => $healthCheck,
     'health_check_enabled' => $healthCheckEnabled,
     'pm2_enabled' => $pm2Enabled,
+    'pm2_ecosystem_type' => $pm2EcosystemType,
+    'pm2_ecosystem_path' => $pm2EcosystemPath,
     'pm2_script' => $pm2Script,
     'pm2_name' => $pm2Name,
     'pm2_ecosystem' => $pm2Ecosystem,

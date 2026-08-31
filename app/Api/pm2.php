@@ -47,9 +47,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     ]);
 }
 
-// POST Request: Process Control Actions (Admin / Deployer Role Required)
+// POST Request: Process Control Actions (Admin, Deployer, Developer, or pm2 permission required)
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if (!in_array($user['role'] ?? '', ['admin', 'deployer'], true)) {
+    if (!in_array($user['role'] ?? '', ['admin', 'deployer', 'developer'], true) && !$authService->hasPermission('pm2')) {
         jsonError('FORBIDDEN', 'Insufficient permissions to perform PM2 process control actions.', 403);
     }
 
