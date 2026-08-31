@@ -178,7 +178,8 @@ class PM2Manager
             return ['success' => false, 'error' => 'Script path or application name is required.'];
         }
 
-        $cmd = $this->pm2Path . ' start ' . $scriptOrName;
+        // $cmd = $this->pm2Path . ' start ' . $scriptOrName;
+        $cmd = 'pm2 start ' . $scriptOrName;
         if (!empty($name)) {
             $cmd .= ' --name ' . $name;
         }
