@@ -1420,7 +1420,6 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('pm2EditArgsInput').value = proc.args || '';
         document.getElementById('pm2EditInterpreterInput').value = proc.interpreter || 'node';
         document.getElementById('pm2EditInstancesInput').value = proc.instances || '1';
-        document.getElementById('pm2EditMemInput').value = proc.max_memory_restart || '';
         document.getElementById('pm2EditCronInput').value = proc.cron_restart || '';
         document.getElementById('pm2EditRestartDelayInput').value = proc.restart_delay || '';
         document.getElementById('pm2EditAutoRestartInput').checked = proc.autorestart !== false;
@@ -1473,7 +1472,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 args: document.getElementById('pm2EditArgsInput').value.trim(),
                 interpreter: document.getElementById('pm2EditInterpreterInput').value.trim(),
                 instances: document.getElementById('pm2EditInstancesInput').value.trim() || '1',
-                max_memory_restart: document.getElementById('pm2EditMemInput').value.trim(),
                 cron_restart: document.getElementById('pm2EditCronInput').value.trim(),
                 restart_delay: parseInt(document.getElementById('pm2EditRestartDelayInput').value) || 0,
                 autorestart: document.getElementById('pm2EditAutoRestartInput').checked,
