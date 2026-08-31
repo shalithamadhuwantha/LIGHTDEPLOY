@@ -1008,6 +1008,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const deleteBtn = document.getElementById('deleteSiteModalBtn');
             if (deleteBtn) deleteBtn.classList.add('hidden');
 
+            const startPm2Btn = document.getElementById('startSitePm2Btn');
+            if (startPm2Btn) startPm2Btn.classList.add('hidden');
+
             if (addSiteModal) addSiteModal.classList.remove('hidden');
         });
     }
@@ -1116,6 +1119,19 @@ document.addEventListener('DOMContentLoaded', () => {
         const deleteBtn = document.getElementById('deleteSiteModalBtn');
         if (deleteBtn) deleteBtn.classList.remove('hidden');
 
+        // Show 'Start / Reload PM2' button only when editing an existing site with PM2 enabled
+        const startPm2Btn = document.getElementById('startSitePm2Btn');
+        if (startPm2Btn) {
+            if (site.pm2_enabled) {
+                startPm2Btn.classList.remove('hidden');
+                startPm2Btn.dataset.siteId = siteId;
+                startPm2Btn.dataset.ecosystemType = site.pm2_ecosystem_type || 'code';
+                startPm2Btn.dataset.ecosystemPath = site.pm2_ecosystem_path || '';
+            } else {
+                startPm2Btn.classList.add('hidden');
+            }
+        }
+
         addSiteModal.classList.remove('hidden');
     }
 
@@ -1144,6 +1160,50 @@ document.addEventListener('DOMContentLoaded', () => {
             showToast(data.message || 'Site deleted successfully.', 'success');
             if (addSiteModal) addSiteModal.classList.add('hidden');
             loadSites();
+        });
+    }
+
+    // Start / Reload PM2 button handler
+    const startSitePm2Btn = document.getElementById('startSitePm2Btn');
+    if (startSitePm2Btn) {
+        startSitePm2Btn.addEventListener('click', async () => {
+            const siteId = startSitePm2Btn.dataset.siteId || document.getElementById('siteIdInput')?.value.trim();
+            const ecoType = startSitePm2Btn.dataset.ecosystemType || 'code';
+            const ecoPath = startSitePm2Btn.dataset.ecosystemPath || '';
+
+            let script = '';
+
+            if (ecoType === 'path' && ecoPath) {
+                // Use the given ecosystem file path directly
+                script = ecoPath;
+            } else {
+                // Use the LightDeploy-managed ecosystem config file
+                script = `/opt/lightdeploy/config/ecosystem.${siteId}.config.js`;
+            }
+
+            if (!script) {
+                showToast('No ecosystem file or script path found for this site.', 'danger');
+                return;
+            }
+
+            startSitePm2Btn.disabled = true;
+            startSitePm2Btn.textContent = '⏳ Starting...';
+
+            const { ok, data } = await apiFetch('/api/pm2.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'start_app', script })
+            });
+
+            startSitePm2Btn.disabled = false;
+            startSitePm2Btn.textContent = '▶ Start / Reload PM2';
+
+            if (!ok || !data.success) {
+                showToast(data.error?.message || 'Failed to start PM2 process.', 'danger');
+                return;
+            }
+
+            showToast(`PM2 process started/reloaded successfully!`, 'success');
         });
     }
 

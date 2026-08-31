@@ -63,7 +63,7 @@ if (empty($script)) {
     $script = "scripts/{$siteId}.sh";
 }
 
-// PM2 Ecosystem file saving & auto-launch if enabled
+// PM2 Ecosystem file saving (no auto-launch — use the 'Start PM2' button in the UI)
 $ecosystemFilePath = null;
 if ($pm2Enabled) {
     if ($pm2EcosystemType === 'path' && !empty($pm2EcosystemPath)) {
@@ -73,15 +73,6 @@ if ($pm2Enabled) {
         $ecosystemFilePath = $config['config_dir'] . '/' . $ecosystemFileName;
         if (!empty($pm2Ecosystem)) {
             @file_put_contents($ecosystemFilePath, $pm2Ecosystem, LOCK_EX);
-        }
-    }
-
-    $pm2Manager = new \LightDeploy\PM2\PM2Manager();
-    if ($pm2Manager->isInstalled()) {
-        if (!empty($ecosystemFilePath) && file_exists($ecosystemFilePath)) {
-            $pm2Manager->startApp($ecosystemFilePath);
-        } elseif (!empty($pm2Script)) {
-            $pm2Manager->startApp($pm2Script, $pm2Name);
         }
     }
 }
