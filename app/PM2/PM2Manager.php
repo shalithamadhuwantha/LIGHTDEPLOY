@@ -178,12 +178,12 @@ class PM2Manager
             return ['success' => false, 'error' => 'Script path or application name is required.'];
         }
 
-        $cmd = escapeshellcmd($this->pm2Path) . ' start ' . escapeshellarg($scriptOrName);
+        $cmd = $this->pm2Path . ' start ' . $scriptOrName;
         if (!empty($name)) {
-            $cmd .= ' --name ' . escapeshellarg($name);
+            $cmd .= ' --name ' . $name;
         }
         if (!empty($cwd)) {
-            $cmd .= ' --cwd ' . escapeshellarg($cwd);
+            $cmd .= ' --cwd ' . $cwd;
         }
         $cmd .= ' 2>&1';
 
