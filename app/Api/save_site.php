@@ -63,7 +63,7 @@ if (empty($script)) {
     $script = "scripts/{$siteId}.sh";
 }
 
-// PM2 Ecosystem file saving (no auto-launch — use the 'Start PM2' button in the UI)
+// PM2 Ecosystem file saving (no auto-launch when saving site config)
 $ecosystemFilePath = null;
 if ($pm2Enabled) {
     if ($pm2EcosystemType === 'path' && !empty($pm2EcosystemPath)) {

@@ -1008,8 +1008,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const deleteBtn = document.getElementById('deleteSiteModalBtn');
             if (deleteBtn) deleteBtn.classList.add('hidden');
 
-            const startPm2Btn = document.getElementById('startSitePm2Btn');
-            if (startPm2Btn) startPm2Btn.classList.add('hidden');
+            const runPm2Btn = document.getElementById('runSitePm2Btn');
+            if (runPm2Btn) runPm2Btn.classList.add('hidden');
 
             if (addSiteModal) addSiteModal.classList.remove('hidden');
         });
@@ -1119,17 +1119,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const deleteBtn = document.getElementById('deleteSiteModalBtn');
         if (deleteBtn) deleteBtn.classList.remove('hidden');
 
-        // Show 'Start / Reload PM2' button only when editing an existing site with PM2 enabled
-        const startPm2Btn = document.getElementById('startSitePm2Btn');
-        if (startPm2Btn) {
-            if (site.pm2_enabled) {
-                startPm2Btn.classList.remove('hidden');
-                startPm2Btn.dataset.siteId = siteId;
-                startPm2Btn.dataset.ecosystemType = site.pm2_ecosystem_type || 'code';
-                startPm2Btn.dataset.ecosystemPath = site.pm2_ecosystem_path || '';
-            } else {
-                startPm2Btn.classList.add('hidden');
-            }
+        const runPm2Btn = document.getElementById('runSitePm2Btn');
+        if (runPm2Btn) {
+            if (site.pm2_enabled) runPm2Btn.classList.remove('hidden');
+            else runPm2Btn.classList.add('hidden');
         }
 
         addSiteModal.classList.remove('hidden');
@@ -1163,47 +1156,68 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Start / Reload PM2 button handler
-    const startSitePm2Btn = document.getElementById('startSitePm2Btn');
-    if (startSitePm2Btn) {
-        startSitePm2Btn.addEventListener('click', async () => {
-            const siteId = startSitePm2Btn.dataset.siteId || document.getElementById('siteIdInput')?.value.trim();
-            const ecoType = startSitePm2Btn.dataset.ecosystemType || 'code';
-            const ecoPath = startSitePm2Btn.dataset.ecosystemPath || '';
+    const runSitePm2Btn = document.getElementById('runSitePm2Btn');
+    if (runSitePm2Btn) {
+        runSitePm2Btn.addEventListener('click', async () => {
+            const siteId = document.getElementById('siteIdInput')?.value.trim();
+            const pm2TypePathRadio = document.getElementById('pm2TypePathRadio');
+            const isPathMode = pm2TypePathRadio && pm2TypePathRadio.checked;
+            const ecoPath = document.getElementById('pm2EcosystemPathInput')?.value.trim();
+            const ecoCode = document.getElementById('pm2EcosystemInput')?.value;
 
             let script = '';
-
-            if (ecoType === 'path' && ecoPath) {
-                // Use the given ecosystem file path directly
+            if (isPathMode && ecoPath) {
                 script = ecoPath;
-            } else {
-                // Use the LightDeploy-managed ecosystem config file
+            } else if (siteId) {
                 script = `/opt/lightdeploy/config/ecosystem.${siteId}.config.js`;
             }
 
             if (!script) {
-                showToast('No ecosystem file or script path found for this site.', 'danger');
+                showToast('No ecosystem config path found.', 'danger');
                 return;
             }
 
-            startSitePm2Btn.disabled = true;
-            startSitePm2Btn.textContent = '⏳ Starting...';
+            runSitePm2Btn.disabled = true;
+            runSitePm2Btn.textContent = '⏳ Running pm2 start...';
 
+            // 1. Save site config so ecosystem file is up-to-date on server
+            const payload = {
+                site_id: siteId,
+                name: document.getElementById('siteNameInput')?.value.trim(),
+                domain: document.getElementById('siteDomainInput')?.value.trim(),
+                script: document.getElementById('siteScriptInput')?.value.trim(),
+                rollback_script: document.getElementById('siteRollbackInput')?.value.trim(),
+                health_check_enabled: document.getElementById('healthCheckEnableInput')?.checked || false,
+                health_check: document.getElementById('siteHealthCheckInput')?.value.trim() || '',
+                pm2_enabled: document.getElementById('pm2EnableInput')?.checked || false,
+                pm2_ecosystem_type: isPathMode ? 'path' : 'code',
+                pm2_ecosystem_path: ecoPath || '',
+                pm2_ecosystem: ecoCode || ''
+            };
+
+            await apiFetch('/api/save_site.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            // 2. Execute clean `pm2 start <script>` without extra flags
             const { ok, data } = await apiFetch('/api/pm2.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ action: 'start_app', script })
             });
 
-            startSitePm2Btn.disabled = false;
-            startSitePm2Btn.textContent = '▶ Start / Reload PM2';
+            runSitePm2Btn.disabled = false;
+            runSitePm2Btn.textContent = '▶ Run PM2 Ecosystem (pm2 start)';
 
             if (!ok || !data.success) {
-                showToast(data.error?.message || 'Failed to start PM2 process.', 'danger');
+                showToast(data.error?.message || 'Failed to start PM2 ecosystem.', 'danger');
                 return;
             }
 
-            showToast(`PM2 process started/reloaded successfully!`, 'success');
+            showToast(`PM2 Ecosystem started successfully!\n${data.output || ''}`, 'success');
+            loadSites();
         });
     }
 
@@ -1235,8 +1249,10 @@ document.addEventListener('DOMContentLoaded', () => {
         pm2EnableInput.addEventListener('change', (e) => {
             if (e.target.checked) {
                 pm2OptionsGroup.classList.remove('hidden');
+                if (runSitePm2Btn) runSitePm2Btn.classList.remove('hidden');
             } else {
                 pm2OptionsGroup.classList.add('hidden');
+                if (runSitePm2Btn) runSitePm2Btn.classList.add('hidden');
             }
         });
     }
