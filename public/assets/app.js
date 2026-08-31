@@ -3266,7 +3266,7 @@ exit 0`;
                         pm2_instances: parseInt(sgPm2Fields.instances?.value) || 1,
                         pm2_exec_mode: sgPm2Fields.execMode?.value || 'fork',
                         pm2_watch: !!sgPm2Fields.watch?.checked,
-                        pm2_max_memory_restart: sgPm2Fields.maxMem?.value.trim() || '',
+                        
                         pm2_node_env: sgPm2Fields.nodeEnv?.value.trim() || 'production',
                         pm2_port: parseInt(sgPm2Fields.port?.value) || 3001,
                         pm2_error_file: sgPm2Fields.errorFile?.value.trim() || '',
