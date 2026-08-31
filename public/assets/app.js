@@ -1266,7 +1266,6 @@ ${escapeHtml(message)}
             }
 
             const executedCmd = data.cmd || `pm2 start ${script}`;
-            showHighPriorityAlert('PM2 Command Executed Successfully', `Executed Command:\n${executedCmd}\n\nOutput:\n${data.output || 'Process started.'}`, 'success');
             showToast(`Executed: ${executedCmd}`, 'success');
             loadSites();
         });
