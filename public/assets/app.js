@@ -3266,7 +3266,7 @@ exit 0`;
                         pm2_instances: parseInt(sgPm2Fields.instances?.value) || 1,
                         pm2_exec_mode: sgPm2Fields.execMode?.value || 'fork',
                         pm2_watch: !!sgPm2Fields.watch?.checked,
-                        pm2_max_memory_restart: sgPm2Fields.maxMem?.value.trim() || '1G',
+                        pm2_max_memory_restart: sgPm2Fields.maxMem?.value.trim() || '',
                         pm2_node_env: sgPm2Fields.nodeEnv?.value.trim() || 'production',
                         pm2_port: parseInt(sgPm2Fields.port?.value) || 3001,
                         pm2_error_file: sgPm2Fields.errorFile?.value.trim() || '',
@@ -3751,6 +3751,94 @@ exit 0`;
                 loadUsersList();
             } else {
                 showToast(data.error?.message || 'Failed to save user account.', 'error');
+            }
+        });
+    }
+
+    // User Profile Self-Management Engine
+    const userProfileForm = document.getElementById('userProfileForm');
+
+    window.loadUserProfileData = async function() {
+        const usernameInput = document.getElementById('profileUsernameInput');
+        const roleInput = document.getElementById('profileRoleInput');
+        const nameInput = document.getElementById('profileNameInput');
+        const passInput = document.getElementById('profilePasswordInput');
+        const confirmPassInput = document.getElementById('profileConfirmPasswordInput');
+
+        if (passInput) passInput.value = '';
+        if (confirmPassInput) confirmPassInput.value = '';
+
+        const { ok, data } = await apiFetch('/api/profile.php');
+        if (ok && data.success && data.user) {
+            if (usernameInput) usernameInput.value = data.user.username || '';
+            if (roleInput) roleInput.value = `${(data.user.role || 'viewer').toUpperCase()} (Managed by Administrator)`;
+            if (nameInput) nameInput.value = data.user.name || data.user.username || '';
+        } else {
+            if (usernameInput) usernameInput.value = currentUsername || '';
+            if (roleInput) roleInput.value = `${(userRole || 'viewer').toUpperCase()} (Managed by Administrator)`;
+        }
+    };
+
+    if (userProfileForm) {
+        userProfileForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const submitBtn = document.getElementById('saveProfileSubmitBtn');
+            const nameInput = document.getElementById('profileNameInput');
+            const passInput = document.getElementById('profilePasswordInput');
+            const confirmPassInput = document.getElementById('profileConfirmPasswordInput');
+
+            const newName = nameInput ? nameInput.value.trim() : '';
+            const newPass = passInput ? passInput.value : '';
+            const confirmPass = confirmPassInput ? confirmPassInput.value : '';
+
+            if (!newName) {
+                showToast('Display name cannot be empty.', 'danger');
+                return;
+            }
+
+            if (newPass) {
+                if (newPass.length < 6) {
+                    showToast('New password must be at least 6 characters in length.', 'danger');
+                    return;
+                }
+                if (newPass !== confirmPass) {
+                    showToast('Passwords do not match. Please re-enter new password.', 'danger');
+                    return;
+                }
+            }
+
+            if (submitBtn) submitBtn.disabled = true;
+
+            const payload = {
+                name: newName,
+                password: newPass
+            };
+
+            const { ok, data } = await apiFetch('/api/profile.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (submitBtn) submitBtn.disabled = false;
+
+            if (!ok || !data.success) {
+                showToast(data.error?.message || 'Failed to update profile.', 'danger');
+                return;
+            }
+
+            showToast(data.message || 'Profile updated successfully!', 'success');
+
+            // Update UI elements displaying user name
+            document.querySelectorAll('.header-user-name-display, .user-name').forEach(el => {
+                el.textContent = newName;
+            });
+
+            if (typeof closeUserProfileModal === 'function') {
+                closeUserProfileModal();
+            } else {
+                const modal = document.getElementById('userProfileModal');
+                if (modal) modal.classList.add('hidden');
             }
         });
     }

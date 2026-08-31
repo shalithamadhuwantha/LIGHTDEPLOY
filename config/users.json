@@ -13,7 +13,7 @@
         },
         "shalitha": {
             "name": "shalitha",
-            "password_hash": "$2y$12$Ujf02zM4tSqm0sp11vsgvOXgFbTeHn1bbRPP4AXUIqmRREC2BPOOa",
+            "password_hash": "$2y$12$s6FTLiASNAsq/UMab8uNDe3vRpIEANDvbS8NU9CnPYlAAqJ.4Lq7m",
             "role": "viewer",
             "allowed_functions": [
                 "sites",

@@ -30,6 +30,26 @@ $csrfToken = Csrf::getToken();
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <script>
+        function openUserProfileModal() {
+            var modal = document.getElementById('userProfileModal');
+            if (modal) {
+                modal.classList.remove('hidden');
+                modal.style.setProperty('display', 'flex', 'important');
+                modal.style.setProperty('visibility', 'visible', 'important');
+                modal.style.setProperty('opacity', '1', 'important');
+                modal.style.setProperty('z-index', '100001', 'important');
+            }
+            if (window.loadUserProfileData) {
+                window.loadUserProfileData();
+            }
+        }
+        function closeUserProfileModal() {
+            var modal = document.getElementById('userProfileModal');
+            if (modal) {
+                modal.classList.add('hidden');
+                modal.style.setProperty('display', 'none', 'important');
+            }
+        }
         function openUserMgmtModal() {
             var modal = document.getElementById('userMgmtModal');
             if (modal) {
@@ -200,8 +220,9 @@ $csrfToken = Csrf::getToken();
             <?php if ($authService->hasPermission('user_mgmt')): ?>
                 <button id="headerUserMgmtBtn" class="btn btn-secondary btn-sm" style="margin-right: 6px; background: linear-gradient(135deg, #4f46e5, #6366f1); color: #fff; border: none;" onclick="openUserMgmtModal()">👥 Manage Users</button>
             <?php endif; ?>
-            <div class="user-info">
-                <span class="user-name"><?= htmlspecialchars($user['name']) ?></span>
+            <button id="userProfileHeaderBtn" class="btn btn-secondary btn-sm" style="margin-right: 6px; background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.15);" onclick="openUserProfileModal()">👤 Profile</button>
+            <div class="user-info" onclick="openUserProfileModal()" style="cursor: pointer;" title="Click to view & edit your profile">
+                <span class="user-name header-user-name-display"><?= htmlspecialchars($user['name']) ?></span>
                 <span class="badge badge-role badge-role-<?= htmlspecialchars($user['role']) ?>"><?= strtoupper(htmlspecialchars($user['role'])) ?></span>
             </div>
             <button id="logoutBtn" class="btn btn-outline-danger btn-sm">Logout</button>
@@ -1308,6 +1329,59 @@ $csrfToken = Csrf::getToken();
                 <button type="button" id="sgDownloadBtn" class="btn btn-primary" style="background: linear-gradient(135deg, #7c3aed, #a855f7);">📥 Download Script</button>
                 <button type="button" id="sgSaveBtn" class="btn btn-primary" style="background: linear-gradient(135deg, #059669, #10b981);">💾 Save to Server</button>
             </div>
+        </div>
+    </div>
+
+    <!-- User Profile Self-Management Modal -->
+    <div id="userProfileModal" class="modal-overlay hidden">
+        <div class="modal-card" style="max-width: 520px;">
+            <div class="modal-header">
+                <div>
+                    <h3>👤 User Profile Settings</h3>
+                    <div class="modal-sub-info">View your account details, edit display name, and update your password</div>
+                </div>
+                <button class="modal-close-btn" onclick="closeUserProfileModal()">&times;</button>
+            </div>
+            <form id="userProfileForm">
+                <div class="modal-body">
+                    <div class="alert-box alert-success" style="margin-bottom: 16px; padding: 10px 14px;">
+                        <strong>🔒 Security & Privilege Protection:</strong> Your Username and Role/Permissions are managed by policy and cannot be edited here.
+                    </div>
+
+                    <div class="form-group">
+                        <label for="profileUsernameInput" class="form-label">Username (Account Identifier)</label>
+                        <input type="text" id="profileUsernameInput" class="form-input" value="<?= htmlspecialchars($user['username']) ?>" readonly style="background: rgba(255,255,255,0.05); cursor: not-allowed; opacity: 0.8;" title="Username cannot be changed">
+                        <small class="form-help">Username cannot be edited.</small>
+                    </div>
+
+                    <div class="form-group" style="margin-top: 12px;">
+                        <label for="profileRoleInput" class="form-label">Role & System Permissions</label>
+                        <input type="text" id="profileRoleInput" class="form-input" value="<?= strtoupper(htmlspecialchars($user['role'])) ?> (Managed by Administrator)" readonly style="background: rgba(255,255,255,0.05); cursor: not-allowed; opacity: 0.8;" title="Permissions cannot be changed">
+                        <small class="form-help">Access permissions are controlled by administrator.</small>
+                    </div>
+
+                    <div class="form-group" style="margin-top: 12px;">
+                        <label for="profileNameInput" class="form-label">Display Name / Full Name *</label>
+                        <input type="text" id="profileNameInput" name="name" class="form-input" value="<?= htmlspecialchars($user['name']) ?>" required placeholder="e.g. John Doe">
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px;">
+                        <div class="form-group">
+                            <label for="profilePasswordInput" class="form-label">New Password</label>
+                            <input type="password" id="profilePasswordInput" name="password" class="form-input" placeholder="Leave blank to keep current">
+                            <small class="form-help">Min 6 chars if changing.</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="profileConfirmPasswordInput" class="form-label">Confirm New Password</label>
+                            <input type="password" id="profileConfirmPasswordInput" class="form-input" placeholder="Re-enter new password">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeUserProfileModal()">Cancel</button>
+                    <button type="submit" id="saveProfileSubmitBtn" class="btn btn-primary">Save Profile Changes</button>
+                </div>
+            </form>
         </div>
     </div>
 

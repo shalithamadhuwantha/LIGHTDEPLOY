@@ -402,12 +402,47 @@ class AuthService
             }
         }
 
-        if (!$found) {
-            return false;
-        }
-
         $data['users'] = $users;
         return safeWriteJson($this->usersConfigFile, $data);
     }
+
+    public function updateProfile(string $username, string $name, ?string $password = null): bool
+    {
+        $data = $this->getUsers();
+        $users = $data['users'] ?? [];
+
+        $usernameKey = null;
+        $existing = null;
+        foreach ($users as $u => $val) {
+            if (hash_equals(strtolower($u), strtolower($username))) {
+                $existing = $val;
+                $usernameKey = $u;
+                break;
+            }
+        }
+
+        if (!$usernameKey || !$existing) {
+            return false;
+        }
+
+        $passwordHash = $existing['password_hash'] ?? '';
+        if (!empty($password)) {
+            $passwordHash = password_hash($password, PASSWORD_BCRYPT);
+        }
+
+        $users[$usernameKey]['name'] = trim($name) ?: $usernameKey;
+        $users[$usernameKey]['password_hash'] = $passwordHash;
+
+        $data['users'] = $users;
+        if (safeWriteJson($this->usersConfigFile, $data)) {
+            if (!empty($_SESSION['username']) && hash_equals(strtolower($_SESSION['username']), strtolower($username))) {
+                $_SESSION['name'] = $users[$usernameKey]['name'];
+            }
+            return true;
+        }
+
+        return false;
+    }
 }
+
 
