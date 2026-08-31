@@ -587,9 +587,6 @@ if [ "$PM2_WANT_INSTALL" == "y" ] || [ "$PM2_WANT_INSTALL" == "yes" ]; then
     read -p "  3. Server Host IP (default: 0.0.0.0): " INPUT_PM2_HOST
     PM2_APP_HOST="${INPUT_PM2_HOST:-0.0.0.0}"
 
-    read -p "  4. Max Memory Restart Limit (default: 150M): " INPUT_PM2_MEM
-    PM2_APP_MEM="${INPUT_PM2_MEM:-150M}"
-
     # Auto-install PM2 if binary is missing
     if ! command -v pm2 &>/dev/null; then
         echo -e "${YELLOW}[INFO] PM2 binary not found. Installing PM2 globally via npm...${NC}"

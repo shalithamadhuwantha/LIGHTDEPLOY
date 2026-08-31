@@ -48,6 +48,21 @@
             "pm2_name": "pm2-test-node2",
             "pm2_ecosystem": "module.exports = {\n  apps: [\n    {\n      name: 'lightdeploy',\n      script: 'php',\n      args: '-S 0.0.0.0:8000 -t public public/router.php',\n      cwd: __dirname,\n      instances: 1,\n      autorestart: true,\n      watch: false,\n      max_memory_restart: '150M',\n      env: {\n        NODE_ENV: 'production',\n        PORT: 8000\n      },\n      error_file: './logs/application/pm2-error.log',\n      out_file: './logs/application/pm2-out.log',\n      log_date_format: 'YYYY-MM-DD HH:mm:ss Z'\n    }\n  ]\n};",
             "enabled": true
+        },
+        "test011": {
+            "name": "test011",
+            "domain": "localhost:3000",
+            "script": "scripts/test011.sh",
+            "rollback_script": "",
+            "health_check": "",
+            "health_check_enabled": false,
+            "pm2_enabled": true,
+            "pm2_ecosystem_type": "path",
+            "pm2_ecosystem_path": "/home/shalith/Documents/CYBERnetic/test/ecosystem.config.js",
+            "pm2_script": "",
+            "pm2_name": "test011",
+            "pm2_ecosystem": "",
+            "enabled": true
         }
     }
 }
