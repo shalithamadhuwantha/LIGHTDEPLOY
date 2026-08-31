@@ -122,7 +122,6 @@ class PM2Manager
                 'cwd' => $pm2Env['pm_cwd'] ?? '',
                 'args' => $argsStr,
                 'interpreter' => $pm2Env['exec_interpreter'] ?? 'node',
-                'max_memory_restart' => isset($pm2Env['max_memory_restart']) ? (is_numeric($pm2Env['max_memory_restart']) ? round($pm2Env['max_memory_restart'] / 1024 / 1024) . 'M' : (string)$pm2Env['max_memory_restart']) : '',
                 'autorestart' => $pm2Env['autorestart'] ?? true,
                 'cron_restart' => $pm2Env['cron_restart'] ?? '',
                 'restart_delay' => $pm2Env['restart_delay'] ?? 0,
@@ -355,9 +354,7 @@ class PM2Manager
         if (!empty($opts['instances'])) {
             $startCmd .= ' -i ' . escapeshellarg((string)$opts['instances']);
         }
-        if (!empty($opts['max_memory_restart'])) {
-            $startCmd .= ' --max-memory-restart ' . escapeshellarg($opts['max_memory_restart']);
-        }
+        
         if (isset($opts['autorestart']) && ($opts['autorestart'] === false || $opts['autorestart'] === 'false' || $opts['autorestart'] === '0')) {
             $startCmd .= ' --no-autorestart';
         }
