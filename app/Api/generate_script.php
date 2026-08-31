@@ -199,81 +199,89 @@ jsonSuccess([
  * Generate PM2 Ecosystem JS configuration script based on user specification
  */
 function generatePm2EcosystemScript(array $input): string {
-    $appName = trim((string)($input['app_name'] ?? 'solar-backend')) ?: 'solar-backend';
+    $appName = trim((string)($input['app_name'] ?? 'coop-api')) ?: 'coop-api';
     $script = trim((string)($input['pm2_script'] ?? 'src/index.ts')) ?: 'src/index.ts';
+    $cwd = trim((string)($input['app_dir'] ?? ($input['cwd'] ?? '/www/wwwroot/[path]'))) ?: '/www/wwwroot/[path]';
+    
     $interpreter = trim((string)($input['pm2_interpreter'] ?? 'node')) ?: 'node';
     $interpreterArgs = trim((string)($input['pm2_interpreter_args'] ?? '--require esbuild-register'));
-    $cwd = trim((string)($input['app_dir'] ?? ($input['cwd'] ?? '/www/wwwroot/apisolar.blueoctopus.site'))) ?: '/www/wwwroot/apisolar.blueoctopus.site';
+    
     $instances = isset($input['pm2_instances']) && is_numeric($input['pm2_instances']) ? (int)$input['pm2_instances'] : 1;
     $execMode = trim((string)($input['pm2_exec_mode'] ?? 'fork')) ?: 'fork';
     $watch = !empty($input['pm2_watch']);
-    $maxMemoryRestart = trim((string)($input['pm2_max_memory_restart'] ?? '1G')) ?: '1G';
     
-    $nodeEnv = trim((string)($input['pm2_node_env'] ?? 'production')) ?: 'production';
-    $port = isset($input['pm2_port']) && is_numeric($input['pm2_port']) ? (int)$input['pm2_port'] : 3000;
-    
-    $errorFile = trim((string)($input['pm2_error_file'] ?? "/var/log/{$appName}-error.log")) ?: "/var/log/{$appName}-error.log";
-    $outFile = trim((string)($input['pm2_out_file'] ?? "/var/log/{$appName}-out.log")) ?: "/var/log/{$appName}-out.log";
-    $logFile = trim((string)($input['pm2_log_file'] ?? "/var/log/{$appName}-combined.log")) ?: "/var/log/{$appName}-combined.log";
-    
-    $time = isset($input['pm2_time']) ? !empty($input['pm2_time']) : true;
     $autorestart = isset($input['pm2_autorestart']) ? !empty($input['pm2_autorestart']) : true;
     $maxRestarts = isset($input['pm2_max_restarts']) && is_numeric($input['pm2_max_restarts']) ? (int)$input['pm2_max_restarts'] : 10;
     $minUptime = trim((string)($input['pm2_min_uptime'] ?? '10s')) ?: '10s';
     
-    $killTimeout = isset($input['pm2_kill_timeout']) && is_numeric($input['pm2_kill_timeout']) ? (int)$input['pm2_kill_timeout'] : 5000;
-    $listenTimeout = isset($input['pm2_listen_timeout']) && is_numeric($input['pm2_listen_timeout']) ? (int)$input['pm2_listen_timeout'] : 3000;
+    $nodeEnv = trim((string)($input['pm2_node_env'] ?? 'production')) ?: 'production';
+    $port = isset($input['pm2_port']) && is_numeric($input['pm2_port']) ? (int)$input['pm2_port'] : 3001;
+    
+    $defaultLogDir = ($cwd === '/www/wwwroot/[path]') ? '/www/wwwroot/[path]e/logs/pm2' : "{$cwd}/logs/pm2";
+    $errorFile = trim((string)($input['pm2_error_file'] ?? "{$defaultLogDir}/err.log")) ?: "{$defaultLogDir}/err.log";
+    $outFile = trim((string)($input['pm2_out_file'] ?? "{$defaultLogDir}/out.log")) ?: "{$defaultLogDir}/out.log";
+    $logFile = trim((string)($input['pm2_log_file'] ?? "{$defaultLogDir}/combined.log")) ?: "{$defaultLogDir}/combined.log";
+    
+    $time = isset($input['pm2_time']) ? !empty($input['pm2_time']) : true;
     $mergeLogs = isset($input['pm2_merge_logs']) ? !empty($input['pm2_merge_logs']) : true;
+    
+    $killTimeout = isset($input['pm2_kill_timeout']) && is_numeric($input['pm2_kill_timeout']) ? (int)$input['pm2_kill_timeout'] : 5000;
+    $listenTimeout = isset($input['pm2_listen_timeout']) && is_numeric($input['pm2_listen_timeout']) ? (int)$input['pm2_listen_timeout'] : 10000;
+    $shutdownWithMessage = isset($input['pm2_shutdown_with_message']) ? !empty($input['pm2_shutdown_with_message']) : true;
 
     $watchStr = $watch ? 'true' : 'false';
-    $timeStr = $time ? 'true' : 'false';
     $autorestartStr = $autorestart ? 'true' : 'false';
+    $timeStr = $time ? 'true' : 'false';
     $mergeLogsStr = $mergeLogs ? 'true' : 'false';
+    $shutdownWithMessageStr = $shutdownWithMessage ? 'true' : 'false';
 
     $code = "module.exports = {\n";
-    $code .= "  apps: [{\n";
-    $code .= "    name: " . json_encode($appName) . ",\n";
-    $code .= "    script: " . json_encode($script) . ",\n";
-    $code .= "    interpreter: " . json_encode($interpreter) . ",\n";
-    if (!empty($interpreterArgs)) {
-        $code .= "    interpreter_args: " . json_encode($interpreterArgs) . ",\n";
-    }
-    $code .= "    cwd: " . json_encode($cwd) . ",\n";
-    $code .= "    \n";
-    $code .= "    instances: {$instances},\n";
-    $code .= "    exec_mode: " . json_encode($execMode) . ",\n";
-    $code .= "    watch: {$watchStr},\n";
-    $code .= "    max_memory_restart: " . json_encode($maxMemoryRestart) . ",\n";
-    $code .= "    \n";
-    $code .= "    env: {\n";
-    $code .= "      NODE_ENV: " . json_encode($nodeEnv) . ",\n";
-    $code .= "      PORT: {$port},\n";
+    $code .= "  apps: [\n";
+    $code .= "    {\n";
+    $code .= "      name: " . json_encode($appName) . ",\n";
+    $code .= "      script: " . json_encode($script) . ",\n";
+    $code .= "      cwd: " . json_encode($cwd) . ",\n";
+    $code .= "\n";
+    $code .= "      interpreter: " . json_encode($interpreter) . ",\n";
+    $code .= "      interpreter_args: " . json_encode($interpreterArgs) . ",\n";
+    $code .= "\n";
+    $code .= "      instances: {$instances},\n";
+    $code .= "      exec_mode: " . json_encode($execMode) . ",\n";
+    $code .= "\n";
+    $code .= "      watch: {$watchStr},\n";
+    $code .= "\n";
+    $code .= "      autorestart: {$autorestartStr},\n";
+    $code .= "      max_restarts: {$maxRestarts},\n";
+    $code .= "      min_uptime: " . json_encode($minUptime) . ",\n";
+    $code .= "\n";
+    $code .= "      env: {\n";
+    $code .= "        NODE_ENV: " . json_encode($nodeEnv) . ",\n";
+    $code .= "        PORT: {$port}\n";
 
     if (!empty($input['pm2_custom_env']) && is_array($input['pm2_custom_env'])) {
         foreach ($input['pm2_custom_env'] as $k => $v) {
             $kClean = preg_replace('/[^a-zA-Z0-9_]/', '', (string)$k);
             if (!empty($kClean) && !in_array($kClean, ['NODE_ENV', 'PORT'], true)) {
-                $code .= "      {$kClean}: " . json_encode((string)$v) . ",\n";
+                $code .= ",\n        {$kClean}: " . json_encode((string)$v);
             }
         }
     }
 
-    $code .= "    },\n";
-    $code .= "    \n";
-    $code .= "    error_file: " . json_encode($errorFile) . ",\n";
-    $code .= "    out_file: " . json_encode($outFile) . ",\n";
-    $code .= "    log_file: " . json_encode($logFile) . ",\n";
-    $code .= "    time: {$timeStr},\n";
-    $code .= "    \n";
-    $code .= "    autorestart: {$autorestartStr},\n";
-    $code .= "    max_restarts: {$maxRestarts},\n";
-    $code .= "    min_uptime: " . json_encode($minUptime) . ",\n";
-    $code .= "    \n";
-    $code .= "    kill_timeout: {$killTimeout},\n";
-    $code .= "    listen_timeout: {$listenTimeout},\n";
-    $code .= "    \n";
-    $code .= "    merge_logs: {$mergeLogsStr},\n";
-    $code .= "  }]\n";
+    $code .= "\n      },\n";
+    $code .= "\n";
+    $code .= "      error_file: " . json_encode($errorFile) . ",\n";
+    $code .= "      out_file: " . json_encode($outFile) . ",\n";
+    $code .= "      log_file: " . json_encode($logFile) . ",\n";
+    $code .= "\n";
+    $code .= "      time: {$timeStr},\n";
+    $code .= "      merge_logs: {$mergeLogsStr},\n";
+    $code .= "\n";
+    $code .= "      kill_timeout: {$killTimeout},\n";
+    $code .= "      listen_timeout: {$listenTimeout},\n";
+    $code .= "\n";
+    $code .= "      shutdown_with_message: {$shutdownWithMessageStr}\n";
+    $code .= "    }\n";
+    $code .= "  ]\n";
     $code .= "};\n";
 
     return $code;

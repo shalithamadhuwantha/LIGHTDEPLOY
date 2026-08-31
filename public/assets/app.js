@@ -1029,41 +1029,46 @@ document.addEventListener('DOMContentLoaded', () => {
             loadPm2TemplateBtn.addEventListener('click', () => {
                 const siteIdInput = document.getElementById('siteIdInput');
                 const siteNameInput = document.getElementById('siteNameInput');
-                const siteId = siteIdInput?.value.trim() || 'solar-backend';
+                const siteId = siteIdInput?.value.trim() || 'coop-api';
                 const siteName = siteNameInput?.value.trim() || siteId;
                 
                 const template = `module.exports = {
-  apps: [{
-    name: ${JSON.stringify(siteName)},
-    script: 'src/index.ts',
-    interpreter: 'node',
-    interpreter_args: '--require esbuild-register',
-    cwd: '/www/wwwroot/${siteId}',
-    
-    instances: 1,
-    exec_mode: 'fork',
-    watch: false,
-    max_memory_restart: '1G',
-    
-    env: {
-      NODE_ENV: 'production',
-      PORT: 3000,
-    },
-    
-    error_file: '/var/log/${siteId}-error.log',
-    out_file: '/var/log/${siteId}-out.log',
-    log_file: '/var/log/${siteId}-combined.log',
-    time: true,
-    
-    autorestart: true,
-    max_restarts: 10,
-    min_uptime: '10s',
-    
-    kill_timeout: 5000,
-    listen_timeout: 3000,
-    
-    merge_logs: true,
-  }]
+  apps: [
+    {
+      name: ${JSON.stringify(siteName)},
+      script: 'src/index.ts',
+      cwd: '/www/wwwroot/${siteId}',
+
+      interpreter: 'node',
+      interpreter_args: '--require esbuild-register',
+
+      instances: 1,
+      exec_mode: 'fork',
+
+      watch: false,
+
+      autorestart: true,
+      max_restarts: 10,
+      min_uptime: '10s',
+
+      env: {
+        NODE_ENV: 'production',
+        PORT: 3001
+      },
+
+      error_file: '/www/wwwroot/${siteId}e/logs/pm2/err.log',
+      out_file: '/www/wwwroot/${siteId}e/logs/pm2/out.log',
+      log_file: '/www/wwwroot/${siteId}e/logs/pm2/combined.log',
+
+      time: true,
+      merge_logs: true,
+
+      kill_timeout: 5000,
+      listen_timeout: 10000,
+
+      shutdown_with_message: true
+    }
+  ]
 };`;
                 if (pm2EcosystemInput) {
                     pm2EcosystemInput.value = template;
@@ -2528,6 +2533,7 @@ document.addEventListener('DOMContentLoaded', () => {
             minUptime: document.getElementById('sgPm2MinUptimeInput'),
             killTimeout: document.getElementById('sgPm2KillTimeoutInput'),
             listenTimeout: document.getElementById('sgPm2ListenTimeoutInput'),
+            shutdownWithMessage: document.getElementById('sgPm2ShutdownWithMessageCheck'),
             autorestart: document.getElementById('sgPm2AutorestartCheck'),
             outputPath: document.getElementById('sgPm2OutputPathInput'),
         };
@@ -2579,62 +2585,66 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Generate PM2 script content client-side
         function generatePm2ScriptContent() {
-            const appName = sgPm2Fields.appName?.value.trim() || 'solar-backend';
+            const appName = sgPm2Fields.appName?.value.trim() || 'coop-api';
             const script = sgPm2Fields.script?.value.trim() || 'src/index.ts';
             const interpreter = sgPm2Fields.interpreter?.value.trim() || 'node';
-            const interpreterArgs = sgPm2Fields.interpreterArgs?.value.trim() || '';
-            const cwd = sgPm2Fields.cwd?.value.trim() || '/www/wwwroot/apisolar.blueoctopus.site';
+            const interpreterArgs = sgPm2Fields.interpreterArgs?.value.trim() || '--require esbuild-register';
+            const cwd = sgPm2Fields.cwd?.value.trim() || '/www/wwwroot/[path]';
             const instances = parseInt(sgPm2Fields.instances?.value) || 1;
             const execMode = sgPm2Fields.execMode?.value || 'fork';
             const watch = !!sgPm2Fields.watch?.checked;
-            const maxMem = sgPm2Fields.maxMem?.value.trim() || '1G';
             const nodeEnv = sgPm2Fields.nodeEnv?.value.trim() || 'production';
-            const port = parseInt(sgPm2Fields.port?.value) || 3000;
-            const errorFile = sgPm2Fields.errorFile?.value.trim() || `/var/log/${appName}-error.log`;
-            const outFile = sgPm2Fields.outFile?.value.trim() || `/var/log/${appName}-out.log`;
-            const logFile = sgPm2Fields.logFile?.value.trim() || `/var/log/${appName}-combined.log`;
-            const time = !!sgPm2Fields.time?.checked;
-            const autorestart = !!sgPm2Fields.autorestart?.checked;
+            const port = parseInt(sgPm2Fields.port?.value) || 3001;
+            const defaultLogDir = (cwd === '/www/wwwroot/[path]') ? '/www/wwwroot/[path]e/logs/pm2' : `${cwd}/logs/pm2`;
+            const errorFile = sgPm2Fields.errorFile?.value.trim() || `${defaultLogDir}/err.log`;
+            const outFile = sgPm2Fields.outFile?.value.trim() || `${defaultLogDir}/out.log`;
+            const logFile = sgPm2Fields.logFile?.value.trim() || `${defaultLogDir}/combined.log`;
+            const time = sgPm2Fields.time ? sgPm2Fields.time.checked : true;
+            const autorestart = sgPm2Fields.autorestart ? sgPm2Fields.autorestart.checked : true;
             const maxRestarts = parseInt(sgPm2Fields.maxRestarts?.value) || 10;
             const minUptime = sgPm2Fields.minUptime?.value.trim() || '10s';
             const killTimeout = parseInt(sgPm2Fields.killTimeout?.value) || 5000;
-            const listenTimeout = parseInt(sgPm2Fields.listenTimeout?.value) || 3000;
-            const mergeLogs = !!sgPm2Fields.mergeLogs?.checked;
+            const listenTimeout = parseInt(sgPm2Fields.listenTimeout?.value) || 10000;
+            const shutdownWithMessage = sgPm2Fields.shutdownWithMessage ? sgPm2Fields.shutdownWithMessage.checked : true;
+            const mergeLogs = sgPm2Fields.mergeLogs ? sgPm2Fields.mergeLogs.checked : true;
 
             let code = `module.exports = {\n`;
-            code += `  apps: [{\n`;
-            code += `    name: ${JSON.stringify(appName)},\n`;
-            code += `    script: ${JSON.stringify(script)},\n`;
-            code += `    interpreter: ${JSON.stringify(interpreter)},\n`;
-            if (interpreterArgs) {
-                code += `    interpreter_args: ${JSON.stringify(interpreterArgs)},\n`;
-            }
-            code += `    cwd: ${JSON.stringify(cwd)},\n`;
-            code += `    \n`;
-            code += `    instances: ${instances},\n`;
-            code += `    exec_mode: ${JSON.stringify(execMode)},\n`;
-            code += `    watch: ${watch},\n`;
-            code += `    max_memory_restart: ${JSON.stringify(maxMem)},\n`;
-            code += `    \n`;
-            code += `    env: {\n`;
-            code += `      NODE_ENV: ${JSON.stringify(nodeEnv)},\n`;
-            code += `      PORT: ${port},\n`;
-            code += `    },\n`;
-            code += `    \n`;
-            code += `    error_file: ${JSON.stringify(errorFile)},\n`;
-            code += `    out_file: ${JSON.stringify(outFile)},\n`;
-            code += `    log_file: ${JSON.stringify(logFile)},\n`;
-            code += `    time: ${time},\n`;
-            code += `    \n`;
-            code += `    autorestart: ${autorestart},\n`;
-            code += `    max_restarts: ${maxRestarts},\n`;
-            code += `    min_uptime: ${JSON.stringify(minUptime)},\n`;
-            code += `    \n`;
-            code += `    kill_timeout: ${killTimeout},\n`;
-            code += `    listen_timeout: ${listenTimeout},\n`;
-            code += `    \n`;
-            code += `    merge_logs: ${mergeLogs},\n`;
-            code += `  }]\n`;
+            code += `  apps: [\n`;
+            code += `    {\n`;
+            code += `      name: ${JSON.stringify(appName)},\n`;
+            code += `      script: ${JSON.stringify(script)},\n`;
+            code += `      cwd: ${JSON.stringify(cwd)},\n`;
+            code += `\n`;
+            code += `      interpreter: ${JSON.stringify(interpreter)},\n`;
+            code += `      interpreter_args: ${JSON.stringify(interpreterArgs)},\n`;
+            code += `\n`;
+            code += `      instances: ${instances},\n`;
+            code += `      exec_mode: ${JSON.stringify(execMode)},\n`;
+            code += `\n`;
+            code += `      watch: ${watch},\n`;
+            code += `\n`;
+            code += `      autorestart: ${autorestart},\n`;
+            code += `      max_restarts: ${maxRestarts},\n`;
+            code += `      min_uptime: ${JSON.stringify(minUptime)},\n`;
+            code += `\n`;
+            code += `      env: {\n`;
+            code += `        NODE_ENV: ${JSON.stringify(nodeEnv)},\n`;
+            code += `        PORT: ${port}\n`;
+            code += `      },\n`;
+            code += `\n`;
+            code += `      error_file: ${JSON.stringify(errorFile)},\n`;
+            code += `      out_file: ${JSON.stringify(outFile)},\n`;
+            code += `      log_file: ${JSON.stringify(logFile)},\n`;
+            code += `\n`;
+            code += `      time: ${time},\n`;
+            code += `      merge_logs: ${mergeLogs},\n`;
+            code += `\n`;
+            code += `      kill_timeout: ${killTimeout},\n`;
+            code += `      listen_timeout: ${listenTimeout},\n`;
+            code += `\n`;
+            code += `      shutdown_with_message: ${shutdownWithMessage}\n`;
+            code += `    }\n`;
+            code += `  ]\n`;
             code += `};\n`;
 
             return code;
@@ -3151,7 +3161,7 @@ exit 0`;
         if (sgDownloadBtn) {
             sgDownloadBtn.addEventListener('click', () => {
                 if (currentScriptType === 'pm2_ecosystem') {
-                    const appName = sgPm2Fields.appName?.value.trim() || 'solar-backend';
+                    const appName = sgPm2Fields.appName?.value.trim() || 'coop-api';
                     const raw = generatePm2ScriptContent();
                     const filename = `ecosystem.${appName}.config.js`;
                     const blob = new Blob([raw], { type: 'application/javascript' });
@@ -3207,17 +3217,17 @@ exit 0`;
                     const payload = {
                         action: 'save',
                         script_type: 'pm2_ecosystem',
-                        app_name: sgPm2Fields.appName?.value.trim() || 'solar-backend',
+                        app_name: sgPm2Fields.appName?.value.trim() || 'coop-api',
                         pm2_script: sgPm2Fields.script?.value.trim() || 'src/index.ts',
                         pm2_interpreter: sgPm2Fields.interpreter?.value.trim() || 'node',
-                        pm2_interpreter_args: sgPm2Fields.interpreterArgs?.value.trim() || '',
+                        pm2_interpreter_args: sgPm2Fields.interpreterArgs?.value.trim() || '--require esbuild-register',
                         app_dir: sgPm2Fields.cwd?.value.trim() || '',
                         pm2_instances: parseInt(sgPm2Fields.instances?.value) || 1,
                         pm2_exec_mode: sgPm2Fields.execMode?.value || 'fork',
                         pm2_watch: !!sgPm2Fields.watch?.checked,
                         pm2_max_memory_restart: sgPm2Fields.maxMem?.value.trim() || '1G',
                         pm2_node_env: sgPm2Fields.nodeEnv?.value.trim() || 'production',
-                        pm2_port: parseInt(sgPm2Fields.port?.value) || 3000,
+                        pm2_port: parseInt(sgPm2Fields.port?.value) || 3001,
                         pm2_error_file: sgPm2Fields.errorFile?.value.trim() || '',
                         pm2_out_file: sgPm2Fields.outFile?.value.trim() || '',
                         pm2_log_file: sgPm2Fields.logFile?.value.trim() || '',
@@ -3226,7 +3236,8 @@ exit 0`;
                         pm2_max_restarts: parseInt(sgPm2Fields.maxRestarts?.value) || 10,
                         pm2_min_uptime: sgPm2Fields.minUptime?.value.trim() || '10s',
                         pm2_kill_timeout: parseInt(sgPm2Fields.killTimeout?.value) || 5000,
-                        pm2_listen_timeout: parseInt(sgPm2Fields.listenTimeout?.value) || 3000,
+                        pm2_listen_timeout: parseInt(sgPm2Fields.listenTimeout?.value) || 10000,
+                        pm2_shutdown_with_message: !!sgPm2Fields.shutdownWithMessage?.checked,
                         pm2_merge_logs: !!sgPm2Fields.mergeLogs?.checked,
                         output_path: outputPath,
                     };

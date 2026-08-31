@@ -564,37 +564,42 @@ $csrfToken = Csrf::getToken();
                             </div>
                         </div>
                         <textarea id="pm2EcosystemInput" name="pm2_ecosystem" class="form-input" rows="16" style="font-family: var(--font-mono); font-size: 0.83rem; line-height: 1.5; resize: vertical; background: rgba(15, 23, 42, 0.7); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); white-space: pre; tab-size: 2; overflow-x: auto; border-radius: var(--radius-md);" placeholder="module.exports = {
-  apps: [{
-    name: 'solar-backend',
-    script: 'src/index.ts',
-    interpreter: 'node',
-    interpreter_args: '--require esbuild-register',
-    cwd: '/www/wwwroot/apisolar.blueoctopus.site',
-    
-    instances: 1,
-    exec_mode: 'fork',
-    watch: false,
-    max_memory_restart: '1G',
-    
-    env: {
-      NODE_ENV: 'production',
-      PORT: 3000,
-    },
-    
-    error_file: '/var/log/solar-backend-error.log',
-    out_file: '/var/log/solar-backend-out.log',
-    log_file: '/var/log/solar-backend-combined.log',
-    time: true,
-    
-    autorestart: true,
-    max_restarts: 10,
-    min_uptime: '10s',
-    
-    kill_timeout: 5000,
-    listen_timeout: 3000,
-    
-    merge_logs: true,
-  }]
+  apps: [
+    {
+      name: 'coop-api',
+      script: 'src/index.ts',
+      cwd: '/www/wwwroot/[path]',
+
+      interpreter: 'node',
+      interpreter_args: '--require esbuild-register',
+
+      instances: 1,
+      exec_mode: 'fork',
+
+      watch: false,
+
+      autorestart: true,
+      max_restarts: 10,
+      min_uptime: '10s',
+
+      env: {
+        NODE_ENV: 'production',
+        PORT: 3001
+      },
+
+      error_file: '/www/wwwroot/[path]e/logs/pm2/err.log',
+      out_file: '/www/wwwroot/[path]e/logs/pm2/out.log',
+      log_file: '/www/wwwroot/[path]e/logs/pm2/combined.log',
+
+      time: true,
+      merge_logs: true,
+
+      kill_timeout: 5000,
+      listen_timeout: 10000,
+
+      shutdown_with_message: true
+    }
+  ]
 };"></textarea>
                         <small class="form-help">Paste your full <code>module.exports = { apps: [...] }</code> PM2 ecosystem config. LightDeploy will save this script and execute <code>pm2 start ecosystem.config.js</code> automatically during deployment.</small>
                     </div>
@@ -1125,7 +1130,7 @@ $csrfToken = Csrf::getToken();
                             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
                                 <div class="form-group">
                                     <label for="sgPm2AppNameInput" class="form-label">Application Name *</label>
-                                    <input type="text" id="sgPm2AppNameInput" class="form-input" value="solar-backend" placeholder="e.g. solar-backend" required>
+                                    <input type="text" id="sgPm2AppNameInput" class="form-input" value="coop-api" placeholder="e.g. coop-api" required>
                                 </div>
                                 <div class="form-group">
                                     <label for="sgPm2ScriptInput" class="form-label">Entry Script *</label>
@@ -1135,7 +1140,7 @@ $csrfToken = Csrf::getToken();
 
                             <div class="form-group">
                                 <label for="sgPm2CwdInput" class="form-label">Working Directory (cwd) *</label>
-                                <input type="text" id="sgPm2CwdInput" class="form-input" value="/www/wwwroot/apisolar.blueoctopus.site" placeholder="e.g. /www/wwwroot/apisolar.blueoctopus.site" required>
+                                <input type="text" id="sgPm2CwdInput" class="form-input" value="/www/wwwroot/[path]" placeholder="e.g. /www/wwwroot/[path]" required>
                             </div>
 
                             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
@@ -1193,7 +1198,7 @@ $csrfToken = Csrf::getToken();
                                 </div>
                                 <div class="form-group">
                                     <label for="sgPm2PortInput" class="form-label">PORT</label>
-                                    <input type="number" id="sgPm2PortInput" class="form-input" value="3000" placeholder="3000">
+                                    <input type="number" id="sgPm2PortInput" class="form-input" value="3001" placeholder="3001">
                                 </div>
                             </div>
 
@@ -1201,15 +1206,15 @@ $csrfToken = Csrf::getToken();
                             <h4 class="scriptgen-section-title">📊 4. Log Files Configuration</h4>
                             <div class="form-group">
                                 <label for="sgPm2ErrorFileInput" class="form-label">Error Log Path (<code>error_file</code>)</label>
-                                <input type="text" id="sgPm2ErrorFileInput" class="form-input" value="/var/log/solar-backend-error.log" placeholder="/var/log/app-error.log">
+                                <input type="text" id="sgPm2ErrorFileInput" class="form-input" value="/www/wwwroot/[path]e/logs/pm2/err.log" placeholder="/www/wwwroot/[path]e/logs/pm2/err.log">
                             </div>
                             <div class="form-group">
                                 <label for="sgPm2OutFileInput" class="form-label">Output Log Path (<code>out_file</code>)</label>
-                                <input type="text" id="sgPm2OutFileInput" class="form-input" value="/var/log/solar-backend-out.log" placeholder="/var/log/app-out.log">
+                                <input type="text" id="sgPm2OutFileInput" class="form-input" value="/www/wwwroot/[path]e/logs/pm2/out.log" placeholder="/www/wwwroot/[path]e/logs/pm2/out.log">
                             </div>
                             <div class="form-group">
                                 <label for="sgPm2LogFileInput" class="form-label">Combined Log Path (<code>log_file</code>)</label>
-                                <input type="text" id="sgPm2LogFileInput" class="form-input" value="/var/log/solar-backend-combined.log" placeholder="/var/log/app-combined.log">
+                                <input type="text" id="sgPm2LogFileInput" class="form-input" value="/www/wwwroot/[path]e/logs/pm2/combined.log" placeholder="/www/wwwroot/[path]e/logs/pm2/combined.log">
                             </div>
 
                             <!-- Section 5: Lifecycle & Resiliency -->
@@ -1232,14 +1237,18 @@ $csrfToken = Csrf::getToken();
                                 </div>
                                 <div class="form-group">
                                     <label for="sgPm2ListenTimeoutInput" class="form-label">Listen Timeout (ms)</label>
-                                    <input type="number" id="sgPm2ListenTimeoutInput" class="form-input" value="3000" placeholder="3000">
+                                    <input type="number" id="sgPm2ListenTimeoutInput" class="form-input" value="10000" placeholder="10000">
                                 </div>
                             </div>
 
-                            <div class="form-group">
+                            <div style="display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 12px;">
                                 <label class="form-checkbox-label">
                                     <input type="checkbox" id="sgPm2AutorestartCheck" checked>
                                     Enable Auto Restart (<code>autorestart</code>)
+                                </label>
+                                <label class="form-checkbox-label">
+                                    <input type="checkbox" id="sgPm2ShutdownWithMessageCheck" checked>
+                                    Shutdown with Message (<code>shutdown_with_message</code>)
                                 </label>
                             </div>
 
