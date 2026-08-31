@@ -613,7 +613,6 @@ module.exports = {
       instances: 1,
       autorestart: true,
       watch: false,
-      max_memory_restart: '${PM2_APP_MEM}',
       env: {
         NODE_ENV: 'production',
         PORT: ${PM2_APP_PORT}

@@ -774,10 +774,6 @@ $csrfToken = Csrf::getToken();
                     <h4 style="margin: 18px 0 12px; color: var(--accent-primary); border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 6px;">2. Memory, Auto-Restart & Cron</h4>
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px;">
                         <div class="form-group">
-                            <label for="pm2EditMemInput" class="form-label">Max Memory Restart</label>
-                            <input type="text" id="pm2EditMemInput" name="max_memory_restart" class="form-input" placeholder="e.g. 150M, 500M, 1G">
-                        </div>
-                        <div class="form-group">
                             <label for="pm2EditCronInput" class="form-label">Cron Restart Pattern</label>
                             <input type="text" id="pm2EditCronInput" name="cron_restart" class="form-input" placeholder="e.g. 0 0 * * *">
                         </div>
