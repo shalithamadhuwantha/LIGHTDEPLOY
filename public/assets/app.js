@@ -117,6 +117,52 @@ document.addEventListener('DOMContentLoaded', () => {
 
     window.showToast = showToast;
 
+    // High Priority Top Modal Alert System (z-index: 2147483647)
+    function escapeHtml(str) {
+        if (!str) return '';
+        return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function showHighPriorityAlert(title, message, type = 'info') {
+        let alertOverlay = document.getElementById('highPriorityAlertOverlay');
+        if (alertOverlay) alertOverlay.remove();
+
+        alertOverlay = document.createElement('div');
+        alertOverlay.id = 'highPriorityAlertOverlay';
+        alertOverlay.style.cssText = 'position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0, 0, 0, 0.75); backdrop-filter: blur(4px); z-index: 2147483647; display: flex; align-items: flex-start; justify-content: center; padding-top: 60px; pointer-events: auto;';
+
+        let borderColor = '#3b82f6';
+        let icon = 'ℹ️';
+        if (type === 'success') { borderColor = '#10b981'; icon = '🚀'; }
+        else if (type === 'danger' || type === 'error') { borderColor = '#ef4444'; icon = '❌'; }
+
+        alertOverlay.innerHTML = `
+            <div style="background: #0f172a; border: 2px solid ${borderColor}; border-radius: 12px; width: 90%; max-width: 650px; padding: 24px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.9); color: #f8fafc; font-family: var(--font-mono, monospace), sans-serif; font-size: 0.9rem;">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 12px;">
+                    <h3 style="margin: 0; font-size: 1.1rem; color: #38bdf8; display: flex; align-items: center; gap: 8px;">
+                        ${icon} ${escapeHtml(title)}
+                    </h3>
+                    <button id="closeHighPriorityAlertBtn" style="background: none; border: none; color: #94a3b8; font-size: 1.4rem; cursor: pointer; padding: 0 4px;">&times;</button>
+                </div>
+                <div style="background: rgba(15, 23, 42, 0.9); padding: 14px; border-radius: 6px; font-size: 0.85rem; line-height: 1.5; white-space: pre-wrap; word-break: break-all; max-height: 350px; overflow-y: auto; color: #e2e8f0; border: 1px solid rgba(255,255,255,0.08);">
+${escapeHtml(message)}
+                </div>
+                <div style="margin-top: 18px; display: flex; justify-content: flex-end;">
+                    <button id="okHighPriorityAlertBtn" style="background: linear-gradient(135deg, #2563eb, #3b82f6); color: white; border: none; padding: 8px 24px; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 0.9rem;">OK</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(alertOverlay);
+
+        const closeBtn = document.getElementById('closeHighPriorityAlertBtn');
+        const okBtn = document.getElementById('okHighPriorityAlertBtn');
+        const removeAlert = () => alertOverlay.remove();
+        if (closeBtn) closeBtn.addEventListener('click', removeAlert);
+        if (okBtn) okBtn.addEventListener('click', removeAlert);
+    }
+
+    window.showHighPriorityAlert = showHighPriorityAlert;
+
     // Helper: Standard Fetch Wrapper with CSRF header
     async function apiFetch(url, options = {}) {
         options.credentials = 'same-origin';
@@ -1212,11 +1258,16 @@ document.addEventListener('DOMContentLoaded', () => {
             runSitePm2Btn.textContent = '▶ Run PM2 Ecosystem (pm2 start)';
 
             if (!ok || !data.success) {
-                showToast(data.error?.message || 'Failed to start PM2 ecosystem.', 'danger');
+                const errorMsg = data.error?.message || 'Failed to start PM2 ecosystem.';
+                const executedCmd = data.cmd || `pm2 start ${script}`;
+                showHighPriorityAlert('PM2 Command Failed', `Executed Command:\n${executedCmd}\n\nError:\n${errorMsg}`, 'danger');
+                showToast(errorMsg, 'danger');
                 return;
             }
 
-            showToast(`PM2 Ecosystem started successfully!\n${data.output || ''}`, 'success');
+            const executedCmd = data.cmd || `pm2 start ${script}`;
+            showHighPriorityAlert('PM2 Command Executed Successfully', `Executed Command:\n${executedCmd}\n\nOutput:\n${data.output || 'Process started.'}`, 'success');
+            showToast(`Executed: ${executedCmd}`, 'success');
             loadSites();
         });
     }

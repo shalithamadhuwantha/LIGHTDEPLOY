@@ -190,6 +190,7 @@ class PM2Manager
         $output = \safeShellExec($cmd);
         return [
             'success' => true,
+            'cmd' => $cmd,
             'output' => trim((string)$output)
         ];
     }

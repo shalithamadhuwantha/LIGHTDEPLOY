@@ -86,7 +86,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         $securityLogger->log('PM2_START_APP', ['script' => $script, 'name' => $name], $user['username']);
-        jsonSuccess(['message' => 'Process launched with PM2!', 'output' => $res['output']]);
+        jsonSuccess(['message' => 'Process launched with PM2!', 'cmd' => $res['cmd'] ?? '', 'output' => $res['output']]);
     }
 
     if ($action === 'update_config') {
