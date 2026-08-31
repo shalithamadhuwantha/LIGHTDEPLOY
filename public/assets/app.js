@@ -1224,7 +1224,7 @@ ${escapeHtml(message)}
             }
 
             runSitePm2Btn.disabled = true;
-            runSitePm2Btn.textContent = '⏳ Running pm2 start...';
+            runSitePm2Btn.textContent = '⏳ Restarting SC...';
 
             // 1. Save site config so ecosystem file is up-to-date on server
             const payload = {
@@ -1255,7 +1255,7 @@ ${escapeHtml(message)}
             });
 
             runSitePm2Btn.disabled = false;
-            runSitePm2Btn.textContent = '▶ Run PM2 Ecosystem (pm2 start)';
+            runSitePm2Btn.textContent = '▶ Restart SC Ecosystem';
 
             if (!ok || !data.success) {
                 const errorMsg = data.error?.message || 'Failed to start PM2 ecosystem.';

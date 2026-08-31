@@ -655,7 +655,7 @@ $csrfToken = Csrf::getToken();
                 <div class="modal-footer">
                     <button type="button" id="deleteSiteModalBtn" class="btn btn-danger hidden" style="margin-right: auto;">Delete Site</button>
                     <button type="button" id="closeAddSiteFooterBtn" class="btn btn-secondary">Cancel</button>
-                    <button type="button" id="runSitePm2Btn" class="btn btn-secondary hidden" style="background: linear-gradient(135deg, #059669, #10b981); border-color: #10b981; color: #ffffff; font-weight: 600;" title="Execute 'pm2 start ecosystem.config.js' for this site">▶ Run PM2 Ecosystem (pm2 start)</button>
+                    <button type="button" id="runSitePm2Btn" class="btn btn-secondary hidden" style="background: linear-gradient(135deg, #059669, #10b981); border-color: #10b981; color: #ffffff; font-weight: 600;" title="Execute 'pm2 start ecosystem.config.js' for this site">▶ Restart SC Ecosystem</button>
                     <button type="submit" id="saveSiteSubmitBtn" class="btn btn-primary">Save Configuration</button>
                 </div>
             </form>
