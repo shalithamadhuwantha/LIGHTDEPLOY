@@ -67,98 +67,266 @@ document.addEventListener('DOMContentLoaded', () => {
     const modalDeployAgainBtn = document.getElementById('modalDeployAgainBtn');
     const historyTableBody = document.getElementById('historyTableBody');
 
-    // Global Toast Notification System
-    function showToast(message, type = 'info') {
-        let toastContainer = document.getElementById('toastContainer');
-        if (!toastContainer) {
-            toastContainer = document.createElement('div');
-            toastContainer.id = 'toastContainer';
-            toastContainer.style.cssText = 'position: fixed; bottom: 20px; right: 20px; z-index: 999999; display: flex; flex-direction: column; gap: 8px; max-width: 380px; width: 100%; pointer-events: none;';
-            document.body.appendChild(toastContainer);
-        }
-
-        const toast = document.createElement('div');
-        toast.className = `toast toast-${type}`;
-        
-        let bgColor = '#1e293b';
-        let borderColor = '#3b82f6';
-        let icon = 'ℹ️';
-
-        if (type === 'success') {
-            bgColor = '#064e3b';
-            borderColor = '#10b981';
-            icon = '✅';
-        } else if (type === 'danger' || type === 'error') {
-            bgColor = '#7f1d1d';
-            borderColor = '#ef4444';
-            icon = '❌';
-        } else if (type === 'warning') {
-            bgColor = '#78350f';
-            borderColor = '#f59e0b';
-            icon = '⚠️';
-        }
-
-        toast.style.cssText = `background: ${bgColor}; border-left: 4px solid ${borderColor}; color: #f8fafc; padding: 12px 16px; border-radius: 6px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.5); font-size: 0.85rem; line-height: 1.4; opacity: 0; transform: translateY(10px); transition: all 0.3s ease; pointer-events: auto; font-family: var(--font-sans, sans-serif);`;
-        toast.innerHTML = `<strong>${icon} ${message}</strong>`;
-
-        toastContainer.appendChild(toast);
-
-        requestAnimationFrame(() => {
-            toast.style.opacity = '1';
-            toast.style.transform = 'translateY(0)';
-        });
-
-        setTimeout(() => {
-            toast.style.opacity = '0';
-            toast.style.transform = 'translateY(10px)';
-            setTimeout(() => toast.remove(), 300);
-        }, 4000);
-    }
-
-    window.showToast = showToast;
-
-    // High Priority Top Modal Alert System (z-index: 2147483647)
+    // Helper: HTML Escaper
     function escapeHtml(str) {
         if (!str) return '';
         return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
+    // Professional Toast Notification System
+    function showToast(message, type = 'info', title = null, duration = 4500) {
+        let toastContainer = document.getElementById('toastContainer');
+        if (!toastContainer) {
+            toastContainer = document.createElement('div');
+            toastContainer.id = 'toastContainer';
+            toastContainer.className = 'toast-container';
+            document.body.appendChild(toastContainer);
+        }
+
+        const toast = document.createElement('div');
+        toast.className = `toast-card toast-${type}`;
+
+        let iconSvg = '';
+        let typeTitle = title || (type === 'success' ? 'Success' : (type === 'danger' || type === 'error' ? 'Error' : (type === 'warning' ? 'Warning' : 'Information')));
+
+        if (type === 'success') {
+            iconSvg = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`;
+        } else if (type === 'danger' || type === 'error') {
+            iconSvg = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>`;
+        } else if (type === 'warning') {
+            iconSvg = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2.2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`;
+        } else {
+            iconSvg = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>`;
+        }
+
+        toast.innerHTML = `
+            <div class="toast-icon-wrap">${iconSvg}</div>
+            <div class="toast-content">
+                <div class="toast-title">${escapeHtml(typeTitle)}</div>
+                <div class="toast-message">${escapeHtml(message)}</div>
+            </div>
+            <button class="toast-close-btn" aria-label="Close">&times;</button>
+            <div class="toast-progress-bar"><div class="toast-progress-fill"></div></div>
+        `;
+
+        toastContainer.appendChild(toast);
+
+        const fillBar = toast.querySelector('.toast-progress-fill');
+        const closeBtn = toast.querySelector('.toast-close-btn');
+
+        let startTime = null;
+        let remainingTime = duration;
+        let timerId = null;
+        let isHovered = false;
+
+        function startTimer() {
+            startTime = Date.now();
+            if (fillBar) {
+                fillBar.style.transition = `width ${remainingTime}ms linear`;
+                fillBar.style.width = '0%';
+            }
+            timerId = setTimeout(dismiss, remainingTime);
+        }
+
+        function pauseTimer() {
+            if (isHovered) return;
+            isHovered = true;
+            clearTimeout(timerId);
+            const elapsed = Date.now() - startTime;
+            remainingTime = Math.max(0, remainingTime - elapsed);
+            if (fillBar) {
+                const computedWidth = getComputedStyle(fillBar).width;
+                fillBar.style.transition = 'none';
+                fillBar.style.width = computedWidth;
+            }
+        }
+
+        function resumeTimer() {
+            if (!isHovered) return;
+            isHovered = false;
+            if (remainingTime <= 0) {
+                dismiss();
+            } else {
+                startTimer();
+            }
+        }
+
+        function dismiss() {
+            clearTimeout(timerId);
+            toast.classList.remove('toast-show');
+            toast.classList.add('toast-hide');
+            setTimeout(() => toast.remove(), 250);
+        }
+
+        closeBtn.addEventListener('click', dismiss);
+        toast.addEventListener('mouseenter', pauseTimer);
+        toast.addEventListener('mouseleave', resumeTimer);
+
+        requestAnimationFrame(() => {
+            toast.classList.add('toast-show');
+            startTimer();
+        });
+    }
+
+    window.showToast = showToast;
+    window.Toast = {
+        success: (msg, title, dur) => showToast(msg, 'success', title, dur),
+        error: (msg, title, dur) => showToast(msg, 'danger', title, dur),
+        danger: (msg, title, dur) => showToast(msg, 'danger', title, dur),
+        warning: (msg, title, dur) => showToast(msg, 'warning', title, dur),
+        info: (msg, title, dur) => showToast(msg, 'info', title, dur)
+    };
+
+    // Professional Promise-based Confirmation Modal
+    function showConfirm({
+        title = 'Confirm Action',
+        message = 'Are you sure you want to proceed?',
+        confirmText = 'Confirm',
+        cancelText = 'Cancel',
+        type = 'warning'
+    } = {}) {
+        return new Promise((resolve) => {
+            let overlay = document.getElementById('customConfirmOverlay');
+            if (overlay) overlay.remove();
+
+            overlay = document.createElement('div');
+            overlay.id = 'customConfirmOverlay';
+            overlay.className = 'confirm-overlay-backdrop';
+
+            let iconSvg = '';
+            let btnClass = 'btn-primary';
+            let headerColor = 'var(--accent-blue)';
+
+            if (type === 'danger') {
+                btnClass = 'btn-danger';
+                headerColor = 'var(--color-danger)';
+                iconSvg = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--color-danger)" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`;
+            } else if (type === 'warning') {
+                btnClass = 'btn-warning';
+                headerColor = 'var(--color-warning)';
+                iconSvg = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--color-warning)" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`;
+            } else if (type === 'success') {
+                btnClass = 'btn-primary';
+                headerColor = 'var(--color-success)';
+                iconSvg = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--color-success)" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`;
+            } else {
+                iconSvg = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent-blue)" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>`;
+            }
+
+            overlay.innerHTML = `
+                <div class="confirm-modal-card">
+                    <div class="confirm-modal-header">
+                        <div class="confirm-icon-box" style="border-color: ${headerColor};">
+                            ${iconSvg}
+                        </div>
+                        <div class="confirm-title-box">
+                            <h3 class="confirm-title">${escapeHtml(title)}</h3>
+                            <span class="confirm-subtitle">Action requires confirmation</span>
+                        </div>
+                    </div>
+                    <div class="confirm-modal-body">
+                        ${escapeHtml(message).replace(/\n/g, '<br>')}
+                    </div>
+                    <div class="confirm-modal-footer">
+                        <button id="confirmCancelBtn" class="btn btn-secondary">${escapeHtml(cancelText)}</button>
+                        <button id="confirmOkBtn" class="btn ${btnClass}">${escapeHtml(confirmText)}</button>
+                    </div>
+                </div>
+            `;
+
+            document.body.appendChild(overlay);
+
+            requestAnimationFrame(() => {
+                overlay.classList.add('active');
+            });
+
+            const cleanup = (result) => {
+                overlay.classList.remove('active');
+                setTimeout(() => overlay.remove(), 200);
+                window.removeEventListener('keydown', handleKey);
+                resolve(result);
+            };
+
+            const handleKey = (e) => {
+                if (e.key === 'Escape') cleanup(false);
+                else if (e.key === 'Enter') cleanup(true);
+            };
+
+            window.addEventListener('keydown', handleKey);
+            document.getElementById('confirmCancelBtn').addEventListener('click', () => cleanup(false));
+            document.getElementById('confirmOkBtn').addEventListener('click', () => cleanup(true));
+            overlay.addEventListener('click', (e) => {
+                if (e.target === overlay) cleanup(false);
+            });
+        });
+    }
+
+    window.showConfirm = showConfirm;
+
+    // High Priority Top Modal Alert System
     function showHighPriorityAlert(title, message, type = 'info') {
         let alertOverlay = document.getElementById('highPriorityAlertOverlay');
         if (alertOverlay) alertOverlay.remove();
 
         alertOverlay = document.createElement('div');
         alertOverlay.id = 'highPriorityAlertOverlay';
-        alertOverlay.style.cssText = 'position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0, 0, 0, 0.75); backdrop-filter: blur(4px); z-index: 2147483647; display: flex; align-items: flex-start; justify-content: center; padding-top: 60px; pointer-events: auto;';
+        alertOverlay.className = 'confirm-overlay-backdrop active';
+        alertOverlay.style.zIndex = '2147483647';
 
-        let borderColor = '#3b82f6';
-        let icon = 'ℹ️';
-        if (type === 'success') { borderColor = '#10b981'; icon = '🚀'; }
-        else if (type === 'danger' || type === 'error') { borderColor = '#ef4444'; icon = '❌'; }
+        let borderColor = 'var(--accent-blue)';
+        let iconSvg = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--accent-blue)" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>`;
+
+        if (type === 'success') {
+            borderColor = 'var(--color-success)';
+            iconSvg = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--color-success)" stroke-width="2.2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`;
+        } else if (type === 'danger' || type === 'error') {
+            borderColor = 'var(--color-danger)';
+            iconSvg = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--color-danger)" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>`;
+        }
 
         alertOverlay.innerHTML = `
-            <div style="background: #0f172a; border: 2px solid ${borderColor}; border-radius: 12px; width: 90%; max-width: 650px; padding: 24px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.9); color: #f8fafc; font-family: var(--font-mono, monospace), sans-serif; font-size: 0.9rem;">
-                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 12px;">
-                    <h3 style="margin: 0; font-size: 1.1rem; color: #38bdf8; display: flex; align-items: center; gap: 8px;">
-                        ${icon} ${escapeHtml(title)}
-                    </h3>
-                    <button id="closeHighPriorityAlertBtn" style="background: none; border: none; color: #94a3b8; font-size: 1.4rem; cursor: pointer; padding: 0 4px;">&times;</button>
+            <div class="confirm-modal-card" style="max-width: 650px; border-color: ${borderColor}; width: 92%;">
+                <div class="confirm-modal-header">
+                    <div class="confirm-icon-box" style="border-color: ${borderColor};">
+                        ${iconSvg}
+                    </div>
+                    <div class="confirm-title-box">
+                        <h3 class="confirm-title" style="color: #f8fafc;">${escapeHtml(title)}</h3>
+                        <span class="confirm-subtitle">System Diagnostic Notice</span>
+                    </div>
+                    <button id="closeHighPriorityAlertBtn" class="modal-close-btn" style="margin-left: auto;">&times;</button>
                 </div>
-                <div style="background: rgba(15, 23, 42, 0.9); padding: 14px; border-radius: 6px; font-size: 0.85rem; line-height: 1.5; white-space: pre-wrap; word-break: break-all; max-height: 350px; overflow-y: auto; color: #e2e8f0; border: 1px solid rgba(255,255,255,0.08);">
+                <div class="confirm-modal-body">
+                    <div class="high-priority-code-box">
 ${escapeHtml(message)}
+                    </div>
                 </div>
-                <div style="margin-top: 18px; display: flex; justify-content: flex-end;">
-                    <button id="okHighPriorityAlertBtn" style="background: linear-gradient(135deg, #2563eb, #3b82f6); color: white; border: none; padding: 8px 24px; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 0.9rem;">OK</button>
+                <div class="confirm-modal-footer" style="display: flex; justify-content: space-between; align-items: center;">
+                    <button id="copyHighPriorityAlertBtn" class="btn btn-secondary btn-sm">📋 Copy Details</button>
+                    <button id="okHighPriorityAlertBtn" class="btn btn-primary">Acknowledge</button>
                 </div>
             </div>
         `;
+
         document.body.appendChild(alertOverlay);
 
         const closeBtn = document.getElementById('closeHighPriorityAlertBtn');
         const okBtn = document.getElementById('okHighPriorityAlertBtn');
-        const removeAlert = () => alertOverlay.remove();
+        const copyBtn = document.getElementById('copyHighPriorityAlertBtn');
+        
+        const removeAlert = () => {
+            alertOverlay.classList.remove('active');
+            setTimeout(() => alertOverlay.remove(), 200);
+        };
+
         if (closeBtn) closeBtn.addEventListener('click', removeAlert);
         if (okBtn) okBtn.addEventListener('click', removeAlert);
+        if (copyBtn) copyBtn.addEventListener('click', () => {
+            navigator.clipboard.writeText(message).then(() => {
+                copyBtn.textContent = '✅ Copied!';
+                setTimeout(() => copyBtn.textContent = '📋 Copy Details', 2000);
+            });
+        });
     }
 
     window.showHighPriorityAlert = showHighPriorityAlert;
@@ -354,7 +522,12 @@ ${escapeHtml(message)}
         bulkDeployBtn.addEventListener('click', async () => {
             const ids = Array.from(selectedSiteIds);
             if (ids.length === 0) return;
-            if (!confirm(`Deploy ${ids.length} selected site(s)?\n\n${ids.join(', ')}`)) return;
+            if (!await showConfirm({
+                title: 'Deploy Selected Sites',
+                message: `You are about to trigger deployment for ${ids.length} selected site(s):\n\n${ids.join(', ')}`,
+                confirmText: '🚀 Deploy Selected',
+                type: 'warning'
+            })) return;
 
             bulkDeployBtn.disabled = true;
             bulkDeployBtn.textContent = '⏳ Deploying...';
@@ -715,17 +888,23 @@ ${escapeHtml(message)}
 
     // 3. Trigger Deployment Execution
     async function triggerDeployment(siteId) {
-        if (!confirm(`Are you sure you want to trigger DEPLOYMENT for site: ${siteId}?`)) {
-            return;
-        }
+        if (!await showConfirm({
+            title: 'Confirm Deployment',
+            message: `Are you sure you want to trigger DEPLOYMENT for site: ${siteId}?`,
+            confirmText: '🚀 Deploy Now',
+            type: 'warning'
+        })) return;
         await executeDeploymentDirect(siteId, 'deploy', currentUsername);
     }
 
     // 4. Trigger Rollback Execution
     async function triggerRollback(siteId) {
-        if (!confirm(`WARNING: Are you sure you want to execute ROLLBACK for site: ${siteId}?`)) {
-            return;
-        }
+        if (!await showConfirm({
+            title: 'Confirm Site Rollback',
+            message: `WARNING: Are you sure you want to execute ROLLBACK for site: ${siteId}?`,
+            confirmText: '⏪ Execute Rollback',
+            type: 'danger'
+        })) return;
         await executeDeploymentDirect(siteId, 'rollback', currentUsername);
     }
 
@@ -889,7 +1068,12 @@ ${escapeHtml(message)}
     if (modalCancelBtn) {
         modalCancelBtn.addEventListener('click', async () => {
             if (!currentDeploymentId) return;
-            if (!confirm('Are you sure you want to CANCEL this active deployment process?')) return;
+            if (!await showConfirm({
+                title: 'Cancel Active Deployment',
+                message: 'Are you sure you want to CANCEL this active deployment process? The process will be terminated.',
+                confirmText: 'Stop Deployment',
+                type: 'danger'
+            })) return;
 
             modalCancelBtn.disabled = true;
             const { ok, data } = await apiFetch('/api/cancel.php', {
@@ -902,7 +1086,7 @@ ${escapeHtml(message)}
             if (ok && data.success) {
                 appendTerminalLine(`[${formatSriLankaTime()}] [SYSTEM] Cancellation command issued.`);
             } else {
-                alert(`Cancel failed: ${data.error?.message || 'Unknown error'}`);
+                showToast(`Cancel failed: ${data.error?.message || 'Unknown error'}`, 'danger');
             }
         });
     }
@@ -927,11 +1111,16 @@ ${escapeHtml(message)}
 
     // Modal Close Listeners
     if (closeModalBtn) {
-        closeModalBtn.addEventListener('click', () => {
+        closeModalBtn.addEventListener('click', async () => {
             if (activeEventSource) {
-                if (!confirm('Deployment is still running in the background. Close modal window?')) {
-                    return;
-                }
+                const confirmClose = await showConfirm({
+                    title: 'Deployment In Progress',
+                    message: 'Deployment is still running in the background. Are you sure you want to close this modal window?',
+                    confirmText: 'Close Window',
+                    cancelText: 'Keep Open',
+                    type: 'warning'
+                });
+                if (!confirmClose) return;
             }
             if (deploymentModal) deploymentModal.classList.add('hidden');
         });
@@ -1179,9 +1368,12 @@ ${escapeHtml(message)}
         deleteSiteModalBtn.addEventListener('click', async () => {
             const siteId = document.getElementById('siteIdInput').value;
             const siteName = document.getElementById('siteNameInput').value || siteId;
-            if (!confirm(`Are you sure you want to delete website '${siteName}' (${siteId})? This action cannot be undone.`)) {
-                return;
-            }
+            if (!await showConfirm({
+                title: 'Delete Website Configuration',
+                message: `Are you sure you want to delete website '${siteName}' (${siteId})? This action cannot be undone.`,
+                confirmText: 'Delete Website',
+                type: 'danger'
+            })) return;
 
             deleteSiteModalBtn.disabled = true;
             const { ok, data } = await apiFetch('/api/delete_site.php', {
@@ -1508,11 +1700,17 @@ ${escapeHtml(message)}
 
         // Event Listeners for PM2 Row Action Buttons
         document.querySelectorAll('#pm2TableBody .btn-pm2-action').forEach(btn => {
-            btn.addEventListener('click', () => {
+            btn.addEventListener('click', async () => {
                 const action = btn.dataset.action;
                 const target = btn.dataset.target;
-                if (action === 'delete' && !confirm(`Are you sure you want to remove PM2 process ${target}?`)) {
-                    return;
+                if (action === 'delete') {
+                    const confirmDelete = await showConfirm({
+                        title: 'Remove PM2 Process',
+                        message: `Are you sure you want to remove PM2 process ${target}?`,
+                        confirmText: 'Delete Process',
+                        type: 'danger'
+                    });
+                    if (!confirmDelete) return;
                 }
                 executePm2Action(action, target);
             });
@@ -1997,7 +2195,12 @@ ${escapeHtml(message)}
                     btn.addEventListener('click', async () => {
                         const filename = btn.dataset.filename;
                         const dbId = btn.dataset.dbId;
-                        if (!confirm(`Are you sure you want to delete backup '${filename}'?`)) return;
+                        if (!await showConfirm({
+                            title: 'Delete Database Backup',
+                            message: `Are you sure you want to delete backup file '${filename}'?`,
+                            confirmText: 'Delete Backup',
+                            type: 'danger'
+                        })) return;
 
                         btn.disabled = true;
                         const { ok, data } = await apiFetch('/api/backups.php', {
@@ -2187,7 +2390,12 @@ ${escapeHtml(message)}
         document.querySelectorAll('.btn-delete-db').forEach(btn => {
             btn.addEventListener('click', async () => {
                 const dbId = btn.dataset.id;
-                if (!confirm('Are you sure you want to delete this database configuration?')) return;
+                if (!await showConfirm({
+                    title: 'Delete Database Configuration',
+                    message: 'Are you sure you want to delete this database configuration?',
+                    confirmText: 'Delete Config',
+                    type: 'danger'
+                })) return;
 
                 const { ok, data } = await apiFetch('/api/backups.php', {
                     method: 'POST',
@@ -2250,7 +2458,12 @@ ${escapeHtml(message)}
     const backupAllDbsBtn = document.getElementById('backupAllDbsBtn');
     if (backupAllDbsBtn) {
         backupAllDbsBtn.addEventListener('click', async () => {
-            if (!confirm('Run 1-Click backup for ALL configured databases? Each database will be saved into its own separate phpMyAdmin ready .sql file.')) return;
+            if (!await showConfirm({
+                title: '1-Click Full Database Backup',
+                message: 'Run 1-Click backup for ALL configured databases? Each database will be saved into its own separate phpMyAdmin ready .sql file.',
+                confirmText: '⚡ Backup All Databases',
+                type: 'info'
+            })) return;
 
             backupAllDbsBtn.disabled = true;
             const origText = backupAllDbsBtn.textContent;
@@ -2419,7 +2632,12 @@ ${escapeHtml(message)}
     const masterBackupBtn = document.getElementById('masterBackupBtn');
     if (masterBackupBtn) {
         masterBackupBtn.addEventListener('click', async () => {
-            if (!confirm('Run Master Backup for ALL databases on this VPS using Master credentials? Each database will be dumped into its own separate, standalone .sql file.')) return;
+            if (!await showConfirm({
+                title: 'Run Master VPS Backup',
+                message: 'Run Master Backup for ALL databases on this VPS using Master credentials? Each database will be dumped into its own separate, standalone .sql file.',
+                confirmText: '⚡ Run Master Backup',
+                type: 'info'
+            })) return;
 
             masterBackupBtn.disabled = true;
             const origText = masterBackupBtn.textContent;
@@ -2522,7 +2740,12 @@ ${escapeHtml(message)}
         container.querySelectorAll('.btn-delete-master-file').forEach(btn => {
             btn.addEventListener('click', async () => {
                 const fname = btn.dataset.filename;
-                if (!confirm(`Delete backup file '${fname}'?`)) return;
+                if (!await showConfirm({
+                    title: 'Delete Backup File',
+                    message: `Delete backup file '${fname}'?`,
+                    confirmText: 'Delete File',
+                    type: 'danger'
+                })) return;
 
                 const { ok, data } = await apiFetch('/api/backups.php', {
                     method: 'POST',
@@ -3678,7 +3901,12 @@ exit 0`;
         tbody.querySelectorAll('.um-delete-btn').forEach(btn => {
             btn.addEventListener('click', async () => {
                 const targetUser = btn.dataset.username;
-                if (!confirm(`Are you sure you want to delete user account "${targetUser}"?`)) return;
+                if (!await showConfirm({
+                    title: 'Delete User Account',
+                    message: `Are you sure you want to delete user account "${targetUser}"?`,
+                    confirmText: 'Delete User',
+                    type: 'danger'
+                })) return;
                 
                 const { ok, data } = await apiFetch(`/api/users.php?username=${encodeURIComponent(targetUser)}`, {
                     method: 'DELETE'
