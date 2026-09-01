@@ -3371,20 +3371,22 @@ fi
 if [[ "$HAS_COMPOSER" == "true" ]]; then
     log "Installing Composer dependencies..."
     cd "$APP_DIR"
+    export HOME="\${HOME:-/root}"
+    export COMPOSER_HOME="\${COMPOSER_HOME:-\$HOME/.composer}"
     if [[ -f "$APP_DIR/composer.phar" ]]; then
         log "Running local composer.phar..."
-        COMPOSER_ALLOW_SUPERUSER=1 php composer.phar install --no-dev --optimize-autoloader
+        COMPOSER_ALLOW_SUPERUSER=1 COMPOSER_HOME="\$COMPOSER_HOME" php composer.phar install --no-dev --optimize-autoloader
         success "Composer dependencies installed via local composer.phar."
     elif command -v composer >/dev/null 2>&1; then
         log "Running system composer..."
-        COMPOSER_ALLOW_SUPERUSER=1 composer install --no-dev --optimize-autoloader
+        COMPOSER_ALLOW_SUPERUSER=1 COMPOSER_HOME="\$COMPOSER_HOME" composer install --no-dev --optimize-autoloader
         success "Composer dependencies installed via system composer."
     else
         log "composer.phar not found. Downloading composer.phar..."
         php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"
         php composer-setup.php --quiet
         php -r "unlink('composer-setup.php');"
-        COMPOSER_ALLOW_SUPERUSER=1 php composer.phar install --no-dev --optimize-autoloader
+        COMPOSER_ALLOW_SUPERUSER=1 COMPOSER_HOME="\$COMPOSER_HOME" php composer.phar install --no-dev --optimize-autoloader
         success "Composer dependencies installed via downloaded composer.phar."
     fi
 else
