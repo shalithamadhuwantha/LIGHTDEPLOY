@@ -3742,6 +3742,110 @@ exit 0`;
             });
         }
 
+        // Parse loaded Bash script content into form fields
+        function parseAndPopulateBashScript(content) {
+            if (!content) return;
+            const lines = content.split('\n');
+            const vars = {};
+            lines.forEach(line => {
+                const trimmed = line.trim();
+                const match = trimmed.match(/^([A-Z_]+)=["']?(.*?)["']?$/);
+                if (match) {
+                    let val = match[2];
+                    if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+                        val = val.slice(1, -1);
+                    }
+                    vars[match[1]] = val;
+                }
+            });
+
+            if (vars.APP_DIR !== undefined && sgFields.appDir) sgFields.appDir.value = vars.APP_DIR;
+            if (vars.REPO_URL !== undefined && sgFields.repoUrl) sgFields.repoUrl.value = vars.REPO_URL;
+            if (vars.BRANCH !== undefined && sgFields.branch) sgFields.branch.value = vars.BRANCH;
+            if (vars.ENV_SOURCE !== undefined && sgFields.envSource) sgFields.envSource.value = vars.ENV_SOURCE;
+            if (vars.HAS_NPM !== undefined && sgFields.hasNpm) sgFields.hasNpm.checked = (vars.HAS_NPM === 'true');
+            if (vars.HAS_BUILD !== undefined && sgFields.hasBuild) sgFields.hasBuild.checked = (vars.HAS_BUILD === 'true');
+            if (vars.HAS_COMPOSER !== undefined && sgFields.hasComposer) sgFields.hasComposer.checked = (vars.HAS_COMPOSER === 'true');
+            if (vars.HAS_PM2 !== undefined && sgFields.hasPm2) {
+                sgFields.hasPm2.checked = (vars.HAS_PM2 === 'true');
+                if (sgPm2Group) sgPm2Group.classList.toggle('hidden', !sgFields.hasPm2.checked);
+            }
+            if (vars.APP_NAME !== undefined && sgFields.appName) sgFields.appName.value = vars.APP_NAME;
+            if (vars.SITE_USER !== undefined && sgFields.siteUser) sgFields.siteUser.value = vars.SITE_USER;
+            if (vars.SITE_GROUP !== undefined && sgFields.siteGroup) sgFields.siteGroup.value = vars.SITE_GROUP;
+
+            updateScriptPreview();
+        }
+
+        // Parse loaded PM2 Ecosystem script content into form fields
+        function parseAndPopulatePm2Script(content) {
+            if (!content) return;
+
+            function extractStr(key) {
+                const regex = new RegExp(`${key}\\s*:\\s*(["'])(.*?)\\1`, 'i');
+                const match = content.match(regex);
+                return match ? match[2] : null;
+            }
+
+            function extractNum(key) {
+                const regex = new RegExp(`${key}\\s*:\\s*(\\d+)`, 'i');
+                const match = content.match(regex);
+                return match ? match[1] : null;
+            }
+
+            function extractBool(key) {
+                const regex = new RegExp(`${key}\\s*:\\s*(true|false)`, 'i');
+                const match = content.match(regex);
+                return match ? match[1] === 'true' : null;
+            }
+
+            const name = extractStr('name');
+            const script = extractStr('script');
+            const cwd = extractStr('cwd');
+            const interpreter = extractStr('interpreter');
+            const interpreterArgs = extractStr('interpreter_args');
+            const instances = extractNum('instances');
+            const execMode = extractStr('exec_mode');
+            const watch = extractBool('watch');
+            const nodeEnv = extractStr('NODE_ENV');
+            const port = extractNum('PORT');
+            const errorFile = extractStr('error_file');
+            const outFile = extractStr('out_file');
+            const logFile = extractStr('log_file');
+            const time = extractBool('time');
+            const autorestart = extractBool('autorestart');
+            const maxRestarts = extractNum('max_restarts');
+            const minUptime = extractStr('min_uptime');
+            const killTimeout = extractNum('kill_timeout');
+            const listenTimeout = extractNum('listen_timeout');
+            const shutdownWithMessage = extractBool('shutdown_with_message');
+            const mergeLogs = extractBool('merge_logs');
+
+            if (name !== null && sgPm2Fields.appName) sgPm2Fields.appName.value = name;
+            if (script !== null && sgPm2Fields.script) sgPm2Fields.script.value = script;
+            if (cwd !== null && sgPm2Fields.cwd) sgPm2Fields.cwd.value = cwd;
+            if (interpreter !== null && sgPm2Fields.interpreter) sgPm2Fields.interpreter.value = interpreter;
+            if (interpreterArgs !== null && sgPm2Fields.interpreterArgs) sgPm2Fields.interpreterArgs.value = interpreterArgs;
+            if (instances !== null && sgPm2Fields.instances) sgPm2Fields.instances.value = instances;
+            if (execMode !== null && sgPm2Fields.execMode) sgPm2Fields.execMode.value = execMode;
+            if (watch !== null && sgPm2Fields.watch) sgPm2Fields.watch.checked = watch;
+            if (nodeEnv !== null && sgPm2Fields.nodeEnv) sgPm2Fields.nodeEnv.value = nodeEnv;
+            if (port !== null && sgPm2Fields.port) sgPm2Fields.port.value = port;
+            if (errorFile !== null && sgPm2Fields.errorFile) sgPm2Fields.errorFile.value = errorFile;
+            if (outFile !== null && sgPm2Fields.outFile) sgPm2Fields.outFile.value = outFile;
+            if (logFile !== null && sgPm2Fields.logFile) sgPm2Fields.logFile.value = logFile;
+            if (time !== null && sgPm2Fields.time) sgPm2Fields.time.checked = time;
+            if (autorestart !== null && sgPm2Fields.autorestart) sgPm2Fields.autorestart.checked = autorestart;
+            if (maxRestarts !== null && sgPm2Fields.maxRestarts) sgPm2Fields.maxRestarts.value = maxRestarts;
+            if (minUptime !== null && sgPm2Fields.minUptime) sgPm2Fields.minUptime.value = minUptime;
+            if (killTimeout !== null && sgPm2Fields.killTimeout) sgPm2Fields.killTimeout.value = killTimeout;
+            if (listenTimeout !== null && sgPm2Fields.listenTimeout) sgPm2Fields.listenTimeout.value = listenTimeout;
+            if (shutdownWithMessage !== null && sgPm2Fields.shutdownWithMessage) sgPm2Fields.shutdownWithMessage.checked = shutdownWithMessage;
+            if (mergeLogs !== null && sgPm2Fields.mergeLogs) sgPm2Fields.mergeLogs.checked = mergeLogs;
+
+            updateScriptPreview();
+        }
+
         // Load Script from server file path
         async function loadScriptFromFile(filePath, type) {
             if (!filePath) {
@@ -3759,9 +3863,9 @@ exit 0`;
                 if (ok && data.success && data.content) {
                     showToast(`Script successfully loaded from ${filePath}!`, 'success');
                     if (type === 'pm2_ecosystem') {
-                        sgPreview.innerHTML = highlightJs(data.content);
+                        parseAndPopulatePm2Script(data.content);
                     } else {
-                        sgPreview.innerHTML = highlightBash(data.content);
+                        parseAndPopulateBashScript(data.content);
                     }
                 } else {
                     showToast(data.error?.message || 'Failed to load script file from server.', 'error');
@@ -3824,7 +3928,7 @@ exit 0`;
                     const configPath = `/www/wwwroot/${site.domain || siteId}/ecosystem.config.js`;
                     if (sgPm2Fields.outputPath) sgPm2Fields.outputPath.value = configPath;
                     if (site.pm2_ecosystem) {
-                        sgPreview.innerHTML = highlightJs(site.pm2_ecosystem);
+                        parseAndPopulatePm2Script(site.pm2_ecosystem);
                     } else {
                         updateScriptPreview();
                         loadScriptFromFile(configPath, 'pm2_ecosystem');
@@ -3852,7 +3956,7 @@ exit 0`;
                 const pm2Content = document.getElementById('pm2EcosystemInput')?.value.trim() || '';
                 if (window.openScriptGenModal) window.openScriptGenModal('pm2_ecosystem');
                 if (pm2Content) {
-                    sgPreview.innerHTML = highlightJs(pm2Content);
+                    parseAndPopulatePm2Script(pm2Content);
                 }
             });
         }
