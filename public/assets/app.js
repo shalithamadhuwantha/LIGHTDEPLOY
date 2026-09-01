@@ -2893,6 +2893,7 @@ ${escapeHtml(message)}
             envSource: document.getElementById('sgEnvSource'),
             hasNpm: document.getElementById('sgHasNpm'),
             hasBuild: document.getElementById('sgHasBuild'),
+            hasComposer: document.getElementById('sgHasComposer'),
             hasPm2: document.getElementById('sgHasPm2'),
             appName: document.getElementById('sgAppName'),
             siteUser: document.getElementById('sgSiteUser'),
@@ -3047,6 +3048,7 @@ ${escapeHtml(message)}
                 envSource: sgFields.envSource?.value.trim() || '',
                 hasNpm: sgFields.hasNpm?.checked ? 'true' : 'false',
                 hasBuild: sgFields.hasBuild?.checked ? 'true' : 'false',
+                hasComposer: sgFields.hasComposer?.checked ? 'true' : 'false',
                 hasPm2: sgFields.hasPm2?.checked ? 'true' : 'false',
                 appName: sgFields.appName?.value.trim() || '',
                 siteUser: sgFields.siteUser?.value.trim() || 'www',
@@ -3076,6 +3078,7 @@ BRANCH="${c.branch}"
 ENV_SOURCE="${c.envSource}"
 HAS_NPM="${c.hasNpm}"
 HAS_BUILD="${c.hasBuild}"
+HAS_COMPOSER="${c.hasComposer}"
 HAS_PM2="${c.hasPm2}"
 APP_NAME="${c.appName}"
 SITE_USER="${c.siteUser}"
@@ -3154,6 +3157,7 @@ log "Repository: $REPO_URL"
 log "Branch: $BRANCH"
 log "Has npm install: $HAS_NPM"
 log "Has build: $HAS_BUILD"
+log "Has Composer install: $HAS_COMPOSER"
 log "Has PM2: $HAS_PM2"
 if [[ -n "$ENV_SOURCE" ]]; then
     log "Environment source: $ENV_SOURCE"
@@ -3187,6 +3191,10 @@ REQUIRED_CMDS=("git" "find" "rm" "cp" "mktemp" "chown" "stat")
 
 if [[ "$HAS_NPM" == "true" ]] || [[ "$HAS_BUILD" == "true" ]]; then
     REQUIRED_CMDS+=("npm")
+fi
+
+if [[ "$HAS_COMPOSER" == "true" ]]; then
+    REQUIRED_CMDS+=("php")
 fi
 
 for cmd in "\${REQUIRED_CMDS[@]}"; do
@@ -3357,6 +3365,33 @@ else
 fi
 
 # ============================================================
+# COMPOSER INSTALL (if enabled)
+# ============================================================
+
+if [[ "$HAS_COMPOSER" == "true" ]]; then
+    log "Installing Composer dependencies..."
+    cd "$APP_DIR"
+    if [[ -f "$APP_DIR/composer.phar" ]]; then
+        log "Running local composer.phar..."
+        COMPOSER_ALLOW_SUPERUSER=1 php composer.phar install --no-dev --optimize-autoloader
+        success "Composer dependencies installed via local composer.phar."
+    elif command -v composer >/dev/null 2>&1; then
+        log "Running system composer..."
+        COMPOSER_ALLOW_SUPERUSER=1 composer install --no-dev --optimize-autoloader
+        success "Composer dependencies installed via system composer."
+    else
+        log "composer.phar not found. Downloading composer.phar..."
+        php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"
+        php composer-setup.php --quiet
+        php -r "unlink('composer-setup.php');"
+        COMPOSER_ALLOW_SUPERUSER=1 php composer.phar install --no-dev --optimize-autoloader
+        success "Composer dependencies installed via downloaded composer.phar."
+    fi
+else
+    log "Composer install skipped"
+fi
+
+# ============================================================
 # SET OWNERSHIP
 # ============================================================
 
@@ -3448,6 +3483,7 @@ echo "Branch      : $BRANCH"
 echo "Owner       : \${SITE_USER}:\${SITE_GROUP}"
 echo "NPM install : $HAS_NPM"
 echo "Build       : $HAS_BUILD"
+echo "Composer    : $HAS_COMPOSER"
 echo "PM2         : $HAS_PM2"${c.hasPm2 === 'true' ? `\necho "PM2 App     : $APP_NAME"` : ''}
 echo "Time        : $(date '+%Y-%m-%d %H:%M:%S')"
 echo "============================================================"
@@ -3676,6 +3712,7 @@ exit 0`;
                         env_source: c.envSource,
                         has_npm: c.hasNpm === 'true',
                         has_build: c.hasBuild === 'true',
+                        has_composer: c.hasComposer === 'true',
                         has_pm2: c.hasPm2 === 'true',
                         app_name: c.appName,
                         site_user: c.siteUser,

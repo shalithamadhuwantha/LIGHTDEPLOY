@@ -1117,7 +1117,7 @@ $csrfToken = Csrf::getToken();
                             </div>
 
                             <!-- Section 3: Build Pipeline -->
-                            <h4 class="scriptgen-section-title">🔨 3. Build Pipeline</h4>
+                            <h4 class="scriptgen-section-title">🔨 3. Build Pipeline &amp; Dependencies</h4>
                             <div style="display: flex; gap: 24px; flex-wrap: wrap;">
                                 <label class="form-checkbox-label">
                                     <input type="checkbox" id="sgHasNpm">
@@ -1126,6 +1126,10 @@ $csrfToken = Csrf::getToken();
                                 <label class="form-checkbox-label">
                                     <input type="checkbox" id="sgHasBuild">
                                     Run <code>npm run build</code>
+                                </label>
+                                <label class="form-checkbox-label">
+                                    <input type="checkbox" id="sgHasComposer">
+                                    Run <code>composer install</code> (<code>COMPOSER_ALLOW_SUPERUSER=1 php composer.phar install</code>)
                                 </label>
                             </div>
 

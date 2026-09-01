@@ -44,6 +44,7 @@ $branch = trim((string)($input['branch'] ?? 'main'));
 $envSource = trim((string)($input['env_source'] ?? ''));
 $hasNpm = !empty($input['has_npm']);
 $hasBuild = !empty($input['has_build']);
+$hasComposer = !empty($input['has_composer']);
 $hasPm2 = !empty($input['has_pm2']);
 $appName = trim((string)($input['app_name'] ?? ''));
 $siteUser = trim((string)($input['site_user'] ?? 'www'));
@@ -122,11 +123,12 @@ if ($scriptType === 'pm2_ecosystem') {
 } else {
     $hasNpmStr = $hasNpm ? 'true' : 'false';
     $hasBuildStr = $hasBuild ? 'true' : 'false';
+    $hasComposerStr = $hasComposer ? 'true' : 'false';
     $hasPm2Str = $hasPm2 ? 'true' : 'false';
 
     $scriptContent = generateDeploymentScript(
         $appDir, $repoUrl, $branch, $envSource,
-        $hasNpmStr, $hasBuildStr, $hasPm2Str,
+        $hasNpmStr, $hasBuildStr, $hasComposerStr, $hasPm2Str,
         $appName, $siteUser, $siteGroup
     );
     $defaultFilename = 'deploy-' . (basename($appDir) ?: 'app') . '.sh';
@@ -289,7 +291,7 @@ function generatePm2EcosystemScript(array $input): string {
 
 function generateDeploymentScript(
     string $appDir, string $repoUrl, string $branch, string $envSource,
-    string $hasNpm, string $hasBuild, string $hasPm2,
+    string $hasNpm, string $hasBuild, string $hasComposer, string $hasPm2,
     string $appName, string $siteUser, string $siteGroup
 ): string {
 
@@ -316,6 +318,7 @@ BASH;
     $script .= 'ENV_SOURCE="' . $envSource . '"' . "\n";
     $script .= 'HAS_NPM="' . $hasNpm . '"' . "\n";
     $script .= 'HAS_BUILD="' . $hasBuild . '"' . "\n";
+    $script .= 'HAS_COMPOSER="' . $hasComposer . '"' . "\n";
     $script .= 'HAS_PM2="' . $hasPm2 . '"' . "\n";
     $script .= 'APP_NAME="' . $appName . '"' . "\n";
     $script .= 'SITE_USER="' . $siteUser . '"' . "\n";
@@ -400,6 +403,7 @@ log "Repository: $REPO_URL"
 log "Branch: $BRANCH"
 log "Has npm install: $HAS_NPM"
 log "Has build: $HAS_BUILD"
+log "Has Composer install: $HAS_COMPOSER"
 log "Has PM2: $HAS_PM2"
 if [[ -n "$ENV_SOURCE" ]]; then
     log "Environment source: $ENV_SOURCE"
@@ -433,6 +437,10 @@ REQUIRED_CMDS=("git" "find" "rm" "cp" "mktemp" "chown" "stat")
 
 if [[ "$HAS_NPM" == "true" ]] || [[ "$HAS_BUILD" == "true" ]]; then
     REQUIRED_CMDS+=("npm")
+fi
+
+if [[ "$HAS_COMPOSER" == "true" ]]; then
+    REQUIRED_CMDS+=("php")
 fi
 
 for cmd in "${REQUIRED_CMDS[@]}"; do
@@ -633,6 +641,35 @@ else
 fi
 
 # ============================================================
+# COMPOSER INSTALL (if enabled)
+# ============================================================
+
+if [[ "$HAS_COMPOSER" == "true" ]]; then
+    log "Installing Composer dependencies..."
+
+    cd "$APP_DIR"
+
+    if [[ -f "$APP_DIR/composer.phar" ]]; then
+        log "Running local composer.phar..."
+        COMPOSER_ALLOW_SUPERUSER=1 php composer.phar install --no-dev --optimize-autoloader
+        success "Composer dependencies installed via local composer.phar."
+    elif command -v composer >/dev/null 2>&1; then
+        log "Running system composer..."
+        COMPOSER_ALLOW_SUPERUSER=1 composer install --no-dev --optimize-autoloader
+        success "Composer dependencies installed via system composer."
+    else
+        log "composer.phar not found. Downloading composer.phar..."
+        php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"
+        php composer-setup.php --quiet
+        php -r "unlink('composer-setup.php');"
+        COMPOSER_ALLOW_SUPERUSER=1 php composer.phar install --no-dev --optimize-autoloader
+        success "Composer dependencies installed via downloaded composer.phar."
+    fi
+else
+    log "Composer install skipped"
+fi
+
+# ============================================================
 # SET OWNERSHIP
 # ============================================================
 
@@ -817,6 +854,7 @@ else
 fi
 echo "NPM install : $HAS_NPM"
 echo "Build       : $HAS_BUILD"
+echo "Composer    : $HAS_COMPOSER"
 echo "PM2         : $HAS_PM2"
 [[ "$HAS_PM2" == "true" ]] && echo "PM2 App     : $APP_NAME"
 echo "Time        : $(date '+%Y-%m-%d %H:%M:%S')"
