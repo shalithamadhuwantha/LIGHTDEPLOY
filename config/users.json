@@ -13,17 +13,16 @@
         },
         "shalitha": {
             "name": "shalitha",
-            "password_hash": "$2y$12$s6FTLiASNAsq/UMab8uNDe3vRpIEANDvbS8NU9CnPYlAAqJ.4Lq7m",
-            "role": "viewer",
+            "password_hash": "$2y$12$l66uRzaekDngdrmfcOX7deWeJb.IwI6JYxr6MjEeIdYuQ4760lKzO",
+            "role": "deployer",
             "allowed_functions": [
                 "sites",
+                "add_edit_sites",
                 "pm2",
-                "vps_ports",
-                "deploy_history"
+                "terminal"
             ],
             "allowed_systems": [
-                "site-a",
-                "site-c"
+                "*"
             ]
         }
     }

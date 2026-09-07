@@ -66,6 +66,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const modalRollbackBtn = document.getElementById('modalRollbackBtn');
     const modalDeployAgainBtn = document.getElementById('modalDeployAgainBtn');
     const historyTableBody = document.getElementById('historyTableBody');
+    const siteTerminalModal = document.getElementById('siteTerminalModal');
+    const siteTerminalTitle = document.getElementById('siteTerminalTitle');
+    const siteTerminalPath = document.getElementById('siteTerminalPath');
+    const siteTerminalOutput = document.getElementById('siteTerminalOutput');
+    const siteTerminalForm = document.getElementById('siteTerminalForm');
+    const siteTerminalCommand = document.getElementById('siteTerminalCommand');
+    const siteTerminalRunBtn = document.getElementById('siteTerminalRunBtn');
+    const siteTerminalCloseBtn = document.getElementById('siteTerminalCloseBtn');
+    let currentTerminalSiteId = null;
 
     // Helper: HTML Escaper
     function escapeHtml(str) {
@@ -665,6 +674,12 @@ ${escapeHtml(message)}
                             Log
                         </button>
                     ` : ''}
+                    ${hasPermission('terminal') && site.terminal_enabled ? `
+                        <button class="btn btn-terminal btn-sm btn-site-terminal" data-site-id="${siteId}" title="Open the restricted terminal for this website">
+                            <span class="btn-terminal-icon" aria-hidden="true">&gt;_</span>
+                            <span>Open Terminal</span>
+                        </button>
+                    ` : ''}
                     ${site.pm2_enabled ? `
                         <button class="btn btn-secondary btn-sm btn-pm2-reload" data-pm2-target="${escapeHtml(site.pm2_name || siteId)}" data-target="${escapeHtml(site.pm2_name || siteId)}">
                             ⚡ PM2 Reload
@@ -731,6 +746,7 @@ ${escapeHtml(message)}
                             <button class="btn btn-primary btn-sm btn-deploy" data-site-id="${siteId}" ${!canDeploy ? 'disabled' : ''}>${site.is_locked ? '⏳' : '🚀'}</button>
                             ${site.has_rollback ? `<button class="btn btn-warning btn-sm btn-rollback" data-site-id="${siteId}" ${!canRollback ? 'disabled' : ''}>↩️</button>` : ''}
                             ${site.last_deployment ? `<button class="btn btn-secondary btn-sm btn-view-log" data-dep-id="${site.last_deployment.deployment_id}" data-site-id="${siteId}">📋</button>` : ''}
+                            ${hasPermission('terminal') && site.terminal_enabled ? `<button class="btn btn-terminal btn-sm btn-site-terminal" data-site-id="${siteId}" title="Open the restricted terminal for this website" aria-label="Open terminal for ${escapeHtml(site.name || siteId)}"><span class="btn-terminal-icon" aria-hidden="true">&gt;_</span><span class="list-terminal-label">Terminal</span></button>` : ''}
                             ${canEdit ? `<button class="btn btn-secondary btn-sm btn-edit-site" data-site-id="${siteId}">⚙️</button>` : ''}
                         </div>
                     </td>
@@ -781,6 +797,10 @@ ${escapeHtml(message)}
             btn.addEventListener('click', () => viewDeploymentLog(btn.dataset.depId, btn.dataset.siteId));
         });
 
+        document.querySelectorAll('#sitesGrid .btn-site-terminal').forEach(btn => {
+            btn.addEventListener('click', () => openSiteTerminal(btn.dataset.siteId));
+        });
+
         document.querySelectorAll('#sitesGrid .btn-pm2-reload').forEach(btn => {
             btn.addEventListener('click', () => executePm2Action('reload', btn.dataset.pm2Target || btn.dataset.target));
         });
@@ -795,6 +815,61 @@ ${escapeHtml(message)}
                 const site = cachedSites[siteId];
                 if (site) openEditSiteModal(siteId, site);
             });
+        });
+    }
+
+    function appendSiteTerminalOutput(text) {
+        if (!siteTerminalOutput) return;
+        siteTerminalOutput.textContent += `${siteTerminalOutput.textContent ? '\n' : ''}${text}`;
+        siteTerminalOutput.scrollTop = siteTerminalOutput.scrollHeight;
+    }
+
+    function openSiteTerminal(siteId) {
+        const site = cachedSites[siteId] || {};
+        currentTerminalSiteId = siteId;
+        if (siteTerminalTitle) siteTerminalTitle.textContent = `Terminal - ${site.name || siteId}`;
+        if (siteTerminalPath) siteTerminalPath.textContent = site.terminal_path || `/www/wwwroot/${siteId}`;
+        if (siteTerminalOutput) siteTerminalOutput.textContent = 'Restricted terminal ready.';
+        if (siteTerminalModal) siteTerminalModal.classList.remove('hidden');
+        if (siteTerminalCommand) siteTerminalCommand.focus();
+    }
+
+    document.querySelectorAll('.site-terminal-command').forEach((button) => {
+        button.addEventListener('click', () => {
+            if (!siteTerminalCommand) return;
+            siteTerminalCommand.value = button.dataset.command || '';
+            siteTerminalCommand.focus();
+        });
+    });
+
+    if (siteTerminalForm) {
+        siteTerminalForm.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const command = siteTerminalCommand?.value.trim() || '';
+            if (!currentTerminalSiteId || !command) return;
+            siteTerminalCommand.value = '';
+            siteTerminalRunBtn.disabled = true;
+            appendSiteTerminalOutput(`$ ${command}`);
+
+            const { ok, data } = await apiFetch('/api/terminal.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ site_id: currentTerminalSiteId, command })
+            });
+
+            if (ok && data.success) {
+                appendSiteTerminalOutput(data.output || `(command completed with exit code ${data.exit_code})`);
+            } else {
+                appendSiteTerminalOutput(`[ERROR] ${data.error?.message || 'Command failed.'}`);
+            }
+            siteTerminalRunBtn.disabled = false;
+            siteTerminalCommand.focus();
+        });
+    }
+
+    if (siteTerminalCloseBtn) {
+        siteTerminalCloseBtn.addEventListener('click', () => {
+            if (siteTerminalModal) siteTerminalModal.classList.add('hidden');
         });
     }
 
@@ -1264,6 +1339,8 @@ ${escapeHtml(message)}
 
         document.getElementById('siteNameInput').value = site.name || '';
         document.getElementById('siteDomainInput').value = site.domain || '';
+        document.getElementById('terminalEnableInput').checked = !!site.terminal_enabled;
+        document.getElementById('terminalPathInput').value = site.terminal_path || '';
         document.getElementById('siteScriptInput').value = site.script || '';
         document.getElementById('siteRollbackInput').value = site.rollback_script || '';
 
@@ -1423,6 +1500,8 @@ ${escapeHtml(message)}
                 site_id: siteId,
                 name: document.getElementById('siteNameInput')?.value.trim(),
                 domain: document.getElementById('siteDomainInput')?.value.trim(),
+                terminal_enabled: document.getElementById('terminalEnableInput')?.checked || false,
+                terminal_path: document.getElementById('terminalPathInput')?.value.trim() || '',
                 script: document.getElementById('siteScriptInput')?.value.trim(),
                 rollback_script: document.getElementById('siteRollbackInput')?.value.trim(),
                 health_check_enabled: document.getElementById('healthCheckEnableInput')?.checked || false,
@@ -1512,6 +1591,8 @@ ${escapeHtml(message)}
                 site_id: document.getElementById('siteIdInput').value.trim(),
                 name: document.getElementById('siteNameInput').value.trim(),
                 domain: document.getElementById('siteDomainInput').value.trim(),
+                terminal_enabled: document.getElementById('terminalEnableInput').checked,
+                terminal_path: document.getElementById('terminalPathInput').value.trim(),
                 script: document.getElementById('siteScriptInput').value.trim(),
                 rollback_script: document.getElementById('siteRollbackInput').value.trim(),
                 health_check_enabled: document.getElementById('healthCheckEnableInput').checked,
@@ -4153,6 +4234,99 @@ exit 0`;
 
     window.prepareUserEditModal = prepareUserEditModal;
 
+    // ── ADMIN TERMINAL COMMAND ALLOWLIST ───────────────────────────────────
+    async function loadTerminalCommands() {
+        const defaultList = document.getElementById('defaultTerminalCommands');
+        const customList = document.getElementById('customTerminalCommands');
+        if (!defaultList || !customList) return;
+
+        defaultList.innerHTML = '<span class="terminal-command-loading">Loading commands...</span>';
+        customList.innerHTML = '';
+
+        const { ok, data } = await apiFetch('/api/terminal_commands.php');
+        if (!ok || !data.success) {
+            defaultList.innerHTML = '<span class="terminal-command-empty">Unable to load command list.</span>';
+            return;
+        }
+
+        defaultList.innerHTML = (data.default_commands || []).map((command) =>
+            `<span class="terminal-command-pill terminal-command-pill-fixed"><code>${escapeHtml(command)}</code><span>Built-in</span></span>`
+        ).join('');
+
+        const customCommands = data.custom_commands || [];
+        customList.innerHTML = customCommands.length
+            ? customCommands.map((command) => `
+                <span class="terminal-command-pill">
+                    <code>${escapeHtml(command)}</code>
+                    <button type="button" class="terminal-command-remove" data-command="${escapeHtml(command)}" title="Remove command" aria-label="Remove ${escapeHtml(command)}">&times;</button>
+                </span>
+            `).join('')
+            : '<span class="terminal-command-empty">No custom commands added.</span>';
+
+        customList.querySelectorAll('.terminal-command-remove').forEach((button) => {
+            button.addEventListener('click', async () => {
+                const command = button.dataset.command || '';
+                if (!await showConfirm({
+                    title: 'Remove Allowed Command',
+                    message: `Remove "${command}" from all site terminals?`,
+                    confirmText: 'Remove Command',
+                    type: 'danger'
+                })) return;
+
+                const { ok: deleteOk, data: deleteData } = await apiFetch('/api/terminal_commands.php', {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ command })
+                });
+
+                if (deleteOk && deleteData.success) {
+                    showToast('Terminal command removed.', 'success');
+                    loadTerminalCommands();
+                } else {
+                    showToast(deleteData.error?.message || 'Failed to remove command.', 'error');
+                }
+            });
+        });
+    }
+
+    window.openTerminalCommandsModal = () => {
+        const modal = document.getElementById('terminalCommandsModal');
+        if (modal) modal.classList.remove('hidden');
+        loadTerminalCommands();
+    };
+
+    window.closeTerminalCommandsModal = () => {
+        const modal = document.getElementById('terminalCommandsModal');
+        if (modal) modal.classList.add('hidden');
+    };
+
+    const terminalCommandForm = document.getElementById('terminalCommandForm');
+    if (terminalCommandForm) {
+        terminalCommandForm.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const input = document.getElementById('terminalCommandInput');
+            const addButton = document.getElementById('terminalCommandAddBtn');
+            const command = input?.value.trim() || '';
+            if (!command) return;
+
+            if (addButton) addButton.disabled = true;
+            const { ok, data } = await apiFetch('/api/terminal_commands.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ command })
+            });
+            if (addButton) addButton.disabled = false;
+
+            if (ok && data.success) {
+                input.value = '';
+                showToast('Terminal command added.', 'success');
+                loadTerminalCommands();
+            } else {
+                showToast(data.error?.message || 'Failed to add command.', 'error');
+            }
+        });
+    }
+
     function applyRolePreset(role) {
         const funcCheckboxes = document.querySelectorAll('input[name="um_func"]');
         const allSystemsCheck = document.getElementById('umAllSystemsCheck');
@@ -4163,7 +4337,7 @@ exit 0`;
             if (allSystemsCheck) allSystemsCheck.checked = true;
             if (specificSystemsContainer) specificSystemsContainer.classList.add('hidden');
         } else if (role === 'deployer') {
-            const deployerFuncs = ['sites', 'add_edit_sites', 'pm2', 'script_gen', 'db_backups', 'vps_ports', 'deploy_history'];
+            const deployerFuncs = ['sites', 'add_edit_sites', 'pm2', 'terminal', 'script_gen', 'db_backups', 'vps_ports', 'deploy_history'];
             funcCheckboxes.forEach(cb => cb.checked = deployerFuncs.includes(cb.value));
             if (allSystemsCheck) allSystemsCheck.checked = true;
             if (specificSystemsContainer) specificSystemsContainer.classList.add('hidden');

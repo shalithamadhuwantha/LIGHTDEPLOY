@@ -220,6 +220,9 @@ $csrfToken = Csrf::getToken();
             <?php if ($authService->hasPermission('user_mgmt')): ?>
                 <button id="headerUserMgmtBtn" class="btn btn-secondary btn-sm" style="margin-right: 6px; background: linear-gradient(135deg, #4f46e5, #6366f1); color: #fff; border: none;" onclick="openUserMgmtModal()">👥 Manage Users</button>
             <?php endif; ?>
+            <?php if ($authService->hasRole('admin')): ?>
+                <button id="headerTerminalCommandsBtn" class="btn btn-secondary btn-sm" style="margin-right: 6px; background: rgba(16, 185, 129, 0.14); color: #a7f3d0; border-color: rgba(52, 211, 153, 0.38);" onclick="openTerminalCommandsModal()">&gt;_ Terminal Commands</button>
+            <?php endif; ?>
             <button id="userProfileHeaderBtn" class="btn btn-secondary btn-sm" style="margin-right: 6px; background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.15);" onclick="openUserProfileModal()">👤 Profile</button>
             <div class="user-info" onclick="openUserProfileModal()" style="cursor: pointer;" title="Click to view & edit your profile">
                 <span class="user-name header-user-name-display"><?= htmlspecialchars($user['name']) ?></span>
@@ -463,6 +466,84 @@ $csrfToken = Csrf::getToken();
         </div>
     </div>
 
+    <!-- Admin terminal command allowlist -->
+    <div id="terminalCommandsModal" class="modal-overlay hidden">
+        <div class="modal-card" style="max-width: 720px;">
+            <div class="modal-header">
+                <div>
+                    <div class="site-terminal-heading">
+                        <span class="site-terminal-heading-icon" aria-hidden="true">&gt;_</span>
+                        <h3>Allowed Terminal Commands</h3>
+                        <span class="site-terminal-badge">ADMIN</span>
+                    </div>
+                    <div class="modal-sub-info">Add exact commands that site terminals may run. Shell operators and paths are blocked.</div>
+                </div>
+                <button class="modal-close-btn" onclick="closeTerminalCommandsModal()">&times;</button>
+            </div>
+            <div class="modal-body terminal-command-manager">
+                <form id="terminalCommandForm" class="terminal-command-add-form">
+                    <label for="terminalCommandInput" class="form-label">Add approved command</label>
+                    <div class="terminal-command-add-row">
+                        <input id="terminalCommandInput" class="form-input" type="text" maxlength="160" placeholder="e.g. composer install" required>
+                        <button id="terminalCommandAddBtn" class="btn btn-primary" type="submit">Add Command</button>
+                    </div>
+                    <small class="form-help">Examples: <code>composer install</code>, <code>php artisan migrate</code>. These commands run from the selected site directory.</small>
+                </form>
+                <div class="terminal-command-section">
+                    <div class="terminal-command-section-title">Built-in commands <span>Always enabled</span></div>
+                    <div id="defaultTerminalCommands" class="terminal-command-list"></div>
+                </div>
+                <div class="terminal-command-section">
+                    <div class="terminal-command-section-title">Custom commands <span>Managed by administrators</span></div>
+                    <div id="customTerminalCommands" class="terminal-command-list"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeTerminalCommandsModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Restricted per-site terminal -->
+    <div id="siteTerminalModal" class="modal-overlay hidden">
+        <div class="modal-card modal-lg">
+            <div class="modal-header">
+                <div>
+                    <div class="site-terminal-heading">
+                        <span class="site-terminal-heading-icon" aria-hidden="true">&gt;_</span>
+                        <h3 id="siteTerminalTitle">Site Terminal</h3>
+                        <span class="site-terminal-badge">RESTRICTED</span>
+                    </div>
+                    <div class="modal-sub-info site-terminal-location">Working directory <code id="siteTerminalPath">/www/wwwroot/...</code></div>
+                </div>
+                <button id="siteTerminalCloseBtn" class="modal-close-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="terminal-container site-terminal-window">
+                    <div class="terminal-header">
+                        <span class="terminal-dot red"></span>
+                        <span class="terminal-dot yellow"></span>
+                        <span class="terminal-dot green"></span>
+                        <span class="terminal-title">restricted_site_terminal</span>
+                        <span class="terminal-header-status"><span class="terminal-status-dot"></span> ready</span>
+                    </div>
+                    <pre id="siteTerminalOutput" class="terminal-body">Only approved site commands can run here.</pre>
+                    <div class="site-terminal-shortcuts" aria-label="Common commands">
+                        <span class="site-terminal-shortcuts-label">Quick command</span>
+                        <button type="button" class="site-terminal-command" data-command="ls">ls</button>
+                        <button type="button" class="site-terminal-command" data-command="npm run build">npm run build</button>
+                        <button type="button" class="site-terminal-command" data-command="npx prisma db push">npx prisma db push</button>
+                    </div>
+                    <form id="siteTerminalForm" class="site-terminal-form">
+                        <span class="site-terminal-prompt">$</span>
+                        <input id="siteTerminalCommand" class="form-input" type="text" autocomplete="off" maxlength="160" placeholder="ls, npm run build, or npx prisma db push" required>
+                        <button id="siteTerminalRunBtn" class="btn btn-primary" type="submit">Run</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- History Drawer / Modal -->
     <div id="historyModal" class="modal-overlay hidden">
         <div class="modal-card modal-xl">
@@ -529,6 +610,16 @@ $csrfToken = Csrf::getToken();
                     <div class="form-group" style="margin-top: 10px;">
                         <label for="siteDomainInput" class="form-label">Domain Name</label>
                         <input type="text" id="siteDomainInput" name="domain" class="form-input" placeholder="e.g. shop.example.com">
+                    </div>
+
+                    <div class="form-group" style="margin-top: 10px;">
+                        <label class="form-checkbox-label">
+                            <input type="checkbox" id="terminalEnableInput" name="terminal_enabled">
+                            Enable restricted terminal for this website
+                        </label>
+                        <label for="terminalPathInput" class="form-label" style="margin-top: 10px;">Terminal Directory</label>
+                        <input type="text" id="terminalPathInput" name="terminal_path" class="form-input" placeholder="/www/wwwroot/site-id">
+                        <small class="form-help">Must be inside <code>/www/wwwroot</code>. Leave blank to use <code>/www/wwwroot/&lt;site-id&gt;</code>.</small>
                     </div>
 
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin-top: 10px;">
@@ -1492,6 +1583,13 @@ $csrfToken = Csrf::getToken();
                                 <div class="perm-card-content">
                                     <div class="perm-card-title">⚡ PM2 Process Manager</div>
                                     <div class="perm-card-desc">Monitor & control PM2 Node/Python daemons</div>
+                                </div>
+                            </label>
+                            <label class="perm-card">
+                                <input type="checkbox" name="um_func" value="terminal">
+                                <div class="perm-card-content">
+                                    <div class="perm-card-title">&gt;_ Website Terminal</div>
+                                    <div class="perm-card-desc">Run only administrator-approved commands inside an enabled site directory</div>
                                 </div>
                             </label>
                             <label class="perm-card">

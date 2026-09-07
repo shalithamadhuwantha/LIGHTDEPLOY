@@ -33,6 +33,8 @@ if (!empty($siteId)) {
 }
 $name = trim((string)($input['name'] ?? ''));
 $domain = trim((string)($input['domain'] ?? ''));
+$terminalEnabled = !empty($input['terminal_enabled']);
+$terminalPath = trim((string)($input['terminal_path'] ?? ''));
 $script = trim((string)($input['script'] ?? ''));
 $rollbackScript = trim((string)($input['rollback_script'] ?? ''));
 $healthCheck = trim((string)($input['health_check'] ?? ''));
@@ -56,6 +58,10 @@ if (!$validator->validateSiteId($siteId)) {
 
 if (empty($name)) {
     jsonError('INVALID_INPUT', 'Site display name is required.', 400);
+}
+
+if ($terminalPath !== '' && (!str_starts_with($terminalPath, '/www/wwwroot/') || strpos($terminalPath, "\0") !== false)) {
+    jsonError('INVALID_TERMINAL_PATH', 'Terminal directory must be inside /www/wwwroot.', 400);
 }
 
 // Default script path if empty
@@ -130,6 +136,8 @@ $sitesData = safeReadJson($sitesFile, ['sites' => []]);
 $sitesData['sites'][$siteId] = [
     'name' => $name,
     'domain' => $domain,
+    'terminal_enabled' => $terminalEnabled,
+    'terminal_path' => $terminalPath,
     'script' => $script,
     'rollback_script' => $rollbackScript,
     'health_check' => $healthCheck,

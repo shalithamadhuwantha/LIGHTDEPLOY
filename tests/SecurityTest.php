@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 use LightDeploy\Security\RateLimiter;
 use LightDeploy\Security\SecurityLogger;
+use LightDeploy\Terminal\SiteTerminal;
 
 function runSecurityTests(array $config): void
 {
@@ -38,4 +39,14 @@ function runSecurityTests(array $config): void
     $auditLogContent = file_get_contents($logDir . '/audit.log');
     TestRunner::assert(strpos($auditLogContent, '***REDACTED***') !== false, "Audit logger redacts sensitive password and token fields");
     TestRunner::assert(strpos($auditLogContent, 'secret123') === false, "Audit log never stores plain password");
+
+    // Test restricted terminal command grammar
+    TestRunner::assert(SiteTerminal::parseCommand('ls -la') === ['ls', '-la'], "Terminal allows safe directory listing");
+    TestRunner::assert(SiteTerminal::parseCommand('npx prisma db push') === ['npx', 'prisma', 'db', 'push'], "Terminal allows approved database push command");
+    TestRunner::assert(SiteTerminal::parseCommand('npm run build') === ['npm', 'run', 'build'], "Terminal allows approved npm scripts");
+    TestRunner::assert(SiteTerminal::parseCommand('ls; rm -rf /') === null, "Terminal blocks shell command chaining");
+    TestRunner::assert(SiteTerminal::parseCommand('cat /etc/passwd') === null, "Terminal blocks unapproved commands and paths");
+    TestRunner::assert(SiteTerminal::normalizeCustomCommand('composer install') === 'composer install', "Admin can define a safe custom command");
+    TestRunner::assert(SiteTerminal::parseCommand('composer install', ['composer install']) === ['composer', 'install'], "Custom command is accepted when explicitly allowlisted");
+    TestRunner::assert(SiteTerminal::normalizeCustomCommand('composer install && rm -rf /') === null, "Admin command editor blocks shell operators and paths");
 }
