@@ -37,6 +37,8 @@ $terminalEnabled = !empty($input['terminal_enabled']);
 $terminalPath = trim((string)($input['terminal_path'] ?? ''));
 $script = trim((string)($input['script'] ?? ''));
 $rollbackScript = trim((string)($input['rollback_script'] ?? ''));
+$customScriptPath = trim((string)($input['custom_script_path'] ?? ''));
+$customScriptContent = (string)($input['custom_script_content'] ?? '');
 $healthCheck = trim((string)($input['health_check'] ?? ''));
 $healthCheckEnabled = !empty($input['health_check_enabled']);
 $pm2Enabled = !empty($input['pm2_enabled']);
@@ -58,6 +60,37 @@ if (!$validator->validateSiteId($siteId)) {
 
 if (empty($name)) {
     jsonError('INVALID_INPUT', 'Site display name is required.', 400);
+}
+
+if ($customScriptPath !== '' || trim($customScriptContent) !== '') {
+    $customPath = $customScriptPath;
+    if ($customPath === '' || strpos($customPath, "\0") !== false || strpos($customPath, '..') !== false) {
+        jsonError('INVALID_CUSTOM_SCRIPT', 'Custom script path is invalid.', 400);
+    }
+    if (pathinfo($customPath, PATHINFO_EXTENSION) !== 'sh') {
+        jsonError('INVALID_CUSTOM_SCRIPT', 'Custom script path must end with .sh.', 400);
+    }
+    if ($customScriptContent === '' || !preg_match('/^#!\/usr\/bin\/env bash\s|^#!\/bin\/bash\s/m', $customScriptContent)) {
+        jsonError('INVALID_CUSTOM_SCRIPT', 'Custom script content must be a bash script with a bash shebang.', 400);
+    }
+    if (strlen($customScriptContent) > 1048576) {
+        jsonError('INVALID_CUSTOM_SCRIPT', 'Custom script content must be smaller than 1 MB.', 400);
+    }
+    $customScriptPath = $customPath;
+    $customScriptDirectory = dirname($customScriptPath);
+    if (!is_dir($customScriptDirectory) && !@mkdir($customScriptDirectory, 0755, true)) {
+        jsonError('WRITE_FAILED', "Cannot create custom script directory: {$customScriptDirectory}", 500);
+    }
+    if (!is_writable($customScriptDirectory)) {
+        jsonError('WRITE_FAILED', "Custom script directory is not writable: {$customScriptDirectory}", 500);
+    }
+    if (@file_put_contents($customScriptPath, $customScriptContent, LOCK_EX) === false) {
+        jsonError('WRITE_FAILED', "Failed to save the custom bash script to: {$customScriptPath}", 500);
+    }
+    @chmod($customScriptPath, 0755);
+} else {
+    $customScriptPath = '';
+    $customScriptContent = '';
 }
 
 if ($terminalPath !== '' && (!str_starts_with($terminalPath, '/www/wwwroot/') || strpos($terminalPath, "\0") !== false)) {
@@ -140,6 +173,8 @@ $sitesData['sites'][$siteId] = [
     'terminal_path' => $terminalPath,
     'script' => $script,
     'rollback_script' => $rollbackScript,
+    'custom_script_path' => $customScriptPath,
+    'custom_script_content' => $customScriptContent,
     'health_check' => $healthCheck,
     'health_check_enabled' => $healthCheckEnabled,
     'pm2_enabled' => $pm2Enabled,

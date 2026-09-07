@@ -1266,6 +1266,15 @@ ${escapeHtml(message)}
     const addSiteForm = document.getElementById('addSiteForm');
     const healthCheckEnableInput = document.getElementById('healthCheckEnableInput');
     const healthCheckUrlGroup = document.getElementById('healthCheckUrlGroup');
+    const customScriptPathInput = document.getElementById('customScriptPathInput');
+    const customScriptContentInput = document.getElementById('customScriptContentInput');
+    const runCustomScriptBtn = document.getElementById('runCustomScriptBtn');
+
+    function updateCustomScriptButton() {
+        if (!runCustomScriptBtn) return;
+        const hasCustomScript = !!customScriptPathInput?.value.trim() && !!customScriptContentInput?.value.trim();
+        runCustomScriptBtn.classList.toggle('hidden', !hasCustomScript || !document.getElementById('siteIdInput')?.readOnly);
+    }
 
     function updatePm2EcosystemMode(mode) {
         const pm2TypeManualRadio = document.getElementById('pm2TypeManualRadio');
@@ -1296,8 +1305,11 @@ ${escapeHtml(message)}
     if (addSiteBtn) {
         addSiteBtn.addEventListener('click', () => {
             if (addSiteForm) addSiteForm.reset();
+            updateCustomScriptButton();
             const modalTitle = addSiteModal.querySelector('.modal-header h3');
             if (modalTitle) modalTitle.textContent = 'Add New Website';
+            const modalSubInfo = addSiteModal.querySelector('.modal-sub-info');
+            if (modalSubInfo) modalSubInfo.textContent = 'Set up this website\'s deployment and runtime options';
 
             const siteIdInput = document.getElementById('siteIdInput');
             if (siteIdInput) siteIdInput.readOnly = false;
@@ -1329,7 +1341,9 @@ ${escapeHtml(message)}
         if (!addSiteModal) return;
 
         const modalTitle = addSiteModal.querySelector('.modal-header h3');
-        if (modalTitle) modalTitle.textContent = `Edit Website Configuration: ${site.name || siteId}`;
+        if (modalTitle) modalTitle.textContent = 'Edit Website';
+        const modalSubInfo = addSiteModal.querySelector('.modal-sub-info');
+        if (modalSubInfo) modalSubInfo.textContent = `${site.name || siteId} · Update deployment and runtime options`;
 
         const siteIdInput = document.getElementById('siteIdInput');
         if (siteIdInput) {
@@ -1343,6 +1357,8 @@ ${escapeHtml(message)}
         document.getElementById('terminalPathInput').value = site.terminal_path || '';
         document.getElementById('siteScriptInput').value = site.script || '';
         document.getElementById('siteRollbackInput').value = site.rollback_script || '';
+        if (customScriptPathInput) customScriptPathInput.value = site.custom_script_path || '';
+        if (customScriptContentInput) customScriptContentInput.value = site.custom_script_content || '';
 
         const healthCheckCheckbox = document.getElementById('healthCheckEnableInput');
         if (healthCheckCheckbox) healthCheckCheckbox.checked = !!site.health_check_enabled;
@@ -1437,6 +1453,8 @@ ${escapeHtml(message)}
             else runPm2Btn.classList.add('hidden');
         }
 
+        updateCustomScriptButton();
+
         addSiteModal.classList.remove('hidden');
     }
 
@@ -1504,6 +1522,8 @@ ${escapeHtml(message)}
                 terminal_path: document.getElementById('terminalPathInput')?.value.trim() || '',
                 script: document.getElementById('siteScriptInput')?.value.trim(),
                 rollback_script: document.getElementById('siteRollbackInput')?.value.trim(),
+                custom_script_path: customScriptPathInput?.value.trim() || '',
+                custom_script_content: customScriptContentInput?.value || '',
                 health_check_enabled: document.getElementById('healthCheckEnableInput')?.checked || false,
                 health_check: document.getElementById('siteHealthCheckInput')?.value.trim() || '',
                 pm2_enabled: document.getElementById('pm2EnableInput')?.checked || false,
@@ -1538,6 +1558,70 @@ ${escapeHtml(message)}
 
             const executedCmd = data.cmd || `pm2 start ${script}`;
             showToast(`Executed: ${executedCmd}`, 'success');
+            loadSites();
+        });
+    }
+
+    if (runCustomScriptBtn) {
+        runCustomScriptBtn.addEventListener('click', async () => {
+            const siteId = document.getElementById('siteIdInput')?.value.trim();
+            if (!siteId || !customScriptPathInput?.value.trim() || !customScriptContentInput?.value.trim()) {
+                showToast('Save a custom bash script before running it.', 'warning');
+                return;
+            }
+
+            runCustomScriptBtn.disabled = true;
+            runCustomScriptBtn.textContent = '⏳ Saving & Running...';
+
+            const saveResult = await apiFetch('/api/save_site.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    site_id: siteId,
+                    name: document.getElementById('siteNameInput')?.value.trim(),
+                    domain: document.getElementById('siteDomainInput')?.value.trim(),
+                    terminal_enabled: document.getElementById('terminalEnableInput')?.checked || false,
+                    terminal_path: document.getElementById('terminalPathInput')?.value.trim() || '',
+                    script: document.getElementById('siteScriptInput')?.value.trim(),
+                    rollback_script: document.getElementById('siteRollbackInput')?.value.trim(),
+                    custom_script_path: customScriptPathInput.value.trim(),
+                    custom_script_content: customScriptContentInput.value,
+                    health_check_enabled: document.getElementById('healthCheckEnableInput')?.checked || false,
+                    health_check: document.getElementById('siteHealthCheckInput')?.value.trim() || '',
+                    pm2_enabled: document.getElementById('pm2EnableInput')?.checked || false,
+                    pm2_ecosystem_type: document.getElementById('pm2TypePathRadio')?.checked ? 'path' : 'code',
+                    pm2_ecosystem_path: document.getElementById('pm2EcosystemPathInput')?.value.trim() || '',
+                    pm2_ecosystem: document.getElementById('pm2EcosystemInput')?.value || ''
+                })
+            });
+
+            if (!saveResult.ok || !saveResult.data.success) {
+                runCustomScriptBtn.disabled = false;
+                runCustomScriptBtn.textContent = '▶ Run Custom Script';
+                showToast(saveResult.data.error?.message || 'Failed to save custom script.', 'danger');
+                return;
+            }
+
+            const runResult = await apiFetch('/api/custom_script.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ site_id: siteId })
+            });
+
+            runCustomScriptBtn.disabled = false;
+            runCustomScriptBtn.textContent = '▶ Run Custom Script';
+            if (!runResult.ok || !runResult.data.success) {
+                showToast(runResult.data.error?.message || 'Failed to run custom script.', 'danger');
+                return;
+            }
+
+            if (addSiteModal) addSiteModal.classList.add('hidden');
+            currentDeploymentId = runResult.data.deployment_id;
+            currentSiteId = siteId;
+            localStorage.setItem('lightdeploy_active_dep', currentDeploymentId);
+            openDeploymentModal(currentDeploymentId, siteId, 'running');
+            connectSSEStream(currentDeploymentId);
+            showToast(runResult.data.message || 'Custom script started.', 'success');
             loadSites();
         });
     }
@@ -1578,6 +1662,10 @@ ${escapeHtml(message)}
         });
     }
 
+    [customScriptPathInput, customScriptContentInput].forEach((input) => {
+        if (input) input.addEventListener('input', updateCustomScriptButton);
+    });
+
     if (addSiteForm) {
         addSiteForm.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -1595,6 +1683,8 @@ ${escapeHtml(message)}
                 terminal_path: document.getElementById('terminalPathInput').value.trim(),
                 script: document.getElementById('siteScriptInput').value.trim(),
                 rollback_script: document.getElementById('siteRollbackInput').value.trim(),
+                custom_script_path: customScriptPathInput?.value.trim() || '',
+                custom_script_content: customScriptContentInput?.value || '',
                 health_check_enabled: document.getElementById('healthCheckEnableInput').checked,
                 health_check: document.getElementById('siteHealthCheckInput').value.trim(),
                 pm2_enabled: document.getElementById('pm2EnableInput')?.checked || false,

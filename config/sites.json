@@ -60,6 +60,8 @@
             "terminal_path": "/www/wwwroot/test",
             "script": "scripts/test011.sh",
             "rollback_script": "",
+            "custom_script_path": "/home/shalith/Documents/CYBERnetic/test/test.sh",
+            "custom_script_content": "#!/usr/bin/env bash\npm2 list",
             "health_check": "",
             "health_check_enabled": false,
             "pm2_enabled": true,

@@ -583,15 +583,20 @@ $csrfToken = Csrf::getToken();
             <div class="modal-header">
                 <div>
                     <h3>Add New Website</h3>
-                    <div class="modal-sub-info">Configure deployment scripts, post-deploy health checks, and PM2 ecosystem runner</div>
+                    <div class="modal-sub-info">Set up this website's deployment and runtime options</div>
                 </div>
                 <button id="closeAddSiteBtn" class="modal-close-btn">&times;</button>
             </div>
             <form id="addSiteForm" style="display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden;">
                 <div class="modal-body" style="max-height: 72vh; overflow-y: auto; padding: 20px 24px;">
+                    <div class="site-config-intro">
+                        <strong>Website settings</strong>
+                        <span>Changes apply only to this website. Required fields are marked with *.</span>
+                    </div>
                     <!-- Section 1: Basic Site Configuration -->
-                    <h4 style="margin: 0 0 14px; color: var(--accent-blue); font-size: 0.95rem; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 6px; display: flex; align-items: center; gap: 8px;">
-                        🌐 1. Basic Site Configuration
+                    <h4 class="site-config-section-title">
+                        <span class="site-config-step">1</span>
+                        <span><strong>Website details</strong><small>Name, domain, and restricted terminal access</small></span>
                     </h4>
                     
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px;">
@@ -639,14 +644,15 @@ $csrfToken = Csrf::getToken();
                     </div>
 
                     <!-- Section 2: Health Check -->
-                    <h4 style="margin: 20px 0 14px; color: var(--accent-blue); font-size: 0.95rem; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 6px; display: flex; align-items: center; gap: 8px;">
-                        🩺 2. Post-Deployment Health Check
+                    <h4 class="site-config-section-title">
+                        <span class="site-config-step">2</span>
+                        <span><strong>Health check</strong><small>Confirm the website responds after deployment</small></span>
                     </h4>
 
                     <div class="form-group">
                         <label class="form-checkbox-label">
                             <input type="checkbox" id="healthCheckEnableInput" name="health_check_enabled">
-                            Enable Post-Deployment HTTP Health Check
+                            Run an HTTP health check after deployment
                         </label>
                     </div>
 
@@ -655,15 +661,32 @@ $csrfToken = Csrf::getToken();
                         <input type="url" id="siteHealthCheckInput" name="health_check" class="form-input" placeholder="https://shop.example.com/healthz">
                     </div>
 
-                    <!-- Section 3: PM2 Process Manager Ecosystem -->
-                    <h4 style="margin: 20px 0 14px; color: var(--accent-blue); font-size: 0.95rem; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 6px; display: flex; align-items: center; gap: 8px;">
-                        ⚡ 3. PM2 Process Manager Ecosystem Config
+                    <!-- Section 3: Site Custom Bash Script -->
+                    <h4 class="site-config-section-title">
+                        <span class="site-config-step">3</span>
+                        <span><strong>Custom script</strong><small>Optionally save and run a Bash script for this website</small></span>
+                    </h4>
+                    <div class="form-group">
+                        <label for="customScriptPathInput" class="form-label">Script file path <span class="site-config-optional">Optional</span></label>
+                        <input type="text" id="customScriptPathInput" name="custom_script_path" class="form-input" placeholder="e.g. /var/www/site-a/custom.sh">
+                        <small class="form-help">Use an absolute writable path ending with <code>.sh</code>.</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="customScriptContentInput" class="form-label">Bash script content</label>
+                        <textarea id="customScriptContentInput" name="custom_script_content" class="form-input" rows="9" style="font-family: var(--font-mono); font-size: 0.83rem; line-height: 1.5; resize: vertical; background: rgba(15, 23, 42, 0.7); color: #38bdf8; white-space: pre;" placeholder="#!/usr/bin/env bash&#10;set -Eeuo pipefail&#10;&#10;echo &quot;Running custom script&quot;"></textarea>
+                        <small class="form-help">The first line must be <code>#!/bin/bash</code> or <code>#!/usr/bin/env bash</code>. Runtime variables include <code>SITE_ID</code>, <code>SITE_NAME</code>, and <code>DEPLOYMENT_ID</code>.</small>
+                    </div>
+
+                    <!-- Section 4: PM2 Process Manager Ecosystem -->
+                    <h4 class="site-config-section-title">
+                        <span class="site-config-step">4</span>
+                        <span><strong>PM2 process manager</strong><small>Optional process control for Node.js and other applications</small></span>
                     </h4>
 
                     <div class="form-group">
                         <label class="form-checkbox-label">
                             <input type="checkbox" id="pm2EnableInput" name="pm2_enabled">
-                            Register & Control with PM2 Process Manager
+                            Enable PM2 process control for this website
                         </label>
                     </div>
 
@@ -746,8 +769,9 @@ $csrfToken = Csrf::getToken();
                 <div class="modal-footer">
                     <button type="button" id="deleteSiteModalBtn" class="btn btn-danger hidden" style="margin-right: auto;">Delete Site</button>
                     <button type="button" id="closeAddSiteFooterBtn" class="btn btn-secondary">Cancel</button>
-                    <button type="button" id="runSitePm2Btn" class="btn btn-secondary hidden" style="background: linear-gradient(135deg, #059669, #10b981); border-color: #10b981; color: #ffffff; font-weight: 600;" title="Execute 'pm2 start ecosystem.config.js' for this site">▶ Restart SC Ecosystem</button>
-                    <button type="submit" id="saveSiteSubmitBtn" class="btn btn-primary">Save Configuration</button>
+                    <button type="button" id="runCustomScriptBtn" class="btn btn-secondary hidden" style="background: linear-gradient(135deg, #0891b2, #06b6d4); border-color: #06b6d4; color: #ffffff; font-weight: 600;">▶ Run custom script</button>
+                    <button type="button" id="runSitePm2Btn" class="btn btn-secondary hidden" style="background: linear-gradient(135deg, #059669, #10b981); border-color: #10b981; color: #ffffff; font-weight: 600;" title="Execute the PM2 ecosystem configuration for this site">▶ Restart PM2</button>
+                    <button type="submit" id="saveSiteSubmitBtn" class="btn btn-primary">Save website</button>
                 </div>
             </form>
         </div>
