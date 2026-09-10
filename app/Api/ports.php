@@ -29,6 +29,8 @@ $joinSocketLines = static function (string $output): array {
 $user = $authService->requirePermission('vps_ports');
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $user = $authService->requirePermission('kill_port_process');
+
     if (!Csrf::validateHeaderOrPost()) {
         $securityLogger->log('CSRF_FAILURE', ['endpoint' => 'ports'], $user['username']);
         jsonError('CSRF_FAILURE', 'Invalid or missing CSRF security token.', 403);

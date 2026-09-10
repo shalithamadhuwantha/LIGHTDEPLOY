@@ -19,7 +19,11 @@
                 "sites",
                 "add_edit_sites",
                 "pm2",
-                "terminal"
+                "terminal",
+                "db_backups",
+                "vps_ports",
+                "deploy_history",
+                "script_gen"
             ],
             "allowed_systems": [
                 "*"

@@ -1657,6 +1657,13 @@ $csrfToken = Csrf::getToken();
                                 </div>
                             </label>
                             <label class="perm-card">
+                                <input type="checkbox" name="um_func" value="kill_port_process">
+                                <div class="perm-card-content">
+                                    <div class="perm-card-title">⛔ Kill Port Processes</div>
+                                    <div class="perm-card-desc">Stop the verified process attached to a selected listening port</div>
+                                </div>
+                            </label>
+                            <label class="perm-card">
                                 <input type="checkbox" name="um_func" value="deploy_history">
                                 <div class="perm-card-content">
                                     <div class="perm-card-title">📜 Deployment Audit History</div>
