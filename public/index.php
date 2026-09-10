@@ -1025,6 +1025,32 @@ $csrfToken = Csrf::getToken();
         </div>
     </div>
 
+    <!-- Port Process Authentication Modal -->
+    <div id="killPortModal" class="modal-overlay hidden">
+        <div class="modal-card" style="max-width: 460px;">
+            <div class="modal-header">
+                <div>
+                    <h3>Stop Process on Port</h3>
+                    <div id="killPortSummary" class="modal-sub-info">Enter your login password to continue.</div>
+                </div>
+                <button id="closeKillPortBtn" class="modal-close-btn" type="button">&times;</button>
+            </div>
+            <form id="killPortForm">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="killPortPasswordInput">Login password</label>
+                        <input type="password" id="killPortPasswordInput" class="form-input" autocomplete="current-password" required>
+                    </div>
+                    <p style="color: var(--text-muted); font-size: 0.85rem; margin: 12px 0 0;">Only the process currently attached to the selected port will be targeted.</p>
+                </div>
+                <div class="modal-footer">
+                    <button id="cancelKillPortBtn" type="button" class="btn btn-secondary">Cancel</button>
+                    <button id="killPortSubmitBtn" type="submit" class="btn btn-danger">Stop Process</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- MySQL Database Backups Suite Modal -->
     <div id="dbBackupsModal" class="modal-overlay hidden">
         <div class="modal-card modal-xl">

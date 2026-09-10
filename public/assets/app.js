@@ -2104,8 +2104,16 @@ ${escapeHtml(message)}
     const portSearchInput = document.getElementById('portSearchInput');
     const portsTableBody = document.getElementById('portsTableBody');
     const freePortsList = document.getElementById('freePortsList');
+    const killPortModal = document.getElementById('killPortModal');
+    const killPortForm = document.getElementById('killPortForm');
+    const killPortSummary = document.getElementById('killPortSummary');
+    const killPortPasswordInput = document.getElementById('killPortPasswordInput');
+    const killPortSubmitBtn = document.getElementById('killPortSubmitBtn');
+    const closeKillPortBtn = document.getElementById('closeKillPortBtn');
+    const cancelKillPortBtn = document.getElementById('cancelKillPortBtn');
 
     let cachedPortsData = [];
+    let selectedPortProcess = null;
 
     async function loadVpsPorts() {
         window.loadVpsPorts = loadVpsPorts;
@@ -2194,6 +2202,7 @@ ${escapeHtml(message)}
                     <button class="btn btn-secondary btn-sm copy-single-port" data-port="${p.port}">
                         📋 Copy Port
                     </button>
+                    ${p.pid ? `<button class="btn btn-danger btn-sm kill-port-process" data-port="${p.port}" data-proto="${escapeHtml(p.proto)}" data-pid="${p.pid}" style="margin-left: 6px;">✕ Kill Process</button>` : ''}
                 </td>
             </tr>
         `).join('');
@@ -2204,6 +2213,34 @@ ${escapeHtml(message)}
                 showToast(`Port ${btn.dataset.port} copied to clipboard!`, 'success');
             });
         });
+
+        document.querySelectorAll('.kill-port-process').forEach(btn => {
+            btn.addEventListener('click', () => {
+                selectedPortProcess = {
+                    port: Number(btn.dataset.port),
+                    proto: btn.dataset.proto,
+                    pid: Number(btn.dataset.pid)
+                };
+                if (killPortSummary) {
+                    killPortSummary.textContent = `Enter your login password to stop PID ${selectedPortProcess.pid} on port ${selectedPortProcess.port}/${selectedPortProcess.proto}.`;
+                }
+                if (killPortPasswordInput) killPortPasswordInput.value = '';
+                if (killPortModal) {
+                    killPortModal.classList.remove('hidden');
+                    killPortModal.style.display = 'flex';
+                }
+                killPortPasswordInput?.focus();
+            });
+        });
+    }
+
+    function closeKillPortModal() {
+        if (killPortModal) {
+            killPortModal.classList.add('hidden');
+            killPortModal.style.display = 'none';
+        }
+        killPortForm?.reset();
+        selectedPortProcess = null;
     }
 
     window.openVpsPortsModal = function() {
@@ -2243,6 +2280,35 @@ ${escapeHtml(message)}
     if (closePortsBtn) closePortsBtn.addEventListener('click', () => window.closeVpsPortsModal());
     if (closePortsFooterBtn) closePortsFooterBtn.addEventListener('click', () => window.closeVpsPortsModal());
     if (refreshPortsModalBtn) refreshPortsModalBtn.addEventListener('click', () => loadVpsPorts());
+    if (closeKillPortBtn) closeKillPortBtn.addEventListener('click', closeKillPortModal);
+    if (cancelKillPortBtn) cancelKillPortBtn.addEventListener('click', closeKillPortModal);
+    if (killPortForm) {
+        killPortForm.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            if (!selectedPortProcess || !killPortPasswordInput?.value) return;
+
+            if (killPortSubmitBtn) killPortSubmitBtn.disabled = true;
+            const { ok, data } = await apiFetch('/api/ports.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'kill_process',
+                    ...selectedPortProcess,
+                    password: killPortPasswordInput.value
+                })
+            });
+            if (killPortSubmitBtn) killPortSubmitBtn.disabled = false;
+
+            if (!ok || !data.success) {
+                showToast(data.error?.message || 'Unable to stop the selected process.', 'danger');
+                return;
+            }
+
+            closeKillPortModal();
+            showToast(data.message || 'Process stopped successfully.', 'success');
+            loadVpsPorts();
+        });
+    }
     if (portSearchInput) {
         portSearchInput.addEventListener('input', () => renderPortsTable(cachedPortsData));
     }

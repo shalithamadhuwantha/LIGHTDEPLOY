@@ -10,11 +10,73 @@ $config = require_once dirname(__DIR__) . '/bootstrap.php';
 
 use LightDeploy\Security\SecurityLogger;
 use LightDeploy\Auth\AuthService;
+use LightDeploy\Auth\Csrf;
 
 $securityLogger = new SecurityLogger($config['logs_dir'] . '/security');
 $authService = new AuthService($config['config_dir'] . '/users.json', $securityLogger);
+$joinSocketLines = static function (string $output): array {
+    $lines = [];
+    foreach (explode("\n", $output) as $rawLine) {
+        if (preg_match('/^\s+users:\s*/i', $rawLine) && $lines !== []) {
+            $lines[array_key_last($lines)] .= ' ' . trim($rawLine);
+        } else {
+            $lines[] = $rawLine;
+        }
+    }
+    return $lines;
+};
 
-$authService->requirePermission('vps_ports');
+$user = $authService->requirePermission('vps_ports');
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!Csrf::validateHeaderOrPost()) {
+        $securityLogger->log('CSRF_FAILURE', ['endpoint' => 'ports'], $user['username']);
+        jsonError('CSRF_FAILURE', 'Invalid or missing CSRF security token.', 403);
+    }
+
+    $input = json_decode((string)file_get_contents('php://input'), true) ?: $_POST;
+    $action = (string)($input['action'] ?? '');
+    $port = filter_var($input['port'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'max_range' => 65535]]);
+    $pid = filter_var($input['pid'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+    $proto = strtoupper(trim((string)($input['proto'] ?? '')));
+    $password = (string)($input['password'] ?? '');
+
+    if ($action !== 'kill_process' || $port === false || $pid === false || !in_array($proto, ['TCP', 'UDP'], true) || $password === '') {
+        jsonError('INVALID_INPUT', 'A valid port, protocol, process ID, and password are required.', 400);
+    }
+
+    if ($authService->authenticate($user['username'], $password) === null) {
+        $securityLogger->log('PORT_KILL_AUTH_FAILURE', ['port' => $port, 'proto' => $proto, 'pid' => $pid], $user['username']);
+        jsonError('INVALID_CREDENTIALS', 'The password is incorrect.', 401);
+    }
+
+    $socketOutput = safeShellExec('ss -ltnup 2>/dev/null') ?? '';
+    $portPattern = '/(?:^|\s)(?:[^\s]*:|\*)' . preg_quote((string)$port, '/') . '(?:\s|$)/';
+    $pidPattern = '/pid=' . preg_quote((string)$pid, '/') . '(?:,|\))/';
+    $socketMatchesSelection = false;
+    foreach ($joinSocketLines($socketOutput) as $socketLine) {
+        if (preg_match('/^' . strtolower($proto) . '\s/', trim($socketLine)) && preg_match($portPattern, $socketLine) && preg_match($pidPattern, $socketLine)) {
+            $socketMatchesSelection = true;
+            break;
+        }
+    }
+
+    if (!$socketMatchesSelection) {
+        jsonError('PROCESS_NOT_FOUND', 'That process is no longer listening on the selected port.', 409);
+    }
+
+    if (!function_exists('posix_kill') || !posix_kill($pid, SIGTERM)) {
+        $securityLogger->log('PORT_KILL_FAILURE', ['port' => $port, 'proto' => $proto, 'pid' => $pid], $user['username']);
+        jsonError('KILL_FAILED', 'Unable to stop the process. Check server permissions.', 500);
+    }
+
+    $securityLogger->log('PORT_PROCESS_KILLED', ['port' => $port, 'proto' => $proto, 'pid' => $pid], $user['username']);
+    jsonSuccess(['message' => "Process {$pid} was sent a termination signal.", 'port' => $port, 'proto' => $proto, 'pid' => $pid]);
+}
+
+if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
+    jsonError('METHOD_NOT_ALLOWED', 'Only GET and POST requests are permitted.', 405);
+}
 
 $openPorts = [];
 $usedPortNumbers = [];
@@ -23,7 +85,7 @@ $usedPortNumbers = [];
 $output = safeShellExec('ss -tulpn 2>/dev/null || netstat -tulpn 2>/dev/null || lsof -i -P -n 2>/dev/null') ?? '';
 
 if (!empty($output)) {
-    $lines = explode("\n", $output);
+    $lines = $joinSocketLines($output);
     foreach ($lines as $line) {
         $line = trim($line);
         if (empty($line) || str_starts_with($line, 'Netid') || str_starts_with($line, 'Active') || str_starts_with($line, 'COMMAND')) {
@@ -35,9 +97,10 @@ if (!empty($output)) {
         // Extract process & PID if present
         $procName = 'system';
         $pid = 0;
-        if (preg_match('/users:\(\("([^"]+)",pid=(\d+)/i', $line, $pm)) {
-            $procName = $pm[1];
-            $pid = (int)$pm[2];
+        if (preg_match_all('/"([^"]+)",pid=(\d+)/i', $line, $processMatches, PREG_SET_ORDER)) {
+            $lastProcess = end($processMatches);
+            $procName = $lastProcess[1];
+            $pid = (int)$lastProcess[2];
         } elseif (preg_match('/([a-zA-Z0-9_\-\.]+)\s+(\d+)\s+.*?\s+(?:TCP|UDP)/i', $line, $pm)) {
             $procName = $pm[1];
             $pid = (int)$pm[2];
