@@ -33,6 +33,7 @@ if (!empty($siteId)) {
 }
 $name = trim((string)($input['name'] ?? ''));
 $domain = trim((string)($input['domain'] ?? ''));
+$envFilePath = trim((string)($input['env_file_path'] ?? ''));
 $terminalEnabled = !empty($input['terminal_enabled']);
 $terminalPath = trim((string)($input['terminal_path'] ?? ''));
 $script = trim((string)($input['script'] ?? ''));
@@ -60,6 +61,10 @@ if (!$validator->validateSiteId($siteId)) {
 
 if (empty($name)) {
     jsonError('INVALID_INPUT', 'Site display name is required.', 400);
+}
+
+if ($envFilePath !== '' && (strpos($envFilePath, '..') !== false || strpos($envFilePath, "\0") !== false)) {
+    jsonError('INVALID_ENV_FILE', 'Unsafe environment file path characters are not permitted.', 400);
 }
 
 if ($customScriptPath !== '' || trim($customScriptContent) !== '') {
@@ -166,9 +171,32 @@ if (!empty($rollbackScript)) {
 $sitesFile = $config['config_dir'] . '/sites.json';
 $sitesData = safeReadJson($sitesFile, ['sites' => []]);
 
+if ($envFilePath === '') {
+    $scriptCandidates = [];
+    if ($script !== '') {
+        if (str_starts_with($script, '/')) {
+            $scriptCandidates[] = $script;
+        } else {
+            $scriptCandidates[] = $config['scripts_dir'] . '/' . basename($script);
+            $scriptCandidates[] = $config['scripts_dir'] . '/' . ltrim($script, '/');
+        }
+    }
+
+    foreach ($scriptCandidates as $candidate) {
+        if (is_file($candidate)) {
+            $scriptContent = @file_get_contents($candidate);
+            if (is_string($scriptContent) && preg_match('/^ENV_SOURCE="([^"]*)"/m', $scriptContent, $match)) {
+                $envFilePath = $match[1];
+                break;
+            }
+        }
+    }
+}
+
 $sitesData['sites'][$siteId] = [
     'name' => $name,
     'domain' => $domain,
+    'env_file_path' => $envFilePath,
     'terminal_enabled' => $terminalEnabled,
     'terminal_path' => $terminalPath,
     'script' => $script,

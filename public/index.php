@@ -643,6 +643,22 @@ $csrfToken = Csrf::getToken();
                         </div>
                     </div>
 
+                    <div class="form-group" style="margin-top: 10px;">
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
+                            <label for="siteEnvPathInput" class="form-label" style="margin-bottom: 0;">Environment File</label>
+                            <button type="button" id="siteEditEnvBtn" class="btn btn-secondary btn-sm" style="white-space: nowrap;">✏️ Edit .env</button>
+                        </div>
+                        <input type="hidden" id="siteEnvPathInput" name="env_file_path" value="">
+                        <small class="form-help">Loaded automatically from the site deployment script.</small>
+                        <div id="siteEnvEditor" class="hidden" style="margin-top: 10px;">
+                            <textarea id="siteEnvContent" class="form-input" rows="8" spellcheck="false" placeholder="KEY=value"></textarea>
+                            <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px;">
+                                <button type="button" id="siteCancelEnvBtn" class="btn btn-secondary btn-sm">Cancel</button>
+                                <button type="button" id="siteSaveEnvBtn" class="btn btn-primary btn-sm">💾 Save .env</button>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Section 2: Health Check -->
                     <h4 class="site-config-section-title">
                         <span class="site-config-step">2</span>
@@ -1253,8 +1269,18 @@ $csrfToken = Csrf::getToken();
                             <h4 class="scriptgen-section-title">🔐 2. Environment Configuration</h4>
                             <div class="form-group">
                                 <label for="sgEnvSource" class="form-label">Environment File Path (optional)</label>
-                                <input type="text" id="sgEnvSource" class="form-input" placeholder="e.g. /root/envfiles/.env.production">
+                                <div style="display: flex; gap: 8px;">
+                                    <input type="text" id="sgEnvSource" class="form-input" placeholder="e.g. /root/envfiles/.env.production" style="flex: 1;">
+                                    <button type="button" id="sgEditEnvBtn" class="btn btn-secondary btn-sm" style="white-space: nowrap;">✏️ Edit .env</button>
+                                </div>
                                 <small class="form-help">Will be copied to <code>$APP_DIR/.env</code> during deployment</small>
+                                <div id="sgEnvEditor" class="hidden" style="margin-top: 10px;">
+                                    <textarea id="sgEnvContent" class="form-input" rows="8" spellcheck="false" placeholder="KEY=value"></textarea>
+                                    <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px;">
+                                        <button type="button" id="sgCancelEnvBtn" class="btn btn-secondary btn-sm">Cancel</button>
+                                        <button type="button" id="sgSaveEnvBtn" class="btn btn-primary btn-sm">💾 Save .env</button>
+                                    </div>
+                                </div>
                             </div>
 
                             <!-- Section 3: Build Pipeline -->

@@ -65,10 +65,35 @@ foreach ($configuredSites as $siteId => $siteMeta) {
         }
     }
 
+    $envFilePath = trim((string)($siteMeta['env_file_path'] ?? ''));
+    if ($envFilePath === '') {
+        $scriptPath = trim((string)($siteMeta['script'] ?? ''));
+        $scriptCandidates = [];
+        if ($scriptPath !== '') {
+            if (str_starts_with($scriptPath, '/')) {
+                $scriptCandidates[] = $scriptPath;
+            } else {
+                $scriptCandidates[] = $config['scripts_dir'] . '/' . basename($scriptPath);
+                $scriptCandidates[] = $config['scripts_dir'] . '/' . ltrim($scriptPath, '/');
+            }
+        }
+
+        foreach ($scriptCandidates as $candidate) {
+            if (is_file($candidate)) {
+                $scriptContent = @file_get_contents($candidate);
+                if (is_string($scriptContent) && preg_match('/^ENV_SOURCE="([^"]*)"/m', $scriptContent, $match)) {
+                    $envFilePath = $match[1];
+                    break;
+                }
+            }
+        }
+    }
+
     $sanitizedSites[$siteId] = [
         'id' => $siteId,
         'name' => $siteMeta['name'] ?? $siteId,
         'domain' => $siteMeta['domain'] ?? '',
+        'env_file_path' => $envFilePath,
         'script' => $siteMeta['script'] ?? '',
         'rollback_script' => $siteMeta['rollback_script'] ?? '',
         'custom_script_path' => $siteMeta['custom_script_path'] ?? '',

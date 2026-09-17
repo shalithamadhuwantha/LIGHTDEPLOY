@@ -42,6 +42,7 @@ $appDir = trim((string)($input['app_dir'] ?? ''));
 $repoUrl = trim((string)($input['repo_url'] ?? ''));
 $branch = trim((string)($input['branch'] ?? 'main'));
 $envSource = trim((string)($input['env_source'] ?? ''));
+$siteId = strtolower(trim((string)($input['site_id'] ?? '')));
 $hasNpm = !empty($input['has_npm']);
 $hasBuild = !empty($input['has_build']);
 $hasComposer = !empty($input['has_composer']);
@@ -49,14 +50,14 @@ $hasPm2 = !empty($input['has_pm2']);
 $appName = trim((string)($input['app_name'] ?? ''));
 $siteUser = trim((string)($input['site_user'] ?? 'www'));
 $siteGroup = trim((string)($input['site_group'] ?? 'www'));
-// ── Action Read (Load existing script from disk) ─────────────────────────────
-if ($action === 'read') {
+// ── Read existing script or environment file from disk ───────────────────────
+if ($action === 'read' || $action === 'read_env') {
     $filePath = trim((string)($input['file_path'] ?? $input['output_path'] ?? ''));
     if (empty($filePath)) {
         jsonError('INVALID_INPUT', 'File path is required for read action.', 400);
     }
-    if (strpos($filePath, '..') !== false) {
-        jsonError('INVALID_INPUT', 'Path traversal characters are not permitted.', 400);
+    if (strpos($filePath, '..') !== false || strpos($filePath, "\0") !== false) {
+        jsonError('INVALID_INPUT', 'Unsafe file path characters are not permitted.', 400);
     }
     if (!file_exists($filePath)) {
         jsonError('NOT_FOUND', "File does not exist on server: {$filePath}", 404);
@@ -69,8 +70,34 @@ if ($action === 'read') {
         'success' => true,
         'file_path' => $filePath,
         'content' => $content,
-        'message' => 'Script loaded successfully from server.'
+        'message' => $action === 'read_env' ? 'Environment file loaded successfully from server.' : 'Script loaded successfully from server.'
     ]);
+    exit;
+}
+
+// ── Save environment file ───────────────────────────────────────────────────
+if ($action === 'save_env') {
+    $filePath = trim((string)($input['file_path'] ?? ''));
+    $content = (string)($input['content'] ?? '');
+    if (empty($filePath)) {
+        jsonError('INVALID_INPUT', 'Environment file path is required.', 400);
+    }
+    if (strpos($filePath, '..') !== false || strpos($filePath, "\0") !== false) {
+        jsonError('INVALID_INPUT', 'Unsafe environment file path characters are not permitted.', 400);
+    }
+    if (strlen($content) > 1048576) {
+        jsonError('INVALID_INPUT', 'Environment file must be smaller than 1 MB.', 400);
+    }
+    $parentDirectory = dirname($filePath);
+    if (!is_dir($parentDirectory) || !is_writable($parentDirectory)) {
+        jsonError('WRITE_FAILED', "Environment file directory is not writable: {$parentDirectory}", 403);
+    }
+    if (@file_put_contents($filePath, $content, LOCK_EX) === false) {
+        jsonError('WRITE_FAILED', "Failed to save environment file: {$filePath}", 500);
+    }
+    @chmod($filePath, 0600);
+    $securityLogger->log('ENVIRONMENT_FILE_SAVED', ['file_path' => $filePath], $user['username']);
+    jsonSuccess(['message' => "Environment file saved successfully: {$filePath}", 'file_path' => $filePath]);
     exit;
 }
 
@@ -112,6 +139,9 @@ if ($action === 'save') {
     }
     if (strpos($outputPath, '..') !== false) {
         jsonError('INVALID_INPUT', 'Path traversal characters are not permitted.', 400);
+    }
+    if ($siteId !== '' && !preg_match('/^[a-z0-9_-]{3,32}$/', $siteId)) {
+        jsonError('INVALID_INPUT', 'Site ID contains invalid characters.', 400);
     }
 }
 
@@ -166,6 +196,17 @@ if ($action === 'save') {
     }
 
     @chmod($outputPath, 0755);
+
+    if ($scriptType === 'bash' && $siteId !== '') {
+        $sitesFile = $config['config_dir'] . '/sites.json';
+        $sitesData = safeReadJson($sitesFile, ['sites' => []]);
+        if (isset($sitesData['sites'][$siteId])) {
+            $sitesData['sites'][$siteId]['env_file_path'] = $envSource;
+            if (!safeWriteJson($sitesFile, $sitesData)) {
+                jsonError('WRITE_FAILED', 'Script saved, but the site environment path could not be saved.', 500);
+            }
+        }
+    }
 
     $securityLogger->log('SCRIPT_GENERATED_SAVED', [
         'script_type' => $scriptType,

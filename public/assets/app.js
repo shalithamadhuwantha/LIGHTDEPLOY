@@ -1266,6 +1266,12 @@ ${escapeHtml(message)}
     const addSiteForm = document.getElementById('addSiteForm');
     const healthCheckEnableInput = document.getElementById('healthCheckEnableInput');
     const healthCheckUrlGroup = document.getElementById('healthCheckUrlGroup');
+    const siteEnvPathInput = document.getElementById('siteEnvPathInput');
+    const siteEditEnvBtn = document.getElementById('siteEditEnvBtn');
+    const siteEnvEditor = document.getElementById('siteEnvEditor');
+    const siteEnvContent = document.getElementById('siteEnvContent');
+    const siteCancelEnvBtn = document.getElementById('siteCancelEnvBtn');
+    const siteSaveEnvBtn = document.getElementById('siteSaveEnvBtn');
     const customScriptPathInput = document.getElementById('customScriptPathInput');
     const customScriptContentInput = document.getElementById('customScriptContentInput');
     const runCustomScriptBtn = document.getElementById('runCustomScriptBtn');
@@ -1274,6 +1280,73 @@ ${escapeHtml(message)}
         if (!runCustomScriptBtn) return;
         const hasCustomScript = !!customScriptPathInput?.value.trim() && !!customScriptContentInput?.value.trim();
         runCustomScriptBtn.classList.toggle('hidden', !hasCustomScript || !document.getElementById('siteIdInput')?.readOnly);
+    }
+
+    if (siteEditEnvBtn) {
+        siteEditEnvBtn.addEventListener('click', async () => {
+            const filePath = siteEnvPathInput?.value.trim();
+            if (!filePath) {
+                showToast('Enter an environment file path first.', 'warning');
+                return;
+            }
+            siteEditEnvBtn.disabled = true;
+            siteEditEnvBtn.textContent = '⏳ Loading...';
+            try {
+                const { ok, data } = await apiFetch('/api/generate_script.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'read_env', file_path: filePath })
+                });
+                if (ok && data.success) {
+                    siteEnvContent.value = data.content || '';
+                    siteEnvEditor.classList.remove('hidden');
+                    showToast('Environment file loaded.', 'success');
+                } else {
+                    showToast(data.error?.message || 'Failed to load environment file.', 'error');
+                }
+            } catch (err) {
+                showToast('Network error while reading environment file.', 'error');
+            }
+            siteEditEnvBtn.disabled = false;
+            siteEditEnvBtn.textContent = '✏️ Edit .env';
+        });
+    }
+
+    if (siteCancelEnvBtn) {
+        siteCancelEnvBtn.addEventListener('click', () => siteEnvEditor.classList.add('hidden'));
+    }
+
+    if (siteSaveEnvBtn) {
+        siteSaveEnvBtn.addEventListener('click', async () => {
+            const filePath = siteEnvPathInput?.value.trim();
+            if (!filePath) {
+                showToast('Enter an environment file path first.', 'warning');
+                return;
+            }
+            siteSaveEnvBtn.disabled = true;
+            siteSaveEnvBtn.textContent = '⏳ Saving...';
+            try {
+                const { ok, data } = await apiFetch('/api/generate_script.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'save_env',
+                        file_path: filePath,
+                        content: siteEnvContent.value
+                    })
+                });
+                if (ok && data.success) {
+                    showToast(data.message || 'Environment file saved.', 'success');
+                    siteEnvEditor.classList.add('hidden');
+                } else {
+                    showToast(data.error?.message || 'Failed to save environment file.', 'error');
+                }
+            } catch (err) {
+                showToast('Network error while saving environment file.', 'error');
+            }
+            siteSaveEnvBtn.disabled = false;
+            siteSaveEnvBtn.textContent = '💾 Save .env';
+        });
     }
 
     function updatePm2EcosystemMode(mode) {
@@ -1305,6 +1378,7 @@ ${escapeHtml(message)}
     if (addSiteBtn) {
         addSiteBtn.addEventListener('click', () => {
             if (addSiteForm) addSiteForm.reset();
+            if (siteEnvEditor) siteEnvEditor.classList.add('hidden');
             updateCustomScriptButton();
             const modalTitle = addSiteModal.querySelector('.modal-header h3');
             if (modalTitle) modalTitle.textContent = 'Add New Website';
@@ -1353,6 +1427,8 @@ ${escapeHtml(message)}
 
         document.getElementById('siteNameInput').value = site.name || '';
         document.getElementById('siteDomainInput').value = site.domain || '';
+        if (siteEnvPathInput) siteEnvPathInput.value = site.env_file_path || '';
+        if (siteEnvEditor) siteEnvEditor.classList.add('hidden');
         document.getElementById('terminalEnableInput').checked = !!site.terminal_enabled;
         document.getElementById('terminalPathInput').value = site.terminal_path || '';
         document.getElementById('siteScriptInput').value = site.script || '';
@@ -1518,6 +1594,7 @@ ${escapeHtml(message)}
                 site_id: siteId,
                 name: document.getElementById('siteNameInput')?.value.trim(),
                 domain: document.getElementById('siteDomainInput')?.value.trim(),
+                env_file_path: siteEnvPathInput?.value.trim() || '',
                 terminal_enabled: document.getElementById('terminalEnableInput')?.checked || false,
                 terminal_path: document.getElementById('terminalPathInput')?.value.trim() || '',
                 script: document.getElementById('siteScriptInput')?.value.trim(),
@@ -1580,6 +1657,7 @@ ${escapeHtml(message)}
                     site_id: siteId,
                     name: document.getElementById('siteNameInput')?.value.trim(),
                     domain: document.getElementById('siteDomainInput')?.value.trim(),
+                    env_file_path: siteEnvPathInput?.value.trim() || '',
                     terminal_enabled: document.getElementById('terminalEnableInput')?.checked || false,
                     terminal_path: document.getElementById('terminalPathInput')?.value.trim() || '',
                     script: document.getElementById('siteScriptInput')?.value.trim(),
@@ -1679,6 +1757,7 @@ ${escapeHtml(message)}
                 site_id: document.getElementById('siteIdInput').value.trim(),
                 name: document.getElementById('siteNameInput').value.trim(),
                 domain: document.getElementById('siteDomainInput').value.trim(),
+                env_file_path: siteEnvPathInput?.value.trim() || '',
                 terminal_enabled: document.getElementById('terminalEnableInput').checked,
                 terminal_path: document.getElementById('terminalPathInput').value.trim(),
                 script: document.getElementById('siteScriptInput').value.trim(),
@@ -3138,6 +3217,12 @@ ${escapeHtml(message)}
             outputPath: document.getElementById('sgOutputPath'),
         };
 
+        const sgEditEnvBtn = document.getElementById('sgEditEnvBtn');
+        const sgEnvEditor = document.getElementById('sgEnvEditor');
+        const sgEnvContent = document.getElementById('sgEnvContent');
+        const sgCancelEnvBtn = document.getElementById('sgCancelEnvBtn');
+        const sgSaveEnvBtn = document.getElementById('sgSaveEnvBtn');
+
         const sgPm2Fields = {
             appName: document.getElementById('sgPm2AppNameInput'),
             script: document.getElementById('sgPm2ScriptInput'),
@@ -3171,6 +3256,73 @@ ${escapeHtml(message)}
         const sgSaveBtn = document.getElementById('sgSaveBtn');
 
         if (!sgPreview) return; // Not on dashboard page
+
+        if (sgEditEnvBtn) {
+            sgEditEnvBtn.addEventListener('click', async () => {
+                const filePath = sgFields.envSource?.value.trim();
+                if (!filePath) {
+                    showToast('Enter an environment file path first.', 'warning');
+                    return;
+                }
+                sgEditEnvBtn.disabled = true;
+                sgEditEnvBtn.textContent = '⏳ Loading...';
+                try {
+                    const { ok, data } = await apiFetch('/api/generate_script.php', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action: 'read_env', file_path: filePath })
+                    });
+                    if (ok && data.success) {
+                        sgEnvContent.value = data.content || '';
+                        sgEnvEditor.classList.remove('hidden');
+                        showToast('Environment file loaded.', 'success');
+                    } else {
+                        showToast(data.error?.message || 'Failed to load environment file.', 'error');
+                    }
+                } catch (err) {
+                    showToast('Network error while reading environment file.', 'error');
+                }
+                sgEditEnvBtn.disabled = false;
+                sgEditEnvBtn.textContent = '✏️ Edit .env';
+            });
+        }
+
+        if (sgCancelEnvBtn) {
+            sgCancelEnvBtn.addEventListener('click', () => sgEnvEditor.classList.add('hidden'));
+        }
+
+        if (sgSaveEnvBtn) {
+            sgSaveEnvBtn.addEventListener('click', async () => {
+                const filePath = sgFields.envSource?.value.trim();
+                if (!filePath) {
+                    showToast('Enter an environment file path first.', 'warning');
+                    return;
+                }
+                sgSaveEnvBtn.disabled = true;
+                sgSaveEnvBtn.textContent = '⏳ Saving...';
+                try {
+                    const { ok, data } = await apiFetch('/api/generate_script.php', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            action: 'save_env',
+                            file_path: filePath,
+                            content: sgEnvContent.value
+                        })
+                    });
+                    if (ok && data.success) {
+                        showToast(data.message || 'Environment file saved.', 'success');
+                        sgEnvEditor.classList.add('hidden');
+                    } else {
+                        showToast(data.error?.message || 'Failed to save environment file.', 'error');
+                    }
+                } catch (err) {
+                    showToast('Network error while saving environment file.', 'error');
+                }
+                sgSaveEnvBtn.disabled = false;
+                sgSaveEnvBtn.textContent = '💾 Save .env';
+            });
+        }
 
         function setScriptGenMode(mode) {
             currentScriptType = mode === 'pm2_ecosystem' ? 'pm2_ecosystem' : 'bash';
@@ -3945,6 +4097,7 @@ exit 0`;
                     const payload = {
                         action: 'save',
                         script_type: 'bash',
+                        site_id: document.getElementById('sgSiteQuickSelect')?.value || '',
                         app_dir: c.appDir,
                         repo_url: c.repoUrl,
                         branch: c.branch,
@@ -4156,6 +4309,7 @@ exit 0`;
                     if (sgFields.appDir) sgFields.appDir.value = site.deploy_path || `/www/wwwroot/${site.domain || siteId}`;
                     if (sgFields.repoUrl) sgFields.repoUrl.value = site.repo_url || '';
                     if (sgFields.branch) sgFields.branch.value = site.branch || 'main';
+                    if (sgFields.envSource) sgFields.envSource.value = site.env_file_path || '';
                     if (sgFields.appName) sgFields.appName.value = site.name || siteId;
                     const scriptPath = site.deploy_script_path || `/www/wwwroot/${site.domain || siteId}/deploy.sh`;
                     if (sgFields.outputPath) sgFields.outputPath.value = scriptPath;
