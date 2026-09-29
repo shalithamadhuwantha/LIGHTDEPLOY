@@ -393,6 +393,11 @@ class BackupService
             'db_pass' => '',
             'google_service_account_json' => '',
             'google_drive_folder_id' => '',
+            'google_oauth_client_id' => '',
+            'google_oauth_client_secret' => '',
+            'google_oauth_redirect_uri' => '',
+            'google_oauth_refresh_token' => '',
+            'local_backup_folder' => '',
             'last_tested_at' => null
         ]);
         return $data;
@@ -413,6 +418,15 @@ class BackupService
                 ? trim($data['google_service_account_json'])
                 : ($existing['google_service_account_json'] ?? ''),
             'google_drive_folder_id' => trim($data['google_drive_folder_id'] ?? ($existing['google_drive_folder_id'] ?? '')),
+            'google_oauth_client_id' => trim($data['google_oauth_client_id'] ?? ($existing['google_oauth_client_id'] ?? '')),
+            'google_oauth_client_secret' => (isset($data['google_oauth_client_secret']) && $data['google_oauth_client_secret'] !== '')
+                ? trim($data['google_oauth_client_secret'])
+                : ($existing['google_oauth_client_secret'] ?? ''),
+            'google_oauth_redirect_uri' => trim($data['google_oauth_redirect_uri'] ?? ($existing['google_oauth_redirect_uri'] ?? '')),
+            'google_oauth_refresh_token' => (isset($data['google_oauth_refresh_token']) && $data['google_oauth_refresh_token'] !== '')
+                ? $data['google_oauth_refresh_token']
+                : ($existing['google_oauth_refresh_token'] ?? ''),
+            'local_backup_folder' => trim($data['local_backup_folder'] ?? ($existing['local_backup_folder'] ?? '')),
             'last_tested_at' => $existing['last_tested_at'] ?? null,
             'updated_at' => date('Y-m-d H:i:s')
         ];
@@ -420,6 +434,23 @@ class BackupService
         $serviceAccount = json_decode($updated['google_service_account_json'], true);
         if ($updated['google_service_account_json'] !== '' && (!is_array($serviceAccount) || empty($serviceAccount['client_email']) || empty($serviceAccount['private_key']))) {
             throw new \InvalidArgumentException('Google service-account credentials must be valid JSON containing client_email and private_key.');
+        }
+        $oauthValues = [
+            $updated['google_oauth_client_id'],
+            $updated['google_oauth_client_secret'],
+            $updated['google_oauth_redirect_uri']
+        ];
+        if (array_filter($oauthValues, static fn($value) => $value !== '') && in_array('', $oauthValues, true)) {
+            throw new \InvalidArgumentException('Google OAuth requires a client ID, client secret, and redirect URI.');
+        }
+        if ($updated['google_oauth_redirect_uri'] !== '') {
+            $redirect = parse_url($updated['google_oauth_redirect_uri']);
+            $isLocalHttp = is_array($redirect)
+                && ($redirect['scheme'] ?? '') === 'http'
+                && in_array($redirect['host'] ?? '', ['localhost', '127.0.0.1'], true);
+            if (!is_array($redirect) || (($redirect['scheme'] ?? '') !== 'https' && !$isLocalHttp) || empty($redirect['host'])) {
+                throw new \InvalidArgumentException('Google OAuth redirect URI must use HTTPS (HTTP is allowed only for localhost).');
+            }
         }
 
         if (!safeWriteJson($masterFile, $updated)) {
@@ -433,7 +464,36 @@ class BackupService
     {
         $creds = $this->getMasterCredentials();
         $serviceAccount = json_decode($creds['google_service_account_json'] ?? '', true);
-        return is_array($serviceAccount) && !empty($serviceAccount['client_email']) && !empty($serviceAccount['private_key']);
+        $serviceAccountConfigured = is_array($serviceAccount) && !empty($serviceAccount['client_email']) && !empty($serviceAccount['private_key']);
+        $oauthConfigured = !empty($creds['google_oauth_client_id'])
+            && !empty($creds['google_oauth_client_secret'])
+            && !empty($creds['google_oauth_redirect_uri'])
+            && !empty($creds['google_oauth_refresh_token']);
+        return $serviceAccountConfigured || $oauthConfigured;
+    }
+
+    private function copyMasterBackupToConfiguredFolder(string $sourceFile, string $filename): ?string
+    {
+        $folder = trim((string)($this->getMasterCredentials()['local_backup_folder'] ?? ''));
+        if ($folder === '') {
+            return null;
+        }
+        if ($folder[0] !== DIRECTORY_SEPARATOR) {
+            throw new \RuntimeException('Local backup folder must be an absolute path.');
+        }
+        if (!is_dir($folder) && !@mkdir($folder, 0750, true) && !is_dir($folder)) {
+            throw new \RuntimeException("Cannot create local backup folder '{$folder}'. Check the PHP service user's permissions.");
+        }
+        if (!is_writable($folder)) {
+            throw new \RuntimeException("Local backup folder '{$folder}' is not writable by the PHP service user.");
+        }
+
+        $destination = rtrim($folder, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . basename($filename);
+        if (!@copy($sourceFile, $destination)) {
+            throw new \RuntimeException("Could not copy backup file to '{$destination}'.");
+        }
+        @chmod($destination, 0600);
+        return $destination;
     }
 
     private function base64UrlEncode(string $value): string
@@ -443,6 +503,34 @@ class BackupService
 
     private function getGoogleDriveAccessToken(array $serviceAccount): string
     {
+        $settings = $this->getMasterCredentials();
+        if (!empty($settings['google_oauth_refresh_token'])) {
+            $curl = curl_init('https://oauth2.googleapis.com/token');
+            curl_setopt_array($curl, [
+                CURLOPT_POST => true,
+                CURLOPT_POSTFIELDS => http_build_query([
+                    'grant_type' => 'refresh_token',
+                    'refresh_token' => $settings['google_oauth_refresh_token'],
+                    'client_id' => $settings['google_oauth_client_id'],
+                    'client_secret' => $settings['google_oauth_client_secret']
+                ]),
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_TIMEOUT => 30,
+                CURLOPT_HTTPHEADER => ['Content-Type: application/x-www-form-urlencoded']
+            ]);
+            $response = curl_exec($curl);
+            $status = (int)curl_getinfo($curl, CURLINFO_HTTP_CODE);
+            $error = curl_error($curl);
+            curl_close($curl);
+
+            $tokenData = is_string($response) ? json_decode($response, true) : null;
+            if ($status !== 200 || empty($tokenData['access_token'])) {
+                $reason = $tokenData['error_description'] ?? $tokenData['error'] ?? $error ?: 'HTTP ' . $status;
+                throw new \RuntimeException('Google OAuth token refresh failed: ' . $reason);
+            }
+            return $tokenData['access_token'];
+        }
+
         $now = time();
         $header = $this->base64UrlEncode(json_encode(['alg' => 'RS256', 'typ' => 'JWT']));
         $claims = $this->base64UrlEncode(json_encode([
@@ -479,6 +567,9 @@ class BackupService
         $tokenData = is_string($response) ? json_decode($response, true) : null;
         if ($status !== 200 || empty($tokenData['access_token'])) {
             $reason = $tokenData['error_description'] ?? $tokenData['error'] ?? $error ?: 'HTTP ' . $status;
+            if (str_contains(strtolower((string)$reason), 'storage quota')) {
+                $reason = 'Service accounts cannot store files in My Drive. Use a Google Workspace Shared Drive folder or switch to OAuth user authorization.';
+            }
             throw new \RuntimeException('Google authentication failed: ' . $reason);
         }
 
@@ -489,11 +580,14 @@ class BackupService
     {
         $settings = $this->getMasterCredentials();
         $serviceAccount = json_decode($settings['google_service_account_json'] ?? '', true);
-        if (!is_array($serviceAccount) || empty($serviceAccount['client_email']) || empty($serviceAccount['private_key'])) {
+        $oauthConfigured = !empty($settings['google_oauth_client_id'])
+            && !empty($settings['google_oauth_client_secret'])
+            && !empty($settings['google_oauth_refresh_token']);
+        if (!$oauthConfigured && (!is_array($serviceAccount) || empty($serviceAccount['client_email']) || empty($serviceAccount['private_key']))) {
             throw new \RuntimeException('Google Drive service-account credentials are not configured.');
         }
 
-        $accessToken = $this->getGoogleDriveAccessToken($serviceAccount);
+        $accessToken = $this->getGoogleDriveAccessToken(is_array($serviceAccount) ? $serviceAccount : []);
         $metadata = ['name' => $filename];
         if (!empty($settings['google_drive_folder_id'])) {
             $metadata['parents'] = [$settings['google_drive_folder_id']];
@@ -524,6 +618,9 @@ class BackupService
             $body = is_string($response) ? substr($response, $headerSize) : '';
             $errorData = json_decode($body, true);
             $reason = $errorData['error']['message'] ?? $error ?: 'HTTP ' . $status;
+            if (str_contains(strtolower((string)$reason), 'storage quota')) {
+                $reason = 'Service accounts cannot store files in My Drive. Use a Google Workspace Shared Drive folder or switch to OAuth user authorization.';
+            }
             throw new \RuntimeException('Google Drive upload could not be initialized: ' . $reason);
         }
 
@@ -553,6 +650,9 @@ class BackupService
         $uploaded = is_string($uploadResponse) ? json_decode($uploadResponse, true) : null;
         if (!in_array($uploadStatus, [200, 201], true) || empty($uploaded['id'])) {
             $reason = $uploaded['error']['message'] ?? $uploadError ?: 'HTTP ' . $uploadStatus;
+            if (str_contains(strtolower((string)$reason), 'storage quota')) {
+                $reason = 'Service accounts cannot store files in My Drive. Use a Google Workspace Shared Drive folder or switch to OAuth user authorization.';
+            }
             throw new \RuntimeException('Google Drive upload failed: ' . $reason);
         }
 
@@ -727,19 +827,34 @@ class BackupService
                         'created_at' => date('Y-m-d H:i:s'),
                         'db_name' => $dbName
                     ];
+                    try {
+                        $localCopyPath = $this->copyMasterBackupToConfiguredFolder($targetFile, $filename);
+                        if ($localCopyPath !== null) {
+                            $successful[$dbName]['local_copy_path'] = $localCopyPath;
+                            if ($progress !== null) {
+                                $progress(['stage' => 'copied_local', 'database' => $dbName, 'message' => 'Copied ' . $filename . ' to ' . $localCopyPath]);
+                            }
+                        }
+                    } catch (\Throwable $e) {
+                        unset($successful[$dbName]);
+                        $errors[$dbName] = 'Local backup folder copy failed: ' . $e->getMessage();
+                    }
                     if ($this->isGoogleDriveConfigured()) {
                         try {
                             if ($progress !== null) {
                                 $progress(['stage' => 'uploading', 'database' => $dbName, 'message' => 'Uploading ' . $filename . ' to Google Drive']);
                             }
                             $driveFile = $this->uploadFileToGoogleDrive($targetFile, $filename);
-                            $successful[$dbName]['google_drive_file_id'] = $driveFile['id'];
+                            if (isset($successful[$dbName])) {
+                                $successful[$dbName]['google_drive_file_id'] = $driveFile['id'];
+                            }
                             if ($progress !== null) {
                                 $progress(['stage' => 'uploaded', 'database' => $dbName, 'message' => 'Uploaded ' . $filename . ' to Google Drive']);
                             }
                         } catch (\Throwable $e) {
                             unset($successful[$dbName]);
-                            $errors[$dbName] = 'Local dump created, but Google Drive upload failed: ' . $e->getMessage();
+                            $driveError = 'Google Drive upload failed: ' . $e->getMessage();
+                            $errors[$dbName] = isset($errors[$dbName]) ? $errors[$dbName] . ' ' . $driveError : 'Local dump created, but ' . $driveError;
                         }
                     }
                 } else {

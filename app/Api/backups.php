@@ -49,6 +49,10 @@ if (PHP_SAPI === 'cli' && ($argv[1] ?? '') === '--master-backup-worker') {
         $service = new BackupService($config['config_dir'] . '/databases.json', $config['runtime_dir']);
         $driveEnabled = $service->isGoogleDriveConfigured();
         $appendLog($job, $driveEnabled ? 'Destination: Google Drive and local backup archive' : 'Destination: local backup archive only; Google Drive credentials are not configured', $driveEnabled ? 'system' : 'warning');
+        $localFolder = trim((string)($service->getMasterCredentials()['local_backup_folder'] ?? ''));
+        if ($localFolder !== '') {
+            $appendLog($job, 'Destination: local folder ' . $localFolder, 'system');
+        }
         $writeJob($job);
         $summary = $service->runMasterBackup($job['triggered_by'] ?? 'system', $format, static function (array $event) use (&$job, $appendLog, $writeJob): void {
             $job['stage'] = $event['stage'] ?? $job['stage'];
@@ -86,9 +90,16 @@ if (PHP_SAPI === 'cli' && ($argv[1] ?? '') === '--master-backup-worker') {
 
 $securityLogger = new SecurityLogger($config['logs_dir'] . '/security');
 $authService = new AuthService($config['config_dir'] . '/users.json', $securityLogger);
+$method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+$action = $_GET['action'] ?? $_POST['action'] ?? '';
+$isGoogleOAuthCallback = $method === 'GET' && $action === 'google_oauth_callback';
 
-$authService->requirePermission('db_backups');
-$currentUser = $authService->getCurrentUser();
+if (!$isGoogleOAuthCallback) {
+    $authService->requirePermission('db_backups');
+    $currentUser = $authService->getCurrentUser();
+} else {
+    $currentUser = [];
+}
 $backupService = new BackupService(
     $config['config_dir'] . '/databases.json',
     $config['runtime_dir']
@@ -172,8 +183,82 @@ $startMasterBackupJob = static function (string $triggeredBy, string $format = '
     return ['job_id' => $jobId, 'status' => 'queued'];
 };
 
-$method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
-$action = $_GET['action'] ?? $_POST['action'] ?? '';
+if ($method === 'GET' && $action === 'google_oauth_callback') {
+    $settings = $backupService->getMasterCredentials();
+    $redirectUri = (string)($settings['google_oauth_redirect_uri'] ?? '');
+    $redirectParts = parse_url($redirectUri);
+    $origin = is_array($redirectParts) && !empty($redirectParts['scheme']) && !empty($redirectParts['host'])
+        ? $redirectParts['scheme'] . '://' . $redirectParts['host'] . (isset($redirectParts['port']) ? ':' . $redirectParts['port'] : '')
+        : '';
+    $sendOAuthResult = static function (bool $success, string $message, array $extra = []) use ($origin): never {
+        if (!headers_sent()) {
+            header('Content-Type: text/html; charset=utf-8');
+            header('Cache-Control: no-store');
+        }
+        $event = json_encode(array_merge(['type' => 'lightdeploy-google-drive-oauth', 'success' => $success, 'message' => $message], $extra), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT);
+        $safeMessage = htmlspecialchars($message, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $targetOrigin = json_encode($origin, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT);
+        echo '<!doctype html><html lang="en"><meta charset="utf-8"><title>Google Drive connection</title><body><p>' . $safeMessage . '</p><script>if(window.opener){window.opener.postMessage(' . $event . ',' . $targetOrigin . ');window.close();}</script></body></html>';
+        exit;
+    };
+
+    $returnedState = (string)($_GET['state'] ?? '');
+    $stateFile = $config['runtime_dir'] . '/google_oauth_states/' . hash('sha256', $returnedState) . '.json';
+    $oauthState = $returnedState !== '' ? safeReadJson($stateFile, []) : [];
+    if (is_file($stateFile)) {
+        @unlink($stateFile);
+    }
+    if (!is_array($oauthState) || empty($oauthState['state']) || (int)($oauthState['created_at'] ?? 0) < time() - 600 || !hash_equals((string)$oauthState['state'], $returnedState)) {
+        $sendOAuthResult(false, 'Google authorization state was invalid or expired. Start the connection again.');
+    }
+    if (!empty($_GET['error'])) {
+        $sendOAuthResult(false, 'Google authorization was not completed: ' . (string)$_GET['error']);
+    }
+    if (empty($_GET['code']) || empty($settings['google_oauth_client_id']) || empty($settings['google_oauth_client_secret']) || $redirectUri === '') {
+        $sendOAuthResult(false, 'Google OAuth settings or authorization code are missing.');
+    }
+
+    $curl = curl_init('https://oauth2.googleapis.com/token');
+    curl_setopt_array($curl, [
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => http_build_query([
+            'grant_type' => 'authorization_code',
+            'code' => (string)$_GET['code'],
+            'client_id' => $settings['google_oauth_client_id'],
+            'client_secret' => $settings['google_oauth_client_secret'],
+            'redirect_uri' => $redirectUri
+        ]),
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT => 30,
+        CURLOPT_HTTPHEADER => ['Content-Type: application/x-www-form-urlencoded']
+    ]);
+    $tokenResponse = curl_exec($curl);
+    $tokenStatus = (int)curl_getinfo($curl, CURLINFO_HTTP_CODE);
+    $tokenError = curl_error($curl);
+    curl_close($curl);
+    $tokenData = is_string($tokenResponse) ? json_decode($tokenResponse, true) : null;
+    if ($tokenStatus !== 200 || empty($tokenData['access_token'])) {
+        $message = $tokenData['error_description'] ?? $tokenData['error'] ?? $tokenError ?: 'HTTP ' . $tokenStatus;
+        $sendOAuthResult(false, 'Could not exchange Google authorization code: ' . $message);
+    }
+    $refreshToken = $tokenData['refresh_token'] ?? ($settings['google_oauth_refresh_token'] ?? '');
+    if ($refreshToken === '') {
+        $sendOAuthResult(false, 'Google did not provide a refresh token. Remove this app from your Google Account security settings, then connect again and approve offline access.');
+    }
+
+    try {
+        $backupService->saveMasterCredentials([
+            'google_oauth_client_id' => $settings['google_oauth_client_id'],
+            'google_oauth_client_secret' => $settings['google_oauth_client_secret'],
+            'google_oauth_redirect_uri' => $redirectUri,
+            'google_oauth_refresh_token' => $refreshToken
+        ]);
+        $job = $startMasterBackupJob((string)($oauthState['triggered_by'] ?? 'admin'), 'sql');
+        $sendOAuthResult(true, 'Personal Google Drive connected. Starting the master database backup now.', ['job_id' => $job['job_id']]);
+    } catch (\Throwable $e) {
+        $sendOAuthResult(false, 'Google account connected, but the backup could not start: ' . $e->getMessage());
+    }
+}
 
 // Handle direct GZIP file download stream
 if ($method === 'GET' && $action === 'download') {
@@ -213,6 +298,57 @@ if ($method === 'POST') {
     $postAction = $input['action'] ?? '';
 
     switch ($postAction) {
+        case 'google_oauth_start':
+            if (($currentUser['role'] ?? '') !== 'admin') {
+                jsonError('FORBIDDEN', 'Only administrators can connect Google Drive.', 403);
+            }
+
+            try {
+                $settings = $backupService->saveMasterCredentials([
+                    'enabled' => !empty($input['enabled']),
+                    'db_host' => $input['db_host'] ?? '127.0.0.1',
+                    'db_port' => (int)($input['db_port'] ?? 3306),
+                    'db_user' => $input['db_user'] ?? 'root',
+                    'db_pass' => $input['db_pass'] ?? '',
+                    'google_service_account_json' => $input['google_service_account_json'] ?? '',
+                    'google_drive_folder_id' => $input['google_drive_folder_id'] ?? '',
+                    'google_oauth_client_id' => $input['google_oauth_client_id'] ?? '',
+                    'google_oauth_client_secret' => $input['google_oauth_client_secret'] ?? '',
+                    'google_oauth_redirect_uri' => $input['google_oauth_redirect_uri'] ?? '',
+                    'local_backup_folder' => $input['local_backup_folder'] ?? ''
+                ]);
+                if (empty($settings['google_oauth_client_id']) || empty($settings['google_oauth_client_secret']) || empty($settings['google_oauth_redirect_uri'])) {
+                    jsonError('OAUTH_SETTINGS_REQUIRED', 'Enter the Google OAuth client ID, client secret, and redirect URI first.', 400);
+                }
+
+                $state = bin2hex(random_bytes(32));
+                $stateDir = $config['runtime_dir'] . '/google_oauth_states';
+                ensureDirExists($stateDir, 0700);
+                $statePath = $stateDir . '/' . hash('sha256', $state) . '.json';
+                if (!safeWriteJson($statePath, [
+                    'state' => $state,
+                    'created_at' => time(),
+                    'triggered_by' => $currentUser['username'] ?? 'admin'
+                ])) {
+                    throw new RuntimeException('Could not create Google OAuth state record.');
+                }
+                @chmod($statePath, 0600);
+                $authorizationUrl = 'https://accounts.google.com/o/oauth2/v2/auth?' . http_build_query([
+                    'client_id' => $settings['google_oauth_client_id'],
+                    'redirect_uri' => $settings['google_oauth_redirect_uri'],
+                    'response_type' => 'code',
+                    'scope' => 'https://www.googleapis.com/auth/drive',
+                    'access_type' => 'offline',
+                    'prompt' => 'consent',
+                    'include_granted_scopes' => 'true',
+                    'state' => $state
+                ]);
+                jsonSuccess(['authorization_url' => $authorizationUrl]);
+            } catch (\Throwable $e) {
+                jsonError('GOOGLE_OAUTH_START_FAILED', $e->getMessage(), 400);
+            }
+            break;
+
         case 'save_db':
             if (!in_array($currentUser['role'] ?? '', ['admin', 'deployer'], true)) {
                 jsonError('FORBIDDEN', 'Insufficient permissions to save database configuration.', 403);
@@ -318,10 +454,16 @@ if ($method === 'POST') {
             }
 
             $creds = $backupService->getMasterCredentials();
+            $serviceAccount = json_decode($creds['google_service_account_json'] ?? '', true);
             unset($creds['db_pass']);
             unset($creds['google_service_account_json']);
+            unset($creds['google_oauth_client_secret']);
+            unset($creds['google_oauth_refresh_token']);
             $creds['has_password'] = !empty($backupService->getMasterCredentials()['db_pass']);
             $creds['has_google_drive_credentials'] = $backupService->isGoogleDriveConfigured();
+            $creds['has_service_account_credentials'] = is_array($serviceAccount) && !empty($serviceAccount['client_email']) && !empty($serviceAccount['private_key']);
+            $creds['has_google_oauth_client'] = !empty($creds['google_oauth_client_id']) && !empty($creds['google_oauth_redirect_uri']);
+            $creds['google_drive_connected'] = !empty($backupService->getMasterCredentials()['google_oauth_refresh_token']);
             jsonSuccess(['master_credentials' => $creds]);
             break;
 
@@ -338,10 +480,16 @@ if ($method === 'POST') {
                     'db_user' => $input['db_user'] ?? 'root',
                     'db_pass' => $input['db_pass'] ?? '',
                     'google_service_account_json' => $input['google_service_account_json'] ?? '',
-                    'google_drive_folder_id' => $input['google_drive_folder_id'] ?? ''
+                    'google_drive_folder_id' => $input['google_drive_folder_id'] ?? '',
+                    'google_oauth_client_id' => $input['google_oauth_client_id'] ?? '',
+                    'google_oauth_client_secret' => $input['google_oauth_client_secret'] ?? '',
+                    'google_oauth_redirect_uri' => $input['google_oauth_redirect_uri'] ?? '',
+                    'local_backup_folder' => $input['local_backup_folder'] ?? ''
                 ]);
                 unset($saved['db_pass']);
                 unset($saved['google_service_account_json']);
+                unset($saved['google_oauth_client_secret']);
+                unset($saved['google_oauth_refresh_token']);
                 $backupSummary = null;
                 $backupJob = null;
                 if ($backupService->isGoogleDriveConfigured()) {
@@ -359,7 +507,11 @@ if ($method === 'POST') {
                 }
                 jsonSuccess([
                     'message' => $backupSummary === null
-                        ? ($backupJob !== null ? 'Master credentials saved; Google Drive backup started.' : 'Master MySQL credentials saved. Add Google Drive service-account credentials to enable automatic backups.')
+                        ? ($backupJob !== null
+                            ? 'Master credentials saved; Google Drive backup started.'
+                            : (!empty($saved['google_oauth_client_id'])
+                                ? 'Master credentials saved. Connect your personal Google Drive to enable uploads.'
+                                : 'Master MySQL credentials saved. Configure Google Drive authorization to enable uploads.'))
                         : ($backupSummary['total'] === 0
                             ? 'Master credentials saved, but the automatic Google Drive backup could not start: ' . ($backupSummary['errors']['_backup'] ?? 'unknown error')
                             : sprintf('Master credentials saved; Google Drive backup completed for %d/%d databases (%d failed).', $backupSummary['successful'], $backupSummary['total'], $backupSummary['failed'])),

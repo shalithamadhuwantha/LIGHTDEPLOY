@@ -626,15 +626,47 @@ $csrfToken = Csrf::getToken();
                             <small id="masterPassHelpText" class="form-help">Leave blank if keeping existing password.</small>
                         </div>
                     </div>
+                    <div class="master-google-oauth-section">
+                        <div class="master-google-oauth-heading">
+                            <div>
+                                <strong>Personal Google Drive</strong>
+                                <small>Connect with your Google account to use its Drive storage quota.</small>
+                            </div>
+                            <span id="googleDriveConnectionStatus" class="master-google-status">Not connected</span>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="googleOAuthClientIdInput" class="form-label">Google OAuth Client ID</label>
+                                <input type="text" id="googleOAuthClientIdInput" name="google_oauth_client_id" class="form-input" placeholder="...apps.googleusercontent.com">
+                            </div>
+                            <div class="form-group">
+                                <label for="googleOAuthClientSecretInput" class="form-label">Google OAuth Client Secret</label>
+                                <input type="password" id="googleOAuthClientSecretInput" name="google_oauth_client_secret" class="form-input" placeholder="Leave blank to keep saved secret">
+                            </div>
+                        </div>
+                        <div class="form-group" style="margin-top: 10px;">
+                            <label for="googleOAuthRedirectInput" class="form-label">Authorized Redirect URI</label>
+                            <input type="url" id="googleOAuthRedirectInput" name="google_oauth_redirect_uri" class="form-input" placeholder="https://your-domain/api/backups.php?action=google_oauth_callback">
+                            <small class="form-help">Register this exact URI and enable the Drive API. This connection requests Drive-wide access for folder uploads. OAuth Testing refresh tokens expire after 7 days; use a production consent configuration for unattended backups.</small>
+                        </div>
+                        <div class="master-google-oauth-actions">
+                            <button type="button" id="connectGoogleDriveBtn" class="btn btn-secondary">Connect Personal Google Drive</button>
+                        </div>
+                    </div>
                     <div class="form-group" style="margin-top: 12px;">
-                        <label for="googleServiceAccountInput" class="form-label">Google Drive Service-Account JSON</label>
+                        <label for="googleServiceAccountInput" class="form-label">Service-Account JSON (Workspace Shared Drive alternative)</label>
                         <textarea id="googleServiceAccountInput" name="google_service_account_json" class="form-input" rows="5" placeholder="Paste the downloaded service-account JSON; saved credentials are retained when left blank."></textarea>
-                        <small id="googleDriveCredentialsHelp" class="form-help">Share the destination Drive folder with the service account's client_email as an Editor.</small>
+                        <small id="googleDriveCredentialsHelp" class="form-help">Use this only with a Workspace Shared Drive. Personal Drive accounts should connect above with OAuth.</small>
                     </div>
                     <div class="form-group" style="margin-top: 10px;">
                         <label for="googleDriveFolderInput" class="form-label">Google Drive Folder ID (optional)</label>
                         <input type="text" id="googleDriveFolderInput" name="google_drive_folder_id" class="form-input" placeholder="Folder ID from the Google Drive URL">
-                        <small class="form-help">Leave blank to upload to the service account's My Drive.</small>
+                        <small class="form-help">For personal OAuth, leave blank to upload to My Drive root, or enter a folder ID from your Drive URL.</small>
+                    </div>
+                    <div class="form-group" style="margin-top: 10px;">
+                        <label for="localBackupFolderInput" class="form-label">Local Backup Folder (optional)</label>
+                        <input type="text" id="localBackupFolderInput" name="local_backup_folder" class="form-input" placeholder="/root/mysqlbackup">
+                        <small class="form-help">Each SQL dump is copied here as well as kept in LightDeploy. The PHP service user must be able to access and write to this folder.</small>
                     </div>
 
                     <!-- Connection Status / Discovered DBs Callout -->

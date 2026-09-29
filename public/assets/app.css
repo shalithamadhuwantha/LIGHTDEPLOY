@@ -1418,6 +1418,59 @@ body {
     flex-wrap: wrap;
 }
 
+.master-google-oauth-section {
+    margin-top: 14px;
+    padding: 14px;
+    background: rgba(16, 40, 29, 0.5);
+    border: 1px solid rgba(74, 222, 128, 0.22);
+    border-radius: 6px;
+}
+
+.master-google-oauth-heading,
+.master-google-oauth-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.master-google-oauth-heading strong,
+.master-google-oauth-heading small {
+    display: block;
+}
+
+.master-google-oauth-heading strong {
+    color: #93c5fd;
+    font-size: 0.9rem;
+}
+
+.master-google-oauth-heading small {
+    margin-top: 4px;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+}
+
+.master-google-status {
+    flex: 0 0 auto;
+    padding: 4px 8px;
+    color: #cbd5e1;
+    background: rgba(148, 163, 184, 0.12);
+    border: 1px solid rgba(148, 163, 184, 0.25);
+    border-radius: 4px;
+    font-size: 0.7rem;
+}
+
+.master-google-status.is-connected {
+    color: #86efac;
+    background: rgba(34, 197, 94, 0.1);
+    border-color: rgba(74, 222, 128, 0.35);
+}
+
+.master-google-oauth-actions {
+    justify-content: flex-end;
+    margin-top: 10px;
+}
+
 .master-progress-console {
     width: min(900px, 94vw);
     max-height: 88vh;
@@ -1447,7 +1500,7 @@ body {
 
 .master-progress-header h2 {
     margin: 5px 0 0;
-    color: #f0fdf4;
+    color: #60a5fa;
     font-size: 1.15rem;
 }
 
@@ -1460,7 +1513,7 @@ body {
 }
 
 .master-progress-kicker {
-    color: #86efac;
+    color: #60a5fa;
     font-size: 0.7rem;
     letter-spacing: 0.08em;
 }
@@ -2454,6 +2507,8 @@ html {
     .master-progress-meta { flex-direction: column; gap: 4px; }
     .master-terminal-logs { height: 34vh; min-height: 150px; }
     .master-terminal-bar { font-size: 0.58rem; }
+    .master-google-oauth-heading { align-items: flex-start; flex-direction: column; }
+    .master-google-oauth-actions .btn { width: 100%; }
 
     /* Terminal output box on mobile */
     .terminal-container {

@@ -5,7 +5,7 @@
 
 document.addEventListener('DOMContentLoaded', () => {
     const userRole = document.body.dataset.userRole || 'viewer';
-    const currentUsername = document.body.dataset.username || 'admin';
+     const currentUsername = document.body.dataset.username || 'admin';
     const csrfToken = document.body.dataset.CsrfToken || document.body.dataset.csrfToken || '';
 
     let allowedFunctions = ['*'];
@@ -2846,17 +2846,35 @@ ${escapeHtml(message)}
             if (document.getElementById('masterPortInput')) document.getElementById('masterPortInput').value = creds.db_port || 3306;
             if (document.getElementById('masterUserInput')) document.getElementById('masterUserInput').value = creds.db_user || 'root';
             if (document.getElementById('googleDriveFolderInput')) document.getElementById('googleDriveFolderInput').value = creds.google_drive_folder_id || '';
+            if (document.getElementById('localBackupFolderInput')) document.getElementById('localBackupFolderInput').value = creds.local_backup_folder || '';
+            if (document.getElementById('googleOAuthClientIdInput')) document.getElementById('googleOAuthClientIdInput').value = creds.google_oauth_client_id || '';
+            if (document.getElementById('googleOAuthRedirectInput')) {
+                document.getElementById('googleOAuthRedirectInput').value = creds.google_oauth_redirect_uri || `${window.location.origin}/api/backups.php?action=google_oauth_callback`;
+            }
+            const oauthSecretInput = document.getElementById('googleOAuthClientSecretInput');
+            if (oauthSecretInput) {
+                oauthSecretInput.value = '';
+                oauthSecretInput.placeholder = creds.has_google_oauth_client ? 'Saved secret; leave blank to preserve' : 'Google OAuth client secret';
+            }
+            const driveConnectionStatus = document.getElementById('googleDriveConnectionStatus');
+            if (driveConnectionStatus) {
+                const connected = Boolean(creds.google_drive_connected || creds.has_service_account_credentials);
+                driveConnectionStatus.textContent = connected ? 'Connected' : (creds.has_google_oauth_client ? 'Ready to connect' : 'Not connected');
+                driveConnectionStatus.classList.toggle('is-connected', connected);
+            }
 
             const driveCredentialsInput = document.getElementById('googleServiceAccountInput');
             const driveCredentialsHelp = document.getElementById('googleDriveCredentialsHelp');
             if (driveCredentialsInput) {
                 driveCredentialsInput.value = '';
-                driveCredentialsInput.placeholder = creds.has_google_drive_credentials
+                driveCredentialsInput.placeholder = creds.has_service_account_credentials
                     ? 'Google Drive credentials are saved; paste new JSON only to replace them.'
                     : 'Paste the downloaded service-account JSON.';
             }
             if (driveCredentialsHelp && creds.has_google_drive_credentials) {
-                driveCredentialsHelp.textContent = 'Google Drive credentials are saved. Leave blank to preserve them; share the destination folder with the service account as an Editor.';
+                driveCredentialsHelp.textContent = creds.has_service_account_credentials
+                    ? 'Service-account credentials are saved. Use a Workspace Shared Drive and add the service account as a Contributor or higher.'
+                    : 'Personal Google Drive is connected through OAuth. Leave this service-account field blank unless configuring a Workspace Shared Drive.';
             }
             
             const passInput = document.getElementById('masterPassInput');
@@ -2961,7 +2979,13 @@ ${escapeHtml(message)}
                     if (summary) {
                         const uploadedCount = Object.values(summary.details || {}).filter(item => item.google_drive_file_id).length;
                         const driveConfigured = (job.logs || []).some(entry => entry.message?.startsWith('Destination: Google Drive'));
-                        resultBox.textContent = `${summary.successful}/${summary.total} databases backed up; ${summary.failed} failed. ${driveConfigured ? `${uploadedCount} file(s) uploaded to Google Drive.` : 'Files are stored locally; Google Drive is not configured.'}`;
+                        const localCopyCount = Object.values(summary.details || {}).filter(item => item.local_copy_path).length;
+                        const folderLog = (job.logs || []).find(entry => entry.message?.startsWith('Destination: local folder '));
+                        const destinations = [
+                            driveConfigured ? `${uploadedCount} file(s) uploaded to Google Drive` : 'Google Drive not configured',
+                            folderLog ? `${localCopyCount} file(s) copied to ${folderLog.message.replace('Destination: local folder ', '')}` : 'no extra local folder configured'
+                        ];
+                        resultBox.textContent = `${summary.successful}/${summary.total} databases backed up; ${summary.failed} failed. ${destinations.join('; ')}.`;
                     } else {
                         resultBox.textContent = job.error || 'Backup worker failed before returning a summary.';
                     }
@@ -2991,6 +3015,79 @@ ${escapeHtml(message)}
         return true;
     };
 
+    let googleOAuthPopup = null;
+    window.addEventListener('message', async (event) => {
+        if (!googleOAuthPopup || event.source !== googleOAuthPopup || event.data?.type !== 'lightdeploy-google-drive-oauth') return;
+        let callbackOrigin = '';
+        try {
+            callbackOrigin = new URL(document.getElementById('googleOAuthRedirectInput')?.value || '').origin;
+        } catch (error) {
+            return;
+        }
+        if (event.origin !== callbackOrigin) return;
+
+        googleOAuthPopup = null;
+        if (!event.data.success) {
+            showToast(event.data.message || 'Google Drive authorization failed.', 'error');
+            return;
+        }
+
+        const status = document.getElementById('googleDriveConnectionStatus');
+        if (status) {
+            status.textContent = 'Connected';
+            status.classList.add('is-connected');
+        }
+        showToast(event.data.message || 'Personal Google Drive connected.', 'success');
+        if (event.data.job_id) await watchMasterBackupJob(event.data.job_id);
+    });
+
+    document.getElementById('connectGoogleDriveBtn')?.addEventListener('click', async () => {
+        googleOAuthPopup = window.open('about:blank', 'lightdeploy-google-drive', 'popup,width=600,height=720');
+        if (!googleOAuthPopup) {
+            showToast('Allow popups for this site to connect Google Drive.', 'error');
+            return;
+        }
+
+        const formData = masterCredsForm ? new FormData(masterCredsForm) : new FormData();
+        const payload = {
+            action: 'google_oauth_start',
+            enabled: true,
+            db_host: formData.get('db_host') || '127.0.0.1',
+            db_port: parseInt(formData.get('db_port') || '3306', 10),
+            db_user: formData.get('db_user') || 'root',
+            db_pass: formData.get('db_pass') || '',
+            google_service_account_json: formData.get('google_service_account_json') || '',
+            google_drive_folder_id: formData.get('google_drive_folder_id') || '',
+            google_oauth_client_id: formData.get('google_oauth_client_id') || '',
+            google_oauth_client_secret: formData.get('google_oauth_client_secret') || '',
+            google_oauth_redirect_uri: formData.get('google_oauth_redirect_uri') || '',
+            local_backup_folder: formData.get('local_backup_folder') || ''
+        };
+        const button = document.getElementById('connectGoogleDriveBtn');
+        if (button) {
+            button.disabled = true;
+            button.textContent = 'Connecting...';
+        }
+
+        const { ok, data } = await apiFetch('/api/backups.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        if (button) {
+            button.disabled = false;
+            button.textContent = 'Connect Personal Google Drive';
+        }
+
+        if (!ok || !data.success || !data.authorization_url) {
+            googleOAuthPopup.close();
+            googleOAuthPopup = null;
+            showToast(data.message || data.error?.message || 'Could not start Google authorization.', 'error');
+            return;
+        }
+        googleOAuthPopup.location.href = data.authorization_url;
+    });
+
     document.getElementById('masterProgressCloseBtn')?.addEventListener('click', closeMasterProgress);
     document.getElementById('masterProgressDoneBtn')?.addEventListener('click', closeMasterProgress);
 
@@ -3011,7 +3108,11 @@ ${escapeHtml(message)}
                 db_user: formData.get('db_user') || 'root',
                 db_pass: formData.get('db_pass') || '',
                 google_service_account_json: formData.get('google_service_account_json') || '',
-                google_drive_folder_id: formData.get('google_drive_folder_id') || ''
+                google_drive_folder_id: formData.get('google_drive_folder_id') || '',
+                google_oauth_client_id: formData.get('google_oauth_client_id') || '',
+                google_oauth_client_secret: formData.get('google_oauth_client_secret') || '',
+                google_oauth_redirect_uri: formData.get('google_oauth_redirect_uri') || '',
+                local_backup_folder: formData.get('local_backup_folder') || ''
             };
 
             const { ok, data } = await apiFetch('/api/backups.php', {
