@@ -205,6 +205,9 @@ $csrfToken = Csrf::getToken();
         </div>
 
         <div class="header-right">
+            <?php if ($authService->hasRole('admin')): ?>
+                <div id="activeServerHeaderName" class="active-server-header-name">THIS SERVER</div>
+            <?php endif; ?>
             <?php if ($authService->hasPermission('db_backups')): ?>
                 <a id="headerDbBackupsBtn" href="/databases.php" class="btn btn-secondary btn-sm btn-db-backups" style="margin-right: 6px; text-decoration: none;">🗄️ Database Backups</a>
             <?php endif; ?>
@@ -330,10 +333,14 @@ $csrfToken = Csrf::getToken();
             </div>
         </section>
 
+        <div id="remoteServerReadOnlyNotice" class="alert-box managed-remote-notice hidden" role="status">
+            Viewing <strong id="remoteServerReadOnlyName"></strong>. Site and system data below is read-only; management actions remain on this server.
+        </div>
+
         <div class="section-header">
             <div>
                 <h2>Configured Websites</h2>
-                <p class="section-desc">Select a site to initiate controlled script deployment &bull; <span id="sitesCountLabel">0 sites</span></p>
+                <p class="section-desc"><span id="activeServerContext">This server</span> · <span id="sitesCountLabel">0 sites</span></p>
             </div>
             <div class="section-actions">
                 <?php if ($authService->hasPermission('add_edit_sites')): ?>
@@ -391,7 +398,7 @@ $csrfToken = Csrf::getToken();
         </div>
 
         <!-- PM2 Process Manager Section -->
-        <div class="section-header" style="margin-top: 40px;">
+        <div id="localPm2Header" class="section-header" style="margin-top: 40px;">
             <div>
                 <div style="display: flex; align-items: center; gap: 10px;">
                     <h2>PM2 Process Manager</h2>

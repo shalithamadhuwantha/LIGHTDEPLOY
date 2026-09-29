@@ -837,6 +837,20 @@ body {
     flex-wrap: wrap;
 }
 
+.active-server-header-name {
+    max-width: 260px;
+    min-width: 160px;
+    padding: 8px 12px;
+    overflow-wrap: anywhere;
+    color: #bfdbfe;
+    background: rgba(30, 64, 175, 0.2);
+    border-left: 3px solid #38bdf8;
+    font-size: 1.12rem;
+    font-weight: 800;
+    line-height: 1.2;
+    text-transform: uppercase;
+}
+
 .user-info {
     display: flex;
     align-items: center;
@@ -1644,6 +1658,59 @@ body {
 .managed-server-card-actions {
     justify-content: flex-end;
     flex: 0 0 auto;
+}
+
+.managed-remote-sites {
+    gap: 12px;
+}
+
+.managed-remote-site-card {
+    min-width: 0;
+    padding: 16px;
+    background: rgba(8, 20, 39, 0.78);
+    border: 1px solid rgba(59, 130, 246, 0.26);
+    border-radius: 6px;
+}
+
+.managed-remote-site-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.managed-remote-site-header h3 {
+    margin: 0;
+    color: #dbeafe;
+    font-size: 0.95rem;
+}
+
+.managed-remote-site-domain {
+    margin-top: 5px;
+    overflow-wrap: anywhere;
+    color: #7d93b8;
+    font-family: var(--font-mono);
+    font-size: 0.74rem;
+}
+
+.managed-remote-site-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px 14px;
+    margin-top: 14px;
+    color: #9badc7;
+    font-size: 0.74rem;
+}
+
+.managed-remote-notice {
+    margin: -8px 0 22px;
+    color: #bfdbfe;
+    background: rgba(30, 64, 175, 0.18);
+    border: 1px solid rgba(96, 165, 250, 0.28);
+}
+
+.managed-remote-notice strong {
+    color: #e0f2fe;
 }
 
 .master-progress-console {
@@ -2689,6 +2756,8 @@ html {
     .managed-server-card { align-items: flex-start; flex-direction: column; }
     .managed-server-card-actions { width: 100%; justify-content: flex-start; }
     .managed-form-actions { align-items: flex-start; flex-direction: column; }
+    .managed-remote-site-header { flex-direction: column; }
+    .active-server-header-name { min-width: 0; }
 
     /* Terminal output box on mobile */
     .terminal-container {
@@ -2855,6 +2924,11 @@ html {
         padding-bottom: 4px;
         -webkit-overflow-scrolling: touch;
         gap: 6px;
+    }
+    .active-server-header-name {
+        max-width: 100%;
+        flex: 1 0 100%;
+        text-align: center;
     }
     .header-right .btn {
         flex-shrink: 0;

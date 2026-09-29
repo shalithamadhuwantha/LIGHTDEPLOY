@@ -38,6 +38,9 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentDeploymentId = null;
     let currentSiteId = null;
     let cachedSites = {};
+    let remoteSitesReadOnly = false;
+    let metricRequestSequence = 0;
+    let siteRequestSequence = 0;
 
     // DOM Elements
     const sitesGrid = document.getElementById('sitesGrid');
@@ -361,6 +364,37 @@ ${escapeHtml(message)}
     }
 
     const getSelectedManagedServerId = () => document.getElementById('managedServerSelect')?.value || 'local';
+    let managedOverviewCache = null;
+    let managedOverviewRequest = null;
+
+    async function fetchManagedOverview(serverId) {
+        const now = Date.now();
+        if (managedOverviewCache?.serverId === serverId && now - managedOverviewCache.savedAt < 10000) {
+            return managedOverviewCache.result;
+        }
+        if (managedOverviewRequest?.serverId === serverId) return managedOverviewRequest.promise;
+
+        const promise = apiFetch(`/api/managed_servers.php?view=overview&id=${encodeURIComponent(serverId)}`)
+            .then(result => {
+                if (result.ok && result.data.success) {
+                    managedOverviewCache = { serverId, savedAt: Date.now(), result };
+                }
+                return result;
+            })
+            .finally(() => {
+                if (managedOverviewRequest?.serverId === serverId) managedOverviewRequest = null;
+            });
+        managedOverviewRequest = { serverId, promise };
+        return promise;
+    }
+
+    function setActiveServerLabels(name, remote = false) {
+        const displayName = name || 'This server';
+        const headerName = document.getElementById('activeServerHeaderName');
+        const context = document.getElementById('activeServerContext');
+        if (headerName) headerName.textContent = displayName;
+        if (context) context.textContent = remote ? `${displayName} · read-only` : `${displayName} · local`;
+    }
 
     async function loadManagedServerSelector() {
         const selector = document.getElementById('managedServerSelect');
@@ -378,22 +412,30 @@ ${escapeHtml(message)}
             selector.add(new Option(server.name, server.id));
         });
         selector.value = Array.from(selector.options).some(option => option.value === savedId) ? savedId : 'local';
-        selector.addEventListener('change', () => {
-            try { localStorage.setItem('lightdeploy-active-server-id', selector.value); }
-            catch (error) {}
-            updateServerMetrics();
-        });
+        setActiveServerLabels(selector.selectedOptions[0]?.textContent || 'This server', selector.value !== 'local');
+        if (selector.dataset.changeBound !== 'true') {
+            selector.addEventListener('change', () => {
+                try { localStorage.setItem('lightdeploy-active-server-id', selector.value); }
+                catch (error) {}
+                setActiveServerLabels(selector.selectedOptions[0]?.textContent || 'This server', selector.value !== 'local');
+                updateServerMetrics();
+                loadSites();
+            });
+            selector.dataset.changeBound = 'true';
+        }
         updateServerMetrics();
+        loadSites();
     }
 
     // 1. Fetch & Poll selected server metrics (read-only remote overview)
     async function updateServerMetrics() {
+        const requestSequence = ++metricRequestSequence;
         const selectedServerId = getSelectedManagedServerId();
         const isRemoteServer = selectedServerId !== 'local';
-        const endpoint = isRemoteServer
-            ? `/api/managed_servers.php?view=overview&id=${encodeURIComponent(selectedServerId)}`
-            : '/api/server_status.php';
-        const { ok, data } = await apiFetch(endpoint);
+        const { ok, data } = isRemoteServer
+            ? await fetchManagedOverview(selectedServerId)
+            : await apiFetch('/api/server_status.php');
+        if (requestSequence !== metricRequestSequence || selectedServerId !== getSelectedManagedServerId()) return;
         const statusBadge = document.getElementById('managedServerStatusBadge');
         if (!ok || !data.success) {
             if (isRemoteServer && statusBadge) {
@@ -407,6 +449,8 @@ ${escapeHtml(message)}
                 });
                 const uptimeVal = document.getElementById('bodyUptimeVal');
                 if (uptimeVal) uptimeVal.textContent = '--';
+                const appRamVal = document.getElementById('metricAppRamVal');
+                if (appRamVal) appRamVal.textContent = '-- MB';
             }
             return;
         }
@@ -414,8 +458,10 @@ ${escapeHtml(message)}
         if (statusBadge) {
             statusBadge.classList.remove('is-offline');
             if (isRemoteServer) {
+                setActiveServerLabels(data.server?.name || data.node?.hostname || 'Remote server', true);
                 statusBadge.textContent = `REMOTE · ${data.node?.hostname || data.server?.name || 'ONLINE'}`;
             } else {
+                setActiveServerLabels(data.hostname || 'This server', false);
                 statusBadge.textContent = `LOCAL · ${data.hostname || 'NODE'}`;
             }
         }
@@ -612,7 +658,27 @@ ${escapeHtml(message)}
 
     // 2. Fetch & Render Configured Sites List
     async function loadSites() {
+        const requestSequence = ++siteRequestSequence;
+        const selectedServerId = getSelectedManagedServerId();
+        remoteSitesReadOnly = selectedServerId !== 'local';
+        setRemoteDashboardMode(remoteSitesReadOnly);
+
+        if (remoteSitesReadOnly) {
+            const { ok, data } = await fetchManagedOverview(selectedServerId);
+            if (requestSequence !== siteRequestSequence || selectedServerId !== getSelectedManagedServerId()) return;
+            if (!ok || !data.success) {
+                cachedSites = {};
+                sitesGrid.innerHTML = `<div class="alert-box alert-danger">Could not load sites from this server. ${escapeHtml(data.error?.message || data.message || '')}</div>`;
+                if (sitesCountLabel) sitesCountLabel.textContent = '0 sites';
+                return;
+            }
+            cachedSites = data.sites || {};
+            renderSites();
+            return;
+        }
+
         const { ok, data } = await apiFetch('/api/sites.php');
+        if (requestSequence !== siteRequestSequence || selectedServerId !== getSelectedManagedServerId()) return;
         if (!ok || !data.success) {
             sitesGrid.innerHTML = `<div class="alert-box alert-danger">Failed to load configured sites. ${data.error?.message || ''}</div>`;
             return;
@@ -629,6 +695,16 @@ ${escapeHtml(message)}
         const totalCount = Object.keys(sites).length;
 
         if (sitesCountLabel) sitesCountLabel.textContent = `${totalCount} site${totalCount !== 1 ? 's' : ''}`;
+
+        if (remoteSitesReadOnly) {
+            renderManagedRemoteSites(Object.entries(sites).filter(([siteId, site]) => {
+                if (!searchTerm) return true;
+                return siteId.toLowerCase().includes(searchTerm)
+                    || (site.name || '').toLowerCase().includes(searchTerm)
+                    || (site.domain || '').toLowerCase().includes(searchTerm);
+            }));
+            return;
+        }
 
         if (totalCount === 0) {
             sitesGrid.innerHTML = `<div class="alert-box alert-danger">No websites configured in config/sites.json.</div>`;
@@ -671,6 +747,60 @@ ${escapeHtml(message)}
         }
 
         attachSiteActionListeners();
+    }
+
+    function setRemoteDashboardMode(isRemote) {
+        [
+            'addSiteBtn', 'viewHistoryBtn', 'viewPortsBtn',
+            'headerDbBackupsBtn', 'headerViewPortsBtn', 'headerScriptGenBtn',
+            'headerUpdateSystemBtn', 'headerUserMgmtBtn', 'headerTerminalCommandsBtn',
+            'localPm2Header', 'pm2Card'
+        ].forEach(id => document.getElementById(id)?.classList.toggle('hidden', isRemote));
+        if (isRemote) document.getElementById('bulkActionsBar')?.classList.add('hidden');
+
+        const notice = document.getElementById('remoteServerReadOnlyNotice');
+        const noticeName = document.getElementById('remoteServerReadOnlyName');
+        const selector = document.getElementById('managedServerSelect');
+        if (notice) notice.classList.toggle('hidden', !isRemote);
+        if (noticeName && isRemote) {
+            noticeName.textContent = selector?.selectedOptions[0]?.textContent || 'Remote server';
+        }
+        if (isRemote) {
+            selectedSiteIds.clear();
+        }
+    }
+
+    function renderManagedRemoteSites(entries) {
+        sitesGrid.className = 'sites-grid managed-remote-sites';
+        if (sitesSearchCount) sitesSearchCount.classList.add('hidden');
+        if (entries.length === 0) {
+            sitesGrid.innerHTML = '<div class="managed-empty-state">No remote sites match this search.</div>';
+            return;
+        }
+
+        sitesGrid.innerHTML = entries.map(([siteId, site]) => {
+            const status = site.is_locked ? 'running' : (site.last_deployment?.status || 'idle');
+            const safeStatus = String(status).toLowerCase().replace(/[^a-z0-9_-]/g, '');
+            const statusLabel = site.is_locked ? 'RUNNING' : String(status).toUpperCase();
+            return `
+                <article class="managed-remote-site-card">
+                    <div class="managed-remote-site-header">
+                        <div>
+                            <h3>${escapeHtml(site.name || siteId)}</h3>
+                            <div class="managed-remote-site-domain">${escapeHtml(site.domain || siteId)}</div>
+                        </div>
+                        <span class="badge badge-status badge-status-${safeStatus}">${escapeHtml(statusLabel)}</span>
+                    </div>
+                    <div class="managed-remote-site-meta">
+                        <span>${site.enabled ? 'Enabled' : 'Disabled'}</span>
+                        <span>Health check ${site.health_check_enabled ? 'on' : 'off'}</span>
+                        <span>PM2 ${site.pm2_enabled ? 'managed' : 'not managed'}</span>
+                        <span>Rollback ${site.has_rollback ? 'available' : 'not configured'}</span>
+                        <span>Last deploy ${site.last_deployment?.start_time ? escapeHtml(site.last_deployment.start_time) : 'never'}</span>
+                    </div>
+                </article>
+            `;
+        }).join('');
     }
 
     // ── Card View Renderer ──────────────────────────────────────────────────
@@ -5224,6 +5354,7 @@ exit 0`;
             });
             showToast(deleteData.message || deleteData.error?.message || 'Server removed.', deleteOk && deleteData.success ? 'success' : 'error');
             await loadManagedServers();
+            await loadManagedServerSelector();
         }));
     };
 
@@ -5299,6 +5430,7 @@ exit 0`;
         document.getElementById('managedServerTokenInput').placeholder = 'Paste token from remote server';
         document.getElementById('managedServerCancelEditBtn').classList.add('hidden');
         await loadManagedServers();
+        await loadManagedServerSelector();
     });
 
     // Initial Execution
@@ -5309,7 +5441,7 @@ exit 0`;
     } else {
         updateServerMetrics();
     }
-    if (sitesGrid) loadSites();
+    if (sitesGrid && !document.getElementById('managedServerSelect')) loadSites();
     if (pm2TableBody) loadPm2Data();
     if (dbContainer) loadDatabases();
     checkActiveReconnection();

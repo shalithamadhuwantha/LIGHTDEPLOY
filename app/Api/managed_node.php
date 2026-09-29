@@ -3,6 +3,9 @@ declare(strict_types=1);
 
 $config = require_once dirname(__DIR__) . '/bootstrap.php';
 
+use LightDeploy\Deployment\DeploymentLock;
+use LightDeploy\Deployment\DeploymentLog;
+
 $tokenData = safeReadJson($config['config_dir'] . '/node_control.json', []);
 $storedHash = (string)($tokenData['token_hash'] ?? '');
 $authorization = (string)($_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '');
@@ -56,12 +59,41 @@ $uptimeFormatted = sprintf('%dd %dh %dm', floor($uptimeSeconds / 86400), floor((
 $loadList = array_values($load ?: [0.0, 0.0, 0.0]);
 $appMemory = memory_get_usage(true);
 
+$siteConfig = safeReadJson($config['config_dir'] . '/sites.json', ['sites' => []]);
+$deploymentHistory = (new DeploymentLog($config['logs_dir']))->getHistory(100);
+$deploymentBySite = [];
+foreach ($deploymentHistory as $deployment) {
+    $siteId = (string)($deployment['site_id'] ?? '');
+    if ($siteId !== '' && !isset($deploymentBySite[$siteId])) {
+        $deploymentBySite[$siteId] = [
+            'status' => $deployment['status'] ?? 'unknown',
+            'start_time' => $deployment['start_time'] ?? null
+        ];
+    }
+}
+$lockManager = new DeploymentLock($config['runtime_dir'] . '/locks');
+$safeSites = [];
+foreach (($siteConfig['sites'] ?? []) as $siteId => $site) {
+    $safeSites[$siteId] = [
+        'id' => (string)$siteId,
+        'name' => (string)($site['name'] ?? $siteId),
+        'domain' => (string)($site['domain'] ?? ''),
+        'enabled' => !empty($site['enabled']),
+        'is_locked' => $lockManager->isLocked((string)$siteId),
+        'health_check_enabled' => !empty($site['health_check_enabled']),
+        'pm2_enabled' => !empty($site['pm2_enabled']),
+        'has_rollback' => !empty($site['rollback_script']),
+        'last_deployment' => $deploymentBySite[$siteId] ?? null
+    ];
+}
+
 jsonSuccess([
     'node' => [
         'hostname' => gethostname() ?: 'unknown',
         'php_version' => PHP_VERSION,
         'checked_at' => date(DATE_ATOM),
         'uptime_seconds' => $uptimeSeconds,
+        'site_count' => count($safeSites),
         'load_average' => $loadList,
         'disk_total_bytes' => $totalDisk === false ? null : $totalDisk,
         'disk_free_bytes' => $freeDisk === false ? null : $freeDisk
@@ -91,5 +123,6 @@ jsonSuccess([
             'rss_mb' => round($appMemory / (1024 * 1024), 2),
             'php_version' => PHP_VERSION
         ]
-    ]
+    ],
+    'sites' => $safeSites
 ]);

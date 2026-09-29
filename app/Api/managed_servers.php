@@ -60,7 +60,8 @@ if ($method === 'GET') {
             jsonSuccess([
                 'server' => ['id' => $id, 'name' => $servers[$id]['name'], 'url' => $servers[$id]['url']],
                 'node' => $node['node'],
-                'metrics' => $node['metrics']
+                'metrics' => $node['metrics'],
+                'sites' => $node['sites'] ?? []
             ]);
         } catch (Throwable $error) {
             $servers[$id]['last_status'] = 'offline';
