@@ -221,6 +221,7 @@ $csrfToken = Csrf::getToken();
                 <button id="headerUserMgmtBtn" class="btn btn-secondary btn-sm" style="margin-right: 6px; background: linear-gradient(135deg, #4f46e5, #6366f1); color: #fff; border: none;" onclick="openUserMgmtModal()">👥 Manage Users</button>
             <?php endif; ?>
             <?php if ($authService->hasRole('admin')): ?>
+                <button id="headerManagedServersBtn" class="btn btn-secondary btn-sm" style="margin-right: 6px; border-color: rgba(59, 130, 246, 0.5); color: #bfdbfe;" onclick="openManagedServersModal()">🖥️ Managed Servers</button>
                 <button id="headerTerminalCommandsBtn" class="btn btn-secondary btn-sm" style="margin-right: 6px; background: rgba(16, 185, 129, 0.14); color: #a7f3d0; border-color: rgba(52, 211, 153, 0.38);" onclick="openTerminalCommandsModal()">&gt;_ Terminal Commands</button>
             <?php endif; ?>
             <button id="userProfileHeaderBtn" class="btn btn-secondary btn-sm" style="margin-right: 6px; background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.15);" onclick="openUserProfileModal()">👤 Profile</button>
@@ -1496,6 +1497,85 @@ $csrfToken = Csrf::getToken();
                 <button type="button" class="btn btn-secondary" onclick="closeScriptGenModal()">Close</button>
                 <button type="button" id="sgDownloadBtn" class="btn btn-primary" style="background: linear-gradient(135deg, #7c3aed, #a855f7);">📥 Download Script</button>
                 <button type="button" id="sgSaveBtn" class="btn btn-primary" style="background: linear-gradient(135deg, #059669, #10b981);">💾 Save to Server</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Managed Servers Configuration Modal -->
+    <div id="managedServersModal" class="modal-overlay hidden">
+        <div class="modal-card modal-xl managed-servers-modal">
+            <div class="modal-header">
+                <div>
+                    <h3>🖥️ Managed Servers</h3>
+                    <div class="modal-sub-info">Configure server connections here. Server data stays on its original server.</div>
+                </div>
+                <button class="modal-close-btn" id="managedServersCloseBtn" aria-label="Close managed servers">&times;</button>
+            </div>
+            <div class="modal-body managed-servers-body">
+                <section class="managed-node-setup">
+                    <div class="managed-section-heading">
+                        <div>
+                            <h4>This Server's Connection Token</h4>
+                            <p>Generate this token here, then add this server's HTTPS URL and token to the central dashboard.</p>
+                        </div>
+                        <button type="button" id="generateNodeTokenBtn" class="btn btn-secondary btn-sm">Generate / Rotate Token</button>
+                    </div>
+                    <div id="nodeTokenState" class="managed-node-state">Checking node token…</div>
+                    <div id="nodeTokenReveal" class="managed-token-reveal hidden">
+                        <code id="nodeTokenValue"></code>
+                        <button type="button" id="copyNodeTokenBtn" class="btn btn-secondary btn-sm" title="Copy one-time node token">Copy</button>
+                    </div>
+                </section>
+
+                <section class="managed-server-form-section">
+                    <div class="managed-section-heading">
+                        <div>
+                            <h4>Add a Server</h4>
+                            <p>Use the remote server's HTTPS base URL and one-time generated node token.</p>
+                        </div>
+                    </div>
+                    <form id="managedServerForm">
+                        <input type="hidden" id="managedServerIdInput" name="id">
+                        <div class="managed-server-fields">
+                            <div class="form-group">
+                                <label for="managedServerNameInput" class="form-label">Display Name</label>
+                                <input type="text" id="managedServerNameInput" name="name" class="form-input" placeholder="Production VPS" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="managedServerUrlInput" class="form-label">HTTPS Base URL</label>
+                                <input type="url" id="managedServerUrlInput" name="url" class="form-input" placeholder="https://server.example.com" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="managedServerTokenInput" class="form-label">Node Token</label>
+                                <input type="password" id="managedServerTokenInput" name="token" class="form-input" placeholder="Paste token from remote server">
+                                <small class="form-help">Blank when editing keeps the saved token.</small>
+                            </div>
+                        </div>
+                        <div class="managed-form-actions">
+                            <label class="managed-enabled-toggle"><input type="checkbox" id="managedServerEnabledInput" checked> Include in dashboard</label>
+                            <div>
+                                <button type="button" id="managedServerCancelEditBtn" class="btn btn-secondary btn-sm hidden">Cancel Edit</button>
+                                <button type="submit" class="btn btn-primary btn-sm">Save Server</button>
+                            </div>
+                        </div>
+                    </form>
+                </section>
+
+                <section class="managed-server-list-section">
+                    <div class="managed-section-heading">
+                        <div>
+                            <h4>Configured Servers</h4>
+                            <p id="managedServerCount">No remote servers configured</p>
+                        </div>
+                        <button type="button" id="refreshManagedServersBtn" class="btn btn-secondary btn-sm">Refresh</button>
+                    </div>
+                    <div id="managedServersList" class="managed-server-list">
+                        <div class="managed-empty-state">Load configured servers to get started.</div>
+                    </div>
+                </section>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" id="managedServersFooterCloseBtn">Close</button>
             </div>
         </div>
     </div>

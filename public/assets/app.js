@@ -5059,6 +5059,190 @@ exit 0`;
         });
     }
 
+    const managedServersModal = document.getElementById('managedServersModal');
+    const managedServerForm = document.getElementById('managedServerForm');
+    const managedServersList = document.getElementById('managedServersList');
+    const nodeTokenReveal = document.getElementById('nodeTokenReveal');
+    let generatedNodeToken = '';
+
+    const closeManagedServersModal = () => {
+        if (!managedServersModal) return;
+        managedServersModal.classList.add('hidden');
+        managedServersModal.style.setProperty('display', 'none', 'important');
+    };
+
+    window.openManagedServersModal = async function() {
+        if (!managedServersModal) return;
+        managedServersModal.classList.remove('hidden');
+        managedServersModal.style.setProperty('display', 'flex', 'important');
+        managedServersModal.style.setProperty('visibility', 'visible', 'important');
+        managedServersModal.style.setProperty('opacity', '1', 'important');
+        managedServersModal.style.setProperty('z-index', '100002', 'important');
+        await loadManagedServers();
+    };
+
+    const loadManagedServers = async () => {
+        if (!managedServersList) return;
+        managedServersList.innerHTML = '<div class="managed-empty-state">Loading managed servers...</div>';
+        const { ok, data } = await apiFetch('/api/managed_servers.php');
+        if (!ok || !data.success) {
+            managedServersList.innerHTML = `<div class="managed-empty-state">${escapeHtml(data.error?.message || data.message || 'Could not load servers.')}</div>`;
+            return;
+        }
+
+        const nodeState = document.getElementById('nodeTokenState');
+        if (nodeState) {
+            nodeState.textContent = data.node_token_configured
+                ? 'This server has an active token. Generate a new one only to rotate/revoke the previous token.'
+                : 'No node token exists yet. Generate one so the central dashboard can connect to this server.';
+        }
+        const servers = data.servers || [];
+        const count = document.getElementById('managedServerCount');
+        if (count) count.textContent = `${servers.length} server${servers.length === 1 ? '' : 's'} configured`;
+        if (servers.length === 0) {
+            managedServersList.innerHTML = '<div class="managed-empty-state">No servers configured. Generate a token on each remote server, then add its URL and token here.</div>';
+            return;
+        }
+
+        managedServersList.innerHTML = servers.map(server => `
+            <article class="managed-server-card">
+                <div class="managed-server-card-main">
+                    <div class="managed-server-name">${escapeHtml(server.name)}</div>
+                    <div class="managed-server-url">${escapeHtml(server.url)}</div>
+                    <div class="managed-server-meta">${server.enabled ? 'Included in dashboard' : 'Disabled'}${server.last_checked_at ? ` · Checked ${escapeHtml(server.last_checked_at)}` : ''}${server.last_hostname ? ` · Host ${escapeHtml(server.last_hostname)}` : ''}</div>
+                    <div class="managed-server-status ${server.last_status === 'online' ? 'is-online' : (server.last_status === 'offline' ? 'is-offline' : '')}">${server.last_status === 'online' ? 'Online' : (server.last_status === 'offline' ? 'Offline' : 'Not tested')}</div>
+                </div>
+                <div class="managed-server-card-actions">
+                    <button type="button" class="btn btn-secondary btn-sm managed-server-test" data-id="${escapeHtml(server.id)}">Test</button>
+                    <button type="button" class="btn btn-secondary btn-sm managed-server-edit" data-id="${escapeHtml(server.id)}">Edit</button>
+                    <button type="button" class="btn btn-outline-danger btn-sm managed-server-delete" data-id="${escapeHtml(server.id)}">Remove</button>
+                </div>
+            </article>
+        `).join('');
+
+        managedServersList.querySelectorAll('.managed-server-test').forEach(button => button.addEventListener('click', async () => {
+            button.disabled = true;
+            button.textContent = 'Testing...';
+            const { ok: testOk, data: testData } = await apiFetch('/api/managed_servers.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'test_server', id: button.dataset.id })
+            });
+            button.disabled = false;
+            button.textContent = 'Test';
+            if (testOk && testData.success) {
+                showToast(`Connected to ${testData.node.hostname}.`, 'success');
+            } else {
+                showToast(testData.error?.message || testData.message || 'Server connection failed.', 'error');
+            }
+            await loadManagedServers();
+        }));
+
+        managedServersList.querySelectorAll('.managed-server-edit').forEach(button => button.addEventListener('click', () => {
+            const server = servers.find(item => item.id === button.dataset.id);
+            if (!server || !managedServerForm) return;
+            managedServerForm.elements.id.value = server.id;
+            managedServerForm.elements.name.value = server.name;
+            managedServerForm.elements.url.value = server.url;
+            managedServerForm.elements.token.value = '';
+            document.getElementById('managedServerEnabledInput').checked = Boolean(server.enabled);
+            document.getElementById('managedServerTokenInput').placeholder = 'Saved token; leave blank to preserve';
+            document.getElementById('managedServerCancelEditBtn').classList.remove('hidden');
+            document.getElementById('managedServerNameInput').focus();
+        }));
+
+        managedServersList.querySelectorAll('.managed-server-delete').forEach(button => button.addEventListener('click', async () => {
+            const server = servers.find(item => item.id === button.dataset.id);
+            if (!server || !await showConfirm({
+                title: 'Remove Managed Server',
+                message: `Remove '${server.name}' from this dashboard? This will not delete or change data on that server.`,
+                confirmText: 'Remove Server',
+                type: 'danger'
+            })) return;
+            const { ok: deleteOk, data: deleteData } = await apiFetch('/api/managed_servers.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'delete_server', id: server.id })
+            });
+            showToast(deleteData.message || deleteData.error?.message || 'Server removed.', deleteOk && deleteData.success ? 'success' : 'error');
+            await loadManagedServers();
+        }));
+    };
+
+    document.getElementById('headerManagedServersBtn')?.addEventListener('click', () => window.openManagedServersModal());
+    document.getElementById('managedServersCloseBtn')?.addEventListener('click', closeManagedServersModal);
+    document.getElementById('managedServersFooterCloseBtn')?.addEventListener('click', closeManagedServersModal);
+    document.getElementById('refreshManagedServersBtn')?.addEventListener('click', loadManagedServers);
+
+    document.getElementById('generateNodeTokenBtn')?.addEventListener('click', async (event) => {
+        const button = event.currentTarget;
+        if (!await showConfirm({
+            title: 'Generate Node Token',
+            message: 'Generating a new token immediately revokes the previous token for this server. Update the central dashboard entry after rotating it.',
+            confirmText: 'Generate Token',
+            type: 'info'
+        })) return;
+        button.disabled = true;
+        const { ok, data } = await apiFetch('/api/managed_servers.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'generate_node_token' })
+        });
+        button.disabled = false;
+        if (!ok || !data.success || !data.token) {
+            showToast(data.error?.message || data.message || 'Could not generate node token.', 'error');
+            return;
+        }
+        generatedNodeToken = data.token;
+        document.getElementById('nodeTokenValue').textContent = generatedNodeToken;
+        nodeTokenReveal.classList.remove('hidden');
+        showToast(data.message, 'success');
+        await loadManagedServers();
+    });
+
+    document.getElementById('copyNodeTokenBtn')?.addEventListener('click', async () => {
+        if (!generatedNodeToken) return;
+        await navigator.clipboard.writeText(generatedNodeToken);
+        showToast('Node token copied. Store it securely; it cannot be viewed again.', 'success');
+    });
+
+    document.getElementById('managedServerCancelEditBtn')?.addEventListener('click', () => {
+        managedServerForm?.reset();
+        managedServerForm.elements.id.value = '';
+        document.getElementById('managedServerEnabledInput').checked = true;
+        document.getElementById('managedServerTokenInput').placeholder = 'Paste token from remote server';
+        document.getElementById('managedServerCancelEditBtn').classList.add('hidden');
+    });
+
+    managedServerForm?.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const formData = new FormData(managedServerForm);
+        const payload = {
+            action: 'save_server',
+            id: formData.get('id') || '',
+            name: formData.get('name') || '',
+            url: formData.get('url') || '',
+            token: formData.get('token') || '',
+            enabled: document.getElementById('managedServerEnabledInput').checked
+        };
+        const { ok, data } = await apiFetch('/api/managed_servers.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        if (!ok || !data.success) {
+            showToast(data.error?.message || data.message || 'Could not save server.', 'error');
+            return;
+        }
+        showToast(data.message, 'success');
+        managedServerForm.reset();
+        managedServerForm.elements.id.value = '';
+        document.getElementById('managedServerEnabledInput').checked = true;
+        document.getElementById('managedServerTokenInput').placeholder = 'Paste token from remote server';
+        document.getElementById('managedServerCancelEditBtn').classList.add('hidden');
+        await loadManagedServers();
+    });
+
     // Initial Execution
     window.loadVpsPorts = loadVpsPorts;
     window.loadDatabases = loadDatabases;

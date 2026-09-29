@@ -104,3 +104,17 @@ File location: `/opt/lightdeploy/config/users.json`
 1. `admin`: Full access (deploy, rollback, cancel, view logs, configure).
 2. `deployer`: Deploy, cancel, view logs.
 3. `viewer`: Read-only access to dashboard and logs.
+
+---
+
+## 4. Managed Servers
+
+Managed servers are configured from the dashboard; server URLs and credentials are not hard-coded. Sign in as an administrator and open **Managed Servers**.
+
+1. On each server you want to connect, generate a node token in that server's dashboard. Copy it immediately; it is shown only once.
+2. On the central dashboard, enter that server's display name, HTTPS base URL, and node token, then save and test the connection.
+3. Repeat for each server. Existing sites, users, databases, backups, and other data remain on their original server.
+
+Use a valid HTTPS URL for remote servers. HTTP is accepted only for localhost testing. The node token grants read-only node identity/status access in this initial connection setup; it is not a MySQL password. Rotating a node token immediately invalidates its previous token, so update the matching central entry after rotation. Removing a server only removes its entry from the central dashboard; it does not delete anything from that server.
+
+The central registry is saved in `config/managed_servers.json`; each node stores only a hash of its token in `config/node_control.json`. Both files are written with restrictive `0600` permissions. The managed-node endpoint must be available on each remote installation for connection tests to succeed.
