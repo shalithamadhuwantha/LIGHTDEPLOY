@@ -2984,7 +2984,7 @@ ${escapeHtml(message)}
             body: JSON.stringify({ action: 'start_master_backup', format })
         });
         if (!ok || !data.success || !data.job?.job_id) {
-            showToast(data.message || 'Could not start the master backup.', 'error');
+            showToast(data.message || data.error?.message || 'Could not start the master backup.', 'error');
             return false;
         }
         await watchMasterBackupJob(data.job.job_id);

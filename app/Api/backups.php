@@ -51,7 +51,17 @@ $startMasterBackupJob = static function (string $triggeredBy, string $format = '
 
     $phpCli = PHP_BINARY;
     if (!preg_match('/^php(?:[0-9.]*)?$/i', basename($phpCli))) {
-        $phpCli = trim((string)safeShellExec('command -v php 2>/dev/null'));
+        $candidates = [PHP_BINDIR . '/php', '/usr/bin/php', '/usr/local/bin/php'];
+        $phpCli = '';
+        foreach ($candidates as $candidate) {
+            if (is_executable($candidate)) {
+                $phpCli = $candidate;
+                break;
+            }
+        }
+        if ($phpCli === '') {
+            $phpCli = trim((string)safeShellExec('command -v php 2>/dev/null'));
+        }
     }
     if ($phpCli === '' || !is_executable($phpCli)) {
         throw new RuntimeException('Could not locate an executable PHP CLI binary for the backup worker.');
@@ -64,12 +74,27 @@ $startMasterBackupJob = static function (string $triggeredBy, string $format = '
         escapeshellarg($jobId),
         escapeshellarg($format)
     );
-    $spawnOutput = safeShellExec($command);
-    if ($spawnOutput === null) {
+    $spawned = false;
+    if (isFunctionAvailable('proc_open')) {
+        $descriptors = [
+            0 => ['file', '/dev/null', 'r'],
+            1 => ['file', '/dev/null', 'a'],
+            2 => ['file', '/dev/null', 'a']
+        ];
+        $process = @proc_open(['/bin/sh', '-c', $command], $descriptors, $pipes);
+        if (is_resource($process)) {
+            $spawned = proc_close($process) === 0;
+        }
+    }
+    if (!$spawned && safeShellExec($command) !== null) {
+        $spawned = true;
+    }
+
+    if (!$spawned) {
         $job['status'] = 'failed';
         $job['stage'] = 'failed';
         $job['finished_at'] = date('Y-m-d H:i:s');
-        $job['error'] = 'Could not launch the PHP backup worker. Check PHP shell execution permissions.';
+        $job['error'] = 'Could not launch the PHP backup worker. Enable proc_open or shell execution for the web PHP runtime.';
         $job['logs'][] = ['time' => date('H:i:s'), 'level' => 'error', 'message' => $job['error']];
         safeWriteJson($jobPath, $job);
         throw new RuntimeException((string)$job['error']);
