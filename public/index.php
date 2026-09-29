@@ -221,7 +221,7 @@ $csrfToken = Csrf::getToken();
                 <button id="headerUserMgmtBtn" class="btn btn-secondary btn-sm" style="margin-right: 6px; background: linear-gradient(135deg, #4f46e5, #6366f1); color: #fff; border: none;" onclick="openUserMgmtModal()">👥 Manage Users</button>
             <?php endif; ?>
             <?php if ($authService->hasRole('admin')): ?>
-                <button id="headerManagedServersBtn" class="btn btn-secondary btn-sm" style="margin-right: 6px; border-color: rgba(59, 130, 246, 0.5); color: #bfdbfe;" onclick="openManagedServersModal()">🖥️ Managed Servers</button>
+                <button id="headerManagedServersBtn" class="btn btn-secondary btn-sm" style="margin-right: 6px; border-color: rgba(59, 130, 246, 0.5); color: #bfdbfe;">🖥️ Managed Servers</button>
                 <button id="headerTerminalCommandsBtn" class="btn btn-secondary btn-sm" style="margin-right: 6px; background: rgba(16, 185, 129, 0.14); color: #a7f3d0; border-color: rgba(52, 211, 153, 0.38);" onclick="openTerminalCommandsModal()">&gt;_ Terminal Commands</button>
             <?php endif; ?>
             <button id="userProfileHeaderBtn" class="btn btn-secondary btn-sm" style="margin-right: 6px; background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.15);" onclick="openUserProfileModal()">👤 Profile</button>
@@ -243,7 +243,17 @@ $csrfToken = Csrf::getToken();
                     <h3>Server Performance &amp; Resource Status</h3>
                 </div>
                 <div class="status-banner-meta">
-                    <span class="badge badge-version">VPS NODE</span>
+                    <?php if ($authService->hasRole('admin')): ?>
+                        <label class="managed-active-server-control" for="managedServerSelect">
+                            <span>VIEWING</span>
+                            <select id="managedServerSelect" class="form-input" aria-label="Select server for read-only monitoring">
+                                <option value="local">This server</option>
+                            </select>
+                        </label>
+                        <span id="managedServerStatusBadge" class="badge badge-version">LOCAL NODE</span>
+                    <?php else: ?>
+                        <span class="badge badge-version">VPS NODE</span>
+                    <?php endif; ?>
                     <span class="uptime-label" style="font-size: 0.8rem; color: var(--text-muted);">UPTIME: <strong id="bodyUptimeVal" style="color: #6ee7b7; font-family: var(--font-mono);">--</strong></span>
                 </div>
             </div>

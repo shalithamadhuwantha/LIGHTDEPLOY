@@ -40,12 +40,36 @@ $probeServer = static function (string $url, string $token): array {
         $message = $response['error']['message'] ?? $error ?: 'HTTP ' . $status;
         throw new RuntimeException('Connection failed: ' . $message);
     }
-    return $response['node'];
+    return $response;
 };
 
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 if ($method === 'GET') {
     $servers = $readRegistry()['servers'] ?? [];
+    if (($_GET['view'] ?? '') === 'overview') {
+        $id = trim((string)($_GET['id'] ?? ''));
+        if ($id === '' || !isset($servers[$id]) || empty($servers[$id]['enabled'])) {
+            jsonError('NOT_FOUND', 'Enabled managed server was not found.', 404);
+        }
+        try {
+            $node = $probeServer((string)$servers[$id]['url'], (string)$servers[$id]['token']);
+            $servers[$id]['last_status'] = 'online';
+            $servers[$id]['last_checked_at'] = date('Y-m-d H:i:s');
+            $servers[$id]['last_hostname'] = $node['node']['hostname'];
+            $writeRegistry($servers);
+            jsonSuccess([
+                'server' => ['id' => $id, 'name' => $servers[$id]['name'], 'url' => $servers[$id]['url']],
+                'node' => $node['node'],
+                'metrics' => $node['metrics']
+            ]);
+        } catch (Throwable $error) {
+            $servers[$id]['last_status'] = 'offline';
+            $servers[$id]['last_checked_at'] = date('Y-m-d H:i:s');
+            $writeRegistry($servers);
+            jsonError('SERVER_UNREACHABLE', $error->getMessage(), 502);
+        }
+    }
+
     foreach ($servers as &$server) {
         $server['token_configured'] = !empty($server['token']);
         unset($server['token']);
@@ -143,9 +167,9 @@ try {
                 $node = $probeServer((string)$servers[$id]['url'], (string)$servers[$id]['token']);
                 $servers[$id]['last_status'] = 'online';
                 $servers[$id]['last_checked_at'] = date('Y-m-d H:i:s');
-                $servers[$id]['last_hostname'] = $node['hostname'];
+                $servers[$id]['last_hostname'] = $node['node']['hostname'];
                 $writeRegistry($servers);
-                jsonSuccess(['message' => 'Connection successful.', 'node' => $node]);
+                jsonSuccess(['message' => 'Connection successful.', 'node' => $node['node']]);
             } catch (Throwable $error) {
                 $servers[$id]['last_status'] = 'offline';
                 $servers[$id]['last_checked_at'] = date('Y-m-d H:i:s');
