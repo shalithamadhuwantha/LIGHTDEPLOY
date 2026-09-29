@@ -478,7 +478,8 @@ class BackupService
 
         $tokenData = is_string($response) ? json_decode($response, true) : null;
         if ($status !== 200 || empty($tokenData['access_token'])) {
-            throw new \RuntimeException('Google authentication failed: ' . ($tokenData['error_description'] ?? $error ?: 'HTTP ' . $status));
+            $reason = $tokenData['error_description'] ?? $tokenData['error'] ?? $error ?: 'HTTP ' . $status;
+            throw new \RuntimeException('Google authentication failed: ' . $reason);
         }
 
         return $tokenData['access_token'];
@@ -520,7 +521,10 @@ class BackupService
         curl_close($init);
 
         if ($status !== 200 || !preg_match('/^Location:\s*(.+)$/im', $headers, $matches)) {
-            throw new \RuntimeException('Google Drive upload could not be initialized: ' . ($error ?: 'HTTP ' . $status));
+            $body = is_string($response) ? substr($response, $headerSize) : '';
+            $errorData = json_decode($body, true);
+            $reason = $errorData['error']['message'] ?? $error ?: 'HTTP ' . $status;
+            throw new \RuntimeException('Google Drive upload could not be initialized: ' . $reason);
         }
 
         $stream = fopen($filePath, 'rb');
@@ -548,7 +552,8 @@ class BackupService
 
         $uploaded = is_string($uploadResponse) ? json_decode($uploadResponse, true) : null;
         if (!in_array($uploadStatus, [200, 201], true) || empty($uploaded['id'])) {
-            throw new \RuntimeException('Google Drive upload failed: ' . ($uploadError ?: 'HTTP ' . $uploadStatus));
+            $reason = $uploaded['error']['message'] ?? $uploadError ?: 'HTTP ' . $uploadStatus;
+            throw new \RuntimeException('Google Drive upload failed: ' . $reason);
         }
 
         return ['id' => $uploaded['id'], 'name' => $uploaded['name'] ?? $filename];
@@ -677,6 +682,7 @@ class BackupService
                 $returnVar = 0;
                 safeExec($cmd, $output, $returnVar);
 
+                $errLogContent = file_exists($tempErr) ? trim((string)file_get_contents($tempErr)) : '';
                 if (file_exists($tempErr)) @unlink($tempErr);
 
                 if ($returnVar === 0 && file_exists($targetFile) && filesize($targetFile) > 0) {
@@ -714,7 +720,17 @@ class BackupService
                         }
                     }
                 } else {
-                    $errors[$dbName] = "mysqldump failed for database '{$dbName}'.";
+                    if (file_exists($targetFile)) {
+                        @unlink($targetFile);
+                    }
+                    $errorLines = array_filter(explode("\n", $errLogContent), static function ($line) {
+                        $line = trim($line);
+                        return $line !== '' && !str_contains($line, '[Warning] Using a password');
+                    });
+                    $details = !empty($errorLines) ? implode("\n", $errorLines) : implode("\n", $output);
+                    $errors[$dbName] = $details !== ''
+                        ? "mysqldump failed for database '{$dbName}': " . $details
+                        : "mysqldump failed for database '{$dbName}' (exit code {$returnVar}) without diagnostic output.";
                 }
             }
         } finally {

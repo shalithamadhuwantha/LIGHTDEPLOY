@@ -156,7 +156,7 @@ $csrfToken = Csrf::getToken();
                 modal.style.setProperty('z-index', '99999', 'important');
             }
             if (window.loadMasterBackupHistory) {
-                window.loadMasterBackupHistory();
+                return window.loadMasterBackupHistory();
             }
         }
         function closeMasterBackupModal() {

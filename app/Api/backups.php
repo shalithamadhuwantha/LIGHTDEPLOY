@@ -258,9 +258,10 @@ if ($method === 'POST') {
                 $summary = $backupService->runMasterBackup($currentUser['username'] ?? 'operator', $format);
                 jsonSuccess([
                     'message' => sprintf(
-                        'Master Dump Complete: Successfully backed up %d/%d VPS databases into separate phpMyAdmin-ready .%s files!',
+                        'Master backup finished: %d/%d VPS databases backed up; %d failed. Successful dumps are separate phpMyAdmin-ready .%s files.',
                         $summary['successful'],
                         $summary['total'],
+                        $summary['failed'],
                         $format
                     ),
                     'summary' => $summary

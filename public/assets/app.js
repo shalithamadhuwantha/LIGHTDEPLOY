@@ -2902,9 +2902,10 @@ ${escapeHtml(message)}
 
             if (ok && data.success) {
                 const hasBackupFailures = data.backup_summary && data.backup_summary.failed > 0;
-                showToast(data.message || 'Master credentials saved!', hasBackupFailures ? 'error' : 'success');
-                if (hasBackupFailures && data.backup_summary.errors) {
-                    console.error('Google Drive backup errors:', data.backup_summary.errors);
+                if (hasBackupFailures) {
+                    await showMasterBackupOutcome(data);
+                } else {
+                    showToast(data.message || 'Master credentials saved!', 'success');
                 }
                 if (window.closeMasterCredsModal) window.closeMasterCredsModal();
             } else {
@@ -2964,6 +2965,38 @@ ${escapeHtml(message)}
         });
     }
 
+    const showMasterBackupOutcome = async (data) => {
+        const summary = data.summary || data.backup_summary || {};
+        const errors = Object.entries(summary.errors || {});
+        const failed = Number(summary.failed || 0);
+
+        showToast(data.message || 'Master backup completed.', failed > 0 ? 'error' : 'success');
+        loadDatabases();
+
+        if (failed > 0) {
+            if (window.openMasterBackupModal) {
+                await window.openMasterBackupModal();
+            } else if (window.loadMasterBackupHistory) {
+                await window.loadMasterBackupHistory();
+            }
+
+            const container = document.getElementById('masterSessionsContainer');
+            if (container) {
+                const errorRows = errors.map(([database, message]) => `
+                    <li><strong>${escapeHtml(database)}</strong>: ${escapeHtml(message)}</li>
+                `).join('');
+                container.insertAdjacentHTML('afterbegin', `
+                    <div class="alert-box alert-danger" style="margin-bottom: 16px;">
+                        <strong>${failed} database backup(s) failed</strong>
+                        <ul style="margin: 8px 0 0; padding-left: 20px;">${errorRows}</ul>
+                    </div>
+                `);
+            }
+        } else if (window.loadMasterBackupHistory) {
+            await window.loadMasterBackupHistory();
+        }
+    };
+
     const masterBackupBtn = document.getElementById('masterBackupBtn');
     if (masterBackupBtn) {
         masterBackupBtn.addEventListener('click', async () => {
@@ -2988,8 +3021,7 @@ ${escapeHtml(message)}
             masterBackupBtn.textContent = origText;
 
             if (ok && data.success) {
-                showToast(data.message || 'Master Backup completed! All VPS databases dumped into separate .sql files.', 'success');
-                loadDatabases();
+                await showMasterBackupOutcome(data);
             } else {
                 showToast(data.message || 'Master Backup failed. Ensure Master Credentials are saved & tested.', 'error');
             }
@@ -3116,9 +3148,7 @@ ${escapeHtml(message)}
             runMasterBackupModalBtn.textContent = origText;
 
             if (ok && data.success) {
-                showToast(data.message || 'Master Backup completed successfully!', 'success');
-                window.loadMasterBackupHistory();
-                loadDatabases();
+                await showMasterBackupOutcome(data);
             } else {
                 showToast(data.message || 'Master Backup failed. Check Master DB User credentials.', 'error');
             }
