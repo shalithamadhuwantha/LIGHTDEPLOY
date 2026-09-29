@@ -170,7 +170,9 @@ if ($method === 'POST') {
 
             $creds = $backupService->getMasterCredentials();
             unset($creds['db_pass']);
+            unset($creds['google_service_account_json']);
             $creds['has_password'] = !empty($backupService->getMasterCredentials()['db_pass']);
+            $creds['has_google_drive_credentials'] = $backupService->isGoogleDriveConfigured();
             jsonSuccess(['master_credentials' => $creds]);
             break;
 
@@ -185,12 +187,34 @@ if ($method === 'POST') {
                     'db_host' => $input['db_host'] ?? '127.0.0.1',
                     'db_port' => (int)($input['db_port'] ?? 3306),
                     'db_user' => $input['db_user'] ?? 'root',
-                    'db_pass' => $input['db_pass'] ?? ''
+                    'db_pass' => $input['db_pass'] ?? '',
+                    'google_service_account_json' => $input['google_service_account_json'] ?? '',
+                    'google_drive_folder_id' => $input['google_drive_folder_id'] ?? ''
                 ]);
                 unset($saved['db_pass']);
+                unset($saved['google_service_account_json']);
+                $backupSummary = null;
+                if ($backupService->isGoogleDriveConfigured()) {
+                    try {
+                        $backupSummary = $backupService->runMasterBackup($currentUser['username'] ?? 'operator', 'sql');
+                    } catch (\Throwable $e) {
+                        $backupSummary = [
+                            'total' => 0,
+                            'successful' => 0,
+                            'failed' => 1,
+                            'details' => [],
+                            'errors' => ['_backup' => $e->getMessage()]
+                        ];
+                    }
+                }
                 jsonSuccess([
-                    'message' => 'Master MySQL credentials saved successfully!',
-                    'master_credentials' => $saved
+                    'message' => $backupSummary === null
+                        ? 'Master MySQL credentials saved. Add Google Drive service-account credentials to enable automatic backups.'
+                        : ($backupSummary['total'] === 0
+                            ? 'Master credentials saved, but the automatic Google Drive backup could not start: ' . ($backupSummary['errors']['_backup'] ?? 'unknown error')
+                            : sprintf('Master credentials saved; Google Drive backup completed for %d/%d databases (%d failed).', $backupSummary['successful'], $backupSummary['total'], $backupSummary['failed'])),
+                    'master_credentials' => $saved,
+                    'backup_summary' => $backupSummary
                 ]);
             } catch (\Throwable $e) {
                 jsonError('SAVE_MASTER_FAILED', $e->getMessage(), 500);

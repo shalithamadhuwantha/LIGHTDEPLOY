@@ -2845,6 +2845,19 @@ ${escapeHtml(message)}
             if (document.getElementById('masterHostInput')) document.getElementById('masterHostInput').value = creds.db_host || '127.0.0.1';
             if (document.getElementById('masterPortInput')) document.getElementById('masterPortInput').value = creds.db_port || 3306;
             if (document.getElementById('masterUserInput')) document.getElementById('masterUserInput').value = creds.db_user || 'root';
+            if (document.getElementById('googleDriveFolderInput')) document.getElementById('googleDriveFolderInput').value = creds.google_drive_folder_id || '';
+
+            const driveCredentialsInput = document.getElementById('googleServiceAccountInput');
+            const driveCredentialsHelp = document.getElementById('googleDriveCredentialsHelp');
+            if (driveCredentialsInput) {
+                driveCredentialsInput.value = '';
+                driveCredentialsInput.placeholder = creds.has_google_drive_credentials
+                    ? 'Google Drive credentials are saved; paste new JSON only to replace them.'
+                    : 'Paste the downloaded service-account JSON.';
+            }
+            if (driveCredentialsHelp && creds.has_google_drive_credentials) {
+                driveCredentialsHelp.textContent = 'Google Drive credentials are saved. Leave blank to preserve them; share the destination folder with the service account as an Editor.';
+            }
             
             const passInput = document.getElementById('masterPassInput');
             const helpText = document.getElementById('masterPassHelpText');
@@ -2873,7 +2886,9 @@ ${escapeHtml(message)}
                 db_host: formData.get('db_host') || '127.0.0.1',
                 db_port: parseInt(formData.get('db_port') || '3306', 10),
                 db_user: formData.get('db_user') || 'root',
-                db_pass: formData.get('db_pass') || ''
+                db_pass: formData.get('db_pass') || '',
+                google_service_account_json: formData.get('google_service_account_json') || '',
+                google_drive_folder_id: formData.get('google_drive_folder_id') || ''
             };
 
             const { ok, data } = await apiFetch('/api/backups.php', {
@@ -2886,7 +2901,11 @@ ${escapeHtml(message)}
             submitBtn.textContent = 'Save Master Credentials';
 
             if (ok && data.success) {
-                showToast(data.message || 'Master credentials saved!', 'success');
+                const hasBackupFailures = data.backup_summary && data.backup_summary.failed > 0;
+                showToast(data.message || 'Master credentials saved!', hasBackupFailures ? 'error' : 'success');
+                if (hasBackupFailures && data.backup_summary.errors) {
+                    console.error('Google Drive backup errors:', data.backup_summary.errors);
+                }
                 if (window.closeMasterCredsModal) window.closeMasterCredsModal();
             } else {
                 showToast(data.message || 'Failed to save master credentials.', 'error');

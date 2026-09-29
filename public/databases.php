@@ -591,7 +591,7 @@ $csrfToken = Csrf::getToken();
 
     <!-- Master MySQL Credentials Modal -->
     <div id="masterCredsModal" class="modal-overlay hidden">
-        <div class="modal-card" style="max-width: 540px;">
+        <div class="modal-card" style="max-width: 720px;">
             <div class="modal-header">
                 <div>
                     <h3>🔑 Master MySQL Administrator Credentials</h3>
@@ -625,6 +625,16 @@ $csrfToken = Csrf::getToken();
                             <input type="password" id="masterPassInput" name="db_pass" class="form-input" placeholder="••••••••">
                             <small id="masterPassHelpText" class="form-help">Leave blank if keeping existing password.</small>
                         </div>
+                    </div>
+                    <div class="form-group" style="margin-top: 12px;">
+                        <label for="googleServiceAccountInput" class="form-label">Google Drive Service-Account JSON</label>
+                        <textarea id="googleServiceAccountInput" name="google_service_account_json" class="form-input" rows="5" placeholder="Paste the downloaded service-account JSON; saved credentials are retained when left blank."></textarea>
+                        <small id="googleDriveCredentialsHelp" class="form-help">Share the destination Drive folder with the service account's client_email as an Editor.</small>
+                    </div>
+                    <div class="form-group" style="margin-top: 10px;">
+                        <label for="googleDriveFolderInput" class="form-label">Google Drive Folder ID (optional)</label>
+                        <input type="text" id="googleDriveFolderInput" name="google_drive_folder_id" class="form-input" placeholder="Folder ID from the Google Drive URL">
+                        <small class="form-help">Leave blank to upload to the service account's My Drive.</small>
                     </div>
 
                     <!-- Connection Status / Discovered DBs Callout -->

@@ -391,6 +391,8 @@ class BackupService
             'db_port' => 3306,
             'db_user' => 'root',
             'db_pass' => '',
+            'google_service_account_json' => '',
+            'google_drive_folder_id' => '',
             'last_tested_at' => null
         ]);
         return $data;
@@ -407,12 +409,149 @@ class BackupService
             'db_port' => (int)($data['db_port'] ?? 3306),
             'db_user' => trim($data['db_user'] ?? 'root'),
             'db_pass' => (isset($data['db_pass']) && $data['db_pass'] !== '') ? $data['db_pass'] : ($existing['db_pass'] ?? ''),
+            'google_service_account_json' => (isset($data['google_service_account_json']) && trim($data['google_service_account_json']) !== '')
+                ? trim($data['google_service_account_json'])
+                : ($existing['google_service_account_json'] ?? ''),
+            'google_drive_folder_id' => trim($data['google_drive_folder_id'] ?? ($existing['google_drive_folder_id'] ?? '')),
             'last_tested_at' => $existing['last_tested_at'] ?? null,
             'updated_at' => date('Y-m-d H:i:s')
         ];
 
-        safeWriteJson($masterFile, $updated);
+        $serviceAccount = json_decode($updated['google_service_account_json'], true);
+        if ($updated['google_service_account_json'] !== '' && (!is_array($serviceAccount) || empty($serviceAccount['client_email']) || empty($serviceAccount['private_key']))) {
+            throw new \InvalidArgumentException('Google service-account credentials must be valid JSON containing client_email and private_key.');
+        }
+
+        if (!safeWriteJson($masterFile, $updated)) {
+            throw new \RuntimeException('Unable to save master database credentials.');
+        }
+        @chmod($masterFile, 0600);
         return $updated;
+    }
+
+    public function isGoogleDriveConfigured(): bool
+    {
+        $creds = $this->getMasterCredentials();
+        $serviceAccount = json_decode($creds['google_service_account_json'] ?? '', true);
+        return is_array($serviceAccount) && !empty($serviceAccount['client_email']) && !empty($serviceAccount['private_key']);
+    }
+
+    private function base64UrlEncode(string $value): string
+    {
+        return rtrim(strtr(base64_encode($value), '+/', '-_'), '=');
+    }
+
+    private function getGoogleDriveAccessToken(array $serviceAccount): string
+    {
+        $now = time();
+        $header = $this->base64UrlEncode(json_encode(['alg' => 'RS256', 'typ' => 'JWT']));
+        $claims = $this->base64UrlEncode(json_encode([
+            'iss' => $serviceAccount['client_email'],
+            'scope' => 'https://www.googleapis.com/auth/drive.file',
+            'aud' => 'https://oauth2.googleapis.com/token',
+            'iat' => $now,
+            'exp' => $now + 3600
+        ]));
+        $unsignedToken = $header . '.' . $claims;
+
+        $privateKey = openssl_pkey_get_private($serviceAccount['private_key']);
+        if ($privateKey === false || !openssl_sign($unsignedToken, $signature, $privateKey, OPENSSL_ALGO_SHA256)) {
+            throw new \RuntimeException('Could not sign Google service-account authentication token.');
+        }
+
+        $assertion = $unsignedToken . '.' . $this->base64UrlEncode($signature);
+        $curl = curl_init('https://oauth2.googleapis.com/token');
+        curl_setopt_array($curl, [
+            CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => http_build_query([
+                'grant_type' => 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+                'assertion' => $assertion
+            ]),
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT => 30,
+            CURLOPT_HTTPHEADER => ['Content-Type: application/x-www-form-urlencoded']
+        ]);
+        $response = curl_exec($curl);
+        $status = (int)curl_getinfo($curl, CURLINFO_HTTP_CODE);
+        $error = curl_error($curl);
+        curl_close($curl);
+
+        $tokenData = is_string($response) ? json_decode($response, true) : null;
+        if ($status !== 200 || empty($tokenData['access_token'])) {
+            throw new \RuntimeException('Google authentication failed: ' . ($tokenData['error_description'] ?? $error ?: 'HTTP ' . $status));
+        }
+
+        return $tokenData['access_token'];
+    }
+
+    private function uploadFileToGoogleDrive(string $filePath, string $filename): array
+    {
+        $settings = $this->getMasterCredentials();
+        $serviceAccount = json_decode($settings['google_service_account_json'] ?? '', true);
+        if (!is_array($serviceAccount) || empty($serviceAccount['client_email']) || empty($serviceAccount['private_key'])) {
+            throw new \RuntimeException('Google Drive service-account credentials are not configured.');
+        }
+
+        $accessToken = $this->getGoogleDriveAccessToken($serviceAccount);
+        $metadata = ['name' => $filename];
+        if (!empty($settings['google_drive_folder_id'])) {
+            $metadata['parents'] = [$settings['google_drive_folder_id']];
+        }
+
+        $init = curl_init('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&supportsAllDrives=true');
+        curl_setopt_array($init, [
+            CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => json_encode($metadata),
+            CURLOPT_HEADER => true,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT => 30,
+            CURLOPT_HTTPHEADER => [
+                'Authorization: Bearer ' . $accessToken,
+                'Content-Type: application/json; charset=UTF-8',
+                'X-Upload-Content-Type: application/octet-stream',
+                'X-Upload-Content-Length: ' . filesize($filePath)
+            ]
+        ]);
+        $response = curl_exec($init);
+        $status = (int)curl_getinfo($init, CURLINFO_HTTP_CODE);
+        $headerSize = (int)curl_getinfo($init, CURLINFO_HEADER_SIZE);
+        $error = curl_error($init);
+        $headers = is_string($response) ? substr($response, 0, $headerSize) : '';
+        curl_close($init);
+
+        if ($status !== 200 || !preg_match('/^Location:\s*(.+)$/im', $headers, $matches)) {
+            throw new \RuntimeException('Google Drive upload could not be initialized: ' . ($error ?: 'HTTP ' . $status));
+        }
+
+        $stream = fopen($filePath, 'rb');
+        if ($stream === false) {
+            throw new \RuntimeException('Could not open backup file for Google Drive upload.');
+        }
+
+        $upload = curl_init(trim($matches[1]));
+        curl_setopt_array($upload, [
+            CURLOPT_UPLOAD => true,
+            CURLOPT_INFILE => $stream,
+            CURLOPT_INFILESIZE => filesize($filePath),
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT => 0,
+            CURLOPT_HTTPHEADER => [
+                'Authorization: Bearer ' . $accessToken,
+                'Content-Type: application/octet-stream'
+            ]
+        ]);
+        $uploadResponse = curl_exec($upload);
+        $uploadStatus = (int)curl_getinfo($upload, CURLINFO_HTTP_CODE);
+        $uploadError = curl_error($upload);
+        curl_close($upload);
+        fclose($stream);
+
+        $uploaded = is_string($uploadResponse) ? json_decode($uploadResponse, true) : null;
+        if (!in_array($uploadStatus, [200, 201], true) || empty($uploaded['id'])) {
+            throw new \RuntimeException('Google Drive upload failed: ' . ($uploadError ?: 'HTTP ' . $uploadStatus));
+        }
+
+        return ['id' => $uploaded['id'], 'name' => $uploaded['name'] ?? $filename];
     }
 
     public function testMasterConnection(?array $creds = null): array
@@ -565,6 +704,15 @@ class BackupService
                         'created_at' => date('Y-m-d H:i:s'),
                         'db_name' => $dbName
                     ];
+                    if ($this->isGoogleDriveConfigured()) {
+                        try {
+                            $driveFile = $this->uploadFileToGoogleDrive($targetFile, $filename);
+                            $successful[$dbName]['google_drive_file_id'] = $driveFile['id'];
+                        } catch (\Throwable $e) {
+                            unset($successful[$dbName]);
+                            $errors[$dbName] = 'Local dump created, but Google Drive upload failed: ' . $e->getMessage();
+                        }
+                    }
                 } else {
                     $errors[$dbName] = "mysqldump failed for database '{$dbName}'.";
                 }

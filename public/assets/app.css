@@ -1399,6 +1399,25 @@ body {
     gap: 12px;
 }
 
+#masterCredsForm {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+}
+
+#masterCredsForm .modal-body {
+    min-height: 0;
+}
+
+#masterCredsForm .modal-footer {
+    flex-wrap: wrap;
+}
+
+#masterCredsForm .modal-footer > div {
+    flex-wrap: wrap;
+}
+
 /* Terminal Window */
 .terminal-container {
     background: var(--bg-terminal);
@@ -2216,6 +2235,12 @@ html {
     .modal-footer .btn {
         width: 100%;
         margin-right: 0 !important;
+    }
+
+    #masterCredsForm .modal-footer > div {
+        display: grid !important;
+        grid-template-columns: 1fr 1fr;
+        width: 100%;
     }
 
     /* Terminal output box on mobile */
