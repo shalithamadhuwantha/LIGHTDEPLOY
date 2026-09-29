@@ -1477,11 +1477,11 @@ body {
     overflow: hidden;
     display: flex;
     flex-direction: column;
-    color: #e2f7eb;
-    background: #07130f;
-    border: 1px solid rgba(74, 222, 128, 0.45);
+    color: #dbeafe;
+    background: #07101f;
+    border: 1px solid rgba(59, 130, 246, 0.55);
     border-radius: 10px;
-    box-shadow: 0 28px 90px rgba(0, 0, 0, 0.72), 0 0 42px rgba(34, 197, 94, 0.12);
+    box-shadow: 0 28px 90px rgba(0, 0, 0, 0.72), 0 0 42px rgba(37, 99, 235, 0.2);
 }
 
 .master-progress-header,
@@ -1491,11 +1491,11 @@ body {
     justify-content: space-between;
     gap: 16px;
     padding: 16px 20px;
-    background: rgba(13, 30, 22, 0.96);
+    background: rgba(12, 25, 48, 0.96);
 }
 
 .master-progress-header {
-    border-bottom: 1px solid rgba(74, 222, 128, 0.2);
+    border-bottom: 1px solid rgba(59, 130, 246, 0.28);
 }
 
 .master-progress-header h2 {
@@ -1547,12 +1547,12 @@ body {
 }
 
 .master-progress-status-row {
-    color: #d1fae5;
+    color: #dbeafe;
     font-size: 0.84rem;
 }
 
 .master-progress-status-row strong {
-    color: #86efac;
+    color: #60a5fa;
     font-size: 1rem;
 }
 
@@ -1560,31 +1560,31 @@ body {
     height: 10px;
     margin-top: 10px;
     overflow: hidden;
-    background: #14241b;
-    border: 1px solid rgba(134, 239, 172, 0.2);
+    background: #111d34;
+    border: 1px solid rgba(96, 165, 250, 0.28);
     border-radius: 2px;
 }
 
 .master-progress-fill {
     width: 0;
     height: 100%;
-    background: linear-gradient(90deg, #16a34a, #4ade80 70%, #bef264);
-    box-shadow: 0 0 16px rgba(74, 222, 128, 0.55);
+    background: linear-gradient(90deg, #2563eb, #38bdf8 70%, #a5f3fc);
+    box-shadow: 0 0 16px rgba(56, 189, 248, 0.55);
     transition: width 0.35s ease;
 }
 
 .master-progress-meta {
     margin-top: 8px;
-    color: #8da99a;
+    color: #91a7c7;
     font-size: 0.72rem;
 }
 
 .master-progress-result {
     margin-top: 14px;
     padding: 10px 12px;
-    color: #bbf7d0;
-    background: rgba(22, 101, 52, 0.22);
-    border-left: 3px solid #4ade80;
+    color: #bfdbfe;
+    background: rgba(30, 64, 175, 0.2);
+    border-left: 3px solid #3b82f6;
     font-size: 0.84rem;
 }
 
@@ -1597,8 +1597,8 @@ body {
 .master-terminal-window {
     margin-top: 16px;
     overflow: hidden;
-    background: #030907;
-    border: 1px solid rgba(74, 222, 128, 0.22);
+    background: #030815;
+    border: 1px solid rgba(59, 130, 246, 0.28);
     border-radius: 5px;
 }
 
@@ -1609,9 +1609,9 @@ body {
     gap: 12px;
     min-height: 34px;
     padding: 0 11px;
-    color: #749180;
-    background: #0d1912;
-    border-bottom: 1px solid rgba(74, 222, 128, 0.16);
+    color: #8297b8;
+    background: #0c1730;
+    border-bottom: 1px solid rgba(59, 130, 246, 0.2);
     font-size: 0.67rem;
 }
 
@@ -1628,18 +1628,18 @@ body {
 }
 
 .master-terminal-bar i:nth-child(2) { background: #facc15; }
-.master-terminal-bar i:nth-child(3) { background: #4ade80; }
+.master-terminal-bar i:nth-child(3) { background: #38bdf8; }
 
 .master-terminal-logs {
     height: min(38vh, 330px);
     min-height: 190px;
     padding: 12px;
     overflow-y: auto;
-    color: #bbf7d0;
+    color: #bfdbfe;
     font-family: var(--font-mono);
     font-size: 0.72rem;
     line-height: 1.65;
-    scrollbar-color: #286341 #07110c;
+    scrollbar-color: #315b9a #07101f;
 }
 
 .master-log-line {
@@ -1649,16 +1649,16 @@ body {
     overflow-wrap: anywhere;
 }
 
-.master-log-line time { color: #577763; }
-.master-log-line.is-system span { color: #86efac; }
-.master-log-line.is-success span { color: #4ade80; }
+.master-log-line time { color: #637da7; }
+.master-log-line.is-system span { color: #7dd3fc; }
+.master-log-line.is-success span { color: #93c5fd; }
 .master-log-line.is-warning span { color: #facc15; }
 .master-log-line.is-error span { color: #fca5a5; }
 
 .master-progress-footer {
     min-height: 52px;
-    color: #8da99a;
-    border-top: 1px solid rgba(74, 222, 128, 0.2);
+    color: #91a7c7;
+    border-top: 1px solid rgba(59, 130, 246, 0.28);
     font-size: 0.7rem;
 }
 
