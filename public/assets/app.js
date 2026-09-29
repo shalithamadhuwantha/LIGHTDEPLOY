@@ -2871,6 +2871,129 @@ ${escapeHtml(message)}
         }
     };
 
+    const masterProgressModal = document.getElementById('masterProgressModal');
+    const masterProgressLogs = document.getElementById('masterProgressLogs');
+    let activeMasterBackupJobId = '';
+    let shownMasterBackupLogCount = 0;
+
+    const closeMasterProgress = () => {
+        if (masterProgressModal) {
+            masterProgressModal.classList.add('hidden');
+            masterProgressModal.style.setProperty('display', 'none', 'important');
+        }
+    };
+
+    const openMasterProgress = (jobId) => {
+        if (!masterProgressModal) return;
+        masterProgressModal.classList.remove('hidden');
+        masterProgressModal.style.setProperty('display', 'flex', 'important');
+        masterProgressModal.style.setProperty('visibility', 'visible', 'important');
+        masterProgressModal.style.setProperty('opacity', '1', 'important');
+        masterProgressModal.style.setProperty('z-index', '100002', 'important');
+        document.getElementById('masterProgressJobId').textContent = `JOB: ${jobId}`;
+    };
+
+    const appendMasterBackupLogs = (logs) => {
+        if (!masterProgressLogs || !Array.isArray(logs)) return;
+        logs.slice(shownMasterBackupLogCount).forEach((entry) => {
+            const row = document.createElement('div');
+            row.className = `master-log-line is-${entry.level || 'info'}`;
+            const time = document.createElement('time');
+            time.textContent = entry.time || '--:--:--';
+            const message = document.createElement('span');
+            message.textContent = entry.message || '';
+            row.append(time, message);
+            masterProgressLogs.appendChild(row);
+        });
+        shownMasterBackupLogCount = logs.length;
+        masterProgressLogs.scrollTop = masterProgressLogs.scrollHeight;
+    };
+
+    const watchMasterBackupJob = async (jobId) => {
+        activeMasterBackupJobId = jobId;
+        shownMasterBackupLogCount = 0;
+        if (masterProgressLogs) masterProgressLogs.replaceChildren();
+        const doneButton = document.getElementById('masterProgressDoneBtn');
+        const stageLabel = document.getElementById('masterProgressStage');
+        const percentLabel = document.getElementById('masterProgressPercent');
+        const countLabel = document.getElementById('masterProgressCount');
+        const databaseLabel = document.getElementById('masterProgressDatabase');
+        const progressFill = document.getElementById('masterProgressFill');
+        const progressTrack = document.querySelector('.master-progress-track');
+        const footerStatus = document.getElementById('masterProgressFooterStatus');
+        const resultBox = document.getElementById('masterProgressResult');
+        if (doneButton) doneButton.disabled = true;
+        if (resultBox) resultBox.hidden = true;
+        openMasterProgress(jobId);
+
+        while (activeMasterBackupJobId === jobId) {
+            const { ok, data } = await apiFetch('/api/backups.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'master_backup_status', job_id: jobId })
+            });
+
+            if (!ok || !data.success || !data.job) {
+                if (stageLabel) stageLabel.textContent = 'Unable to read worker status';
+                if (footerStatus) footerStatus.textContent = data.message || 'Status polling failed';
+                if (doneButton) doneButton.disabled = false;
+                return;
+            }
+
+            const job = data.job;
+            const percent = Math.max(0, Math.min(100, Number(job.percent || 0)));
+            if (stageLabel) stageLabel.textContent = String(job.stage || job.status || 'running').replaceAll('_', ' ').toUpperCase();
+            if (percentLabel) percentLabel.textContent = `${percent}%`;
+            if (progressFill) progressFill.style.width = `${percent}%`;
+            if (progressTrack) progressTrack.setAttribute('aria-valuenow', String(percent));
+            if (countLabel) countLabel.textContent = job.total > 0 ? `${job.current || 0} / ${job.total} databases processed` : 'Discovering databases';
+            if (databaseLabel) databaseLabel.textContent = job.current_database ? `CURRENT: ${job.current_database}` : 'Preparing database list';
+            appendMasterBackupLogs(job.logs || []);
+
+            const terminal = ['completed', 'completed_with_errors', 'failed'].includes(job.status);
+            if (terminal) {
+                if (doneButton) doneButton.disabled = false;
+                if (footerStatus) footerStatus.textContent = job.status === 'completed' ? 'All backup steps completed' : 'Backup ended with errors';
+                if (resultBox) {
+                    resultBox.hidden = false;
+                    resultBox.classList.toggle('is-error', job.status !== 'completed');
+                    const summary = job.summary;
+                    if (summary) {
+                        const uploadedCount = Object.values(summary.details || {}).filter(item => item.google_drive_file_id).length;
+                        const driveConfigured = (job.logs || []).some(entry => entry.message?.startsWith('Destination: Google Drive'));
+                        resultBox.textContent = `${summary.successful}/${summary.total} databases backed up; ${summary.failed} failed. ${driveConfigured ? `${uploadedCount} file(s) uploaded to Google Drive.` : 'Files are stored locally; Google Drive is not configured.'}`;
+                    } else {
+                        resultBox.textContent = job.error || 'Backup worker failed before returning a summary.';
+                    }
+                }
+                activeMasterBackupJobId = '';
+                loadDatabases();
+                if (window.loadMasterBackupHistory) await window.loadMasterBackupHistory();
+                showToast(job.status === 'completed' ? 'Master backup completed.' : 'Master backup finished with errors. See the live log.', job.status === 'completed' ? 'success' : 'error');
+                return;
+            }
+
+            await new Promise(resolve => setTimeout(resolve, 700));
+        }
+    };
+
+    const launchMasterBackupJob = async (format = 'sql') => {
+        const { ok, data } = await apiFetch('/api/backups.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'start_master_backup', format })
+        });
+        if (!ok || !data.success || !data.job?.job_id) {
+            showToast(data.message || 'Could not start the master backup.', 'error');
+            return false;
+        }
+        await watchMasterBackupJob(data.job.job_id);
+        return true;
+    };
+
+    document.getElementById('masterProgressCloseBtn')?.addEventListener('click', closeMasterProgress);
+    document.getElementById('masterProgressDoneBtn')?.addEventListener('click', closeMasterProgress);
+
     const masterCredsForm = document.getElementById('masterCredsForm');
     if (masterCredsForm) {
         masterCredsForm.addEventListener('submit', async (e) => {
@@ -2901,13 +3024,13 @@ ${escapeHtml(message)}
             submitBtn.textContent = 'Save Master Credentials';
 
             if (ok && data.success) {
-                const hasBackupFailures = data.backup_summary && data.backup_summary.failed > 0;
-                if (hasBackupFailures) {
-                    await showMasterBackupOutcome(data);
+                if (data.backup_job?.job_id) {
+                    if (window.closeMasterCredsModal) window.closeMasterCredsModal();
+                    await watchMasterBackupJob(data.backup_job.job_id);
                 } else {
                     showToast(data.message || 'Master credentials saved!', 'success');
+                    if (window.closeMasterCredsModal) window.closeMasterCredsModal();
                 }
-                if (window.closeMasterCredsModal) window.closeMasterCredsModal();
             } else {
                 showToast(data.message || 'Failed to save master credentials.', 'error');
             }
@@ -2965,38 +3088,6 @@ ${escapeHtml(message)}
         });
     }
 
-    const showMasterBackupOutcome = async (data) => {
-        const summary = data.summary || data.backup_summary || {};
-        const errors = Object.entries(summary.errors || {});
-        const failed = Number(summary.failed || 0);
-
-        showToast(data.message || 'Master backup completed.', failed > 0 ? 'error' : 'success');
-        loadDatabases();
-
-        if (failed > 0) {
-            if (window.openMasterBackupModal) {
-                await window.openMasterBackupModal();
-            } else if (window.loadMasterBackupHistory) {
-                await window.loadMasterBackupHistory();
-            }
-
-            const container = document.getElementById('masterSessionsContainer');
-            if (container) {
-                const errorRows = errors.map(([database, message]) => `
-                    <li><strong>${escapeHtml(database)}</strong>: ${escapeHtml(message)}</li>
-                `).join('');
-                container.insertAdjacentHTML('afterbegin', `
-                    <div class="alert-box alert-danger" style="margin-bottom: 16px;">
-                        <strong>${failed} database backup(s) failed</strong>
-                        <ul style="margin: 8px 0 0; padding-left: 20px;">${errorRows}</ul>
-                    </div>
-                `);
-            }
-        } else if (window.loadMasterBackupHistory) {
-            await window.loadMasterBackupHistory();
-        }
-    };
-
     const masterBackupBtn = document.getElementById('masterBackupBtn');
     if (masterBackupBtn) {
         masterBackupBtn.addEventListener('click', async () => {
@@ -3010,21 +3101,10 @@ ${escapeHtml(message)}
             masterBackupBtn.disabled = true;
             const origText = masterBackupBtn.textContent;
             masterBackupBtn.textContent = '⏳ Running Master Backup...';
-
-            const { ok, data } = await apiFetch('/api/backups.php', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'run_master_backup', format: 'sql' })
-            });
+            await launchMasterBackupJob('sql');
 
             masterBackupBtn.disabled = false;
             masterBackupBtn.textContent = origText;
-
-            if (ok && data.success) {
-                await showMasterBackupOutcome(data);
-            } else {
-                showToast(data.message || 'Master Backup failed. Ensure Master Credentials are saved & tested.', 'error');
-            }
         });
     }
 
@@ -3137,21 +3217,10 @@ ${escapeHtml(message)}
             runMasterBackupModalBtn.disabled = true;
             const origText = runMasterBackupModalBtn.textContent;
             runMasterBackupModalBtn.textContent = '⏳ Running Backup...';
-
-            const { ok, data } = await apiFetch('/api/backups.php', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'run_master_backup', format: 'sql' })
-            });
+            await launchMasterBackupJob('sql');
 
             runMasterBackupModalBtn.disabled = false;
             runMasterBackupModalBtn.textContent = origText;
-
-            if (ok && data.success) {
-                await showMasterBackupOutcome(data);
-            } else {
-                showToast(data.message || 'Master Backup failed. Check Master DB User credentials.', 'error');
-            }
         });
     }
 

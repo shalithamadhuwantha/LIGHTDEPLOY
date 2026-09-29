@@ -675,6 +675,47 @@ $csrfToken = Csrf::getToken();
         </div>
     </div>
 
+    <!-- Live Master Backup Progress Console -->
+    <div id="masterProgressModal" class="modal-overlay hidden">
+        <section class="master-progress-console" role="dialog" aria-modal="true" aria-labelledby="masterProgressTitle">
+            <header class="master-progress-header">
+                <div>
+                    <div class="master-progress-kicker"><span class="master-live-indicator"></span> LIVE BACKUP TRACE</div>
+                    <h2 id="masterProgressTitle">Master Database Backup</h2>
+                </div>
+                <button type="button" class="modal-close-btn" id="masterProgressCloseBtn" aria-label="Close backup progress">&times;</button>
+            </header>
+            <div class="master-progress-body">
+                <div class="master-progress-status-row">
+                    <span id="masterProgressStage">Starting worker...</span>
+                    <strong id="masterProgressPercent">0%</strong>
+                </div>
+                <div class="master-progress-track" role="progressbar" aria-label="Databases backed up" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                    <div id="masterProgressFill" class="master-progress-fill"></div>
+                </div>
+                <div class="master-progress-meta">
+                    <span id="masterProgressCount">Discovering databases</span>
+                    <span id="masterProgressDatabase">Waiting for database list</span>
+                </div>
+                <div id="masterProgressResult" class="master-progress-result" hidden></div>
+                <div class="master-terminal-window">
+                    <div class="master-terminal-bar">
+                        <span><i></i><i></i><i></i></span>
+                        <span>backup-run.log</span>
+                        <span id="masterProgressJobId">JOB: --</span>
+                    </div>
+                    <div id="masterProgressLogs" class="master-terminal-logs" aria-live="polite">
+                        <div class="master-log-line is-system"><time>--:--:--</time><span>Awaiting worker output...</span></div>
+                    </div>
+                </div>
+            </div>
+            <footer class="master-progress-footer">
+                <span id="masterProgressFooterStatus">Worker is initializing</span>
+                <button type="button" class="btn btn-secondary btn-sm" id="masterProgressDoneBtn" disabled>Close</button>
+            </footer>
+        </section>
+    </div>
+
     <!-- User Profile Self-Management Modal -->
     <div id="userProfileModal" class="modal-overlay hidden">
         <div class="modal-card" style="max-width: 520px;">

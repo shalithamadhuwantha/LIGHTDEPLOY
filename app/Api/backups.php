@@ -23,6 +23,61 @@ $backupService = new BackupService(
     $config['runtime_dir']
 );
 
+$startMasterBackupJob = static function (string $triggeredBy, string $format = 'sql') use ($config): array {
+    $jobsDir = $config['runtime_dir'] . '/master_backup_jobs';
+    ensureDirExists($jobsDir, 0700);
+    $jobId = 'MBK-' . date('YmdHis') . '-' . bin2hex(random_bytes(5));
+    $jobPath = $jobsDir . '/' . $jobId . '.json';
+    $job = [
+        'job_id' => $jobId,
+        'status' => 'queued',
+        'stage' => 'queued',
+        'current' => 0,
+        'total' => 0,
+        'percent' => 0,
+        'triggered_by' => $triggeredBy,
+        'started_at' => date('Y-m-d H:i:s'),
+        'logs' => [['time' => date('H:i:s'), 'level' => 'system', 'message' => 'Backup job queued; launching worker']]
+    ];
+    if (!safeWriteJson($jobPath, $job)) {
+        throw new RuntimeException('Could not create the master backup job record.');
+    }
+    @chmod($jobPath, 0600);
+
+    $workerPath = $config['scripts_dir'] . '/master_backup_worker.php';
+    if (!is_file($workerPath)) {
+        throw new RuntimeException('Master backup worker script is missing.');
+    }
+
+    $phpCli = PHP_BINARY;
+    if (!preg_match('/^php(?:[0-9.]*)?$/i', basename($phpCli))) {
+        $phpCli = trim((string)safeShellExec('command -v php 2>/dev/null'));
+    }
+    if ($phpCli === '' || !is_executable($phpCli)) {
+        throw new RuntimeException('Could not locate an executable PHP CLI binary for the backup worker.');
+    }
+
+    $command = sprintf(
+        'nohup %s %s %s %s > /dev/null 2>&1 &',
+        escapeshellarg($phpCli),
+        escapeshellarg($workerPath),
+        escapeshellarg($jobId),
+        escapeshellarg($format)
+    );
+    $spawnOutput = safeShellExec($command);
+    if ($spawnOutput === null) {
+        $job['status'] = 'failed';
+        $job['stage'] = 'failed';
+        $job['finished_at'] = date('Y-m-d H:i:s');
+        $job['error'] = 'Could not launch the PHP backup worker. Check PHP shell execution permissions.';
+        $job['logs'][] = ['time' => date('H:i:s'), 'level' => 'error', 'message' => $job['error']];
+        safeWriteJson($jobPath, $job);
+        throw new RuntimeException((string)$job['error']);
+    }
+
+    return ['job_id' => $jobId, 'status' => 'queued'];
+};
+
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 $action = $_GET['action'] ?? $_POST['action'] ?? '';
 
@@ -194,9 +249,10 @@ if ($method === 'POST') {
                 unset($saved['db_pass']);
                 unset($saved['google_service_account_json']);
                 $backupSummary = null;
+                $backupJob = null;
                 if ($backupService->isGoogleDriveConfigured()) {
                     try {
-                        $backupSummary = $backupService->runMasterBackup($currentUser['username'] ?? 'operator', 'sql');
+                        $backupJob = $startMasterBackupJob($currentUser['username'] ?? 'operator', 'sql');
                     } catch (\Throwable $e) {
                         $backupSummary = [
                             'total' => 0,
@@ -209,12 +265,13 @@ if ($method === 'POST') {
                 }
                 jsonSuccess([
                     'message' => $backupSummary === null
-                        ? 'Master MySQL credentials saved. Add Google Drive service-account credentials to enable automatic backups.'
+                        ? ($backupJob !== null ? 'Master credentials saved; Google Drive backup started.' : 'Master MySQL credentials saved. Add Google Drive service-account credentials to enable automatic backups.')
                         : ($backupSummary['total'] === 0
                             ? 'Master credentials saved, but the automatic Google Drive backup could not start: ' . ($backupSummary['errors']['_backup'] ?? 'unknown error')
                             : sprintf('Master credentials saved; Google Drive backup completed for %d/%d databases (%d failed).', $backupSummary['successful'], $backupSummary['total'], $backupSummary['failed'])),
                     'master_credentials' => $saved,
-                    'backup_summary' => $backupSummary
+                    'backup_summary' => $backupSummary,
+                    'backup_job' => $backupJob
                 ]);
             } catch (\Throwable $e) {
                 jsonError('SAVE_MASTER_FAILED', $e->getMessage(), 500);
@@ -249,26 +306,33 @@ if ($method === 'POST') {
             break;
 
         case 'run_master_backup':
+        case 'start_master_backup':
             if (!in_array($currentUser['role'] ?? '', ['admin', 'deployer'], true)) {
                 jsonError('FORBIDDEN', 'Insufficient permissions to run Master backup.', 403);
             }
 
             $format = trim($input['format'] ?? 'sql');
             try {
-                $summary = $backupService->runMasterBackup($currentUser['username'] ?? 'operator', $format);
+                $job = $startMasterBackupJob($currentUser['username'] ?? 'operator', $format);
                 jsonSuccess([
-                    'message' => sprintf(
-                        'Master backup finished: %d/%d VPS databases backed up; %d failed. Successful dumps are separate phpMyAdmin-ready .%s files.',
-                        $summary['successful'],
-                        $summary['total'],
-                        $summary['failed'],
-                        $format
-                    ),
-                    'summary' => $summary
+                    'message' => 'Master database backup job started.',
+                    'job' => $job
                 ]);
             } catch (\Throwable $e) {
                 jsonError('MASTER_BACKUP_FAILED', $e->getMessage(), 500);
             }
+            break;
+
+        case 'master_backup_status':
+            $jobId = trim((string)($input['job_id'] ?? ''));
+            if (!preg_match('/^MBK-\d{14}-[a-f0-9]{10}$/', $jobId)) {
+                jsonError('INVALID_INPUT', 'Invalid master backup job ID.', 400);
+            }
+            $jobPath = $config['runtime_dir'] . '/master_backup_jobs/' . $jobId . '.json';
+            if (!is_file($jobPath)) {
+                jsonError('NOT_FOUND', 'Master backup job was not found.', 404);
+            }
+            jsonSuccess(['job' => safeReadJson($jobPath, [])]);
             break;
 
         case 'get_master_history':

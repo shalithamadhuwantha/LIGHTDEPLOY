@@ -609,8 +609,11 @@ class BackupService
         ];
     }
 
-    public function runMasterBackup(string $triggeredBy = 'system', string $format = 'sql'): array
+    public function runMasterBackup(string $triggeredBy = 'system', string $format = 'sql', ?callable $progress = null): array
     {
+        if ($progress !== null) {
+            $progress(['stage' => 'connecting', 'message' => 'Opening MySQL master connection']);
+        }
         $creds = $this->getMasterCredentials();
         if (empty($creds['db_user'])) {
             throw new \RuntimeException('Master database credentials are not configured.');
@@ -621,6 +624,10 @@ class BackupService
 
         if (empty($userDbs)) {
             throw new \RuntimeException('No user databases found using Master credentials.');
+        }
+
+        if ($progress !== null) {
+            $progress(['stage' => 'discovered', 'total' => count($userDbs), 'message' => 'Discovered ' . count($userDbs) . ' user databases']);
         }
 
         $dbsMap = [];
@@ -650,11 +657,21 @@ class BackupService
         try {
             $dumpFlags = '--add-drop-table --add-locks --create-options --disable-keys --extended-insert --quick --set-charset --default-character-set=utf8mb4 --single-transaction --routines --triggers';
 
-            foreach ($userDbs as $dbName) {
+            foreach ($userDbs as $index => $dbName) {
                 $cleanDbName = preg_replace('/[^a-zA-Z0-9_\-]/', '', $dbName);
                 $filename = "master_backup_{$cleanDbName}_{$timestamp}.{$ext}";
                 $targetFile = $this->storageDir . '/' . $filename;
                 $tempErr = sys_get_temp_dir() . '/mysqldump_master_err_' . bin2hex(random_bytes(8)) . '.log';
+
+                if ($progress !== null) {
+                    $progress([
+                        'stage' => 'dumping',
+                        'database' => $dbName,
+                        'current' => $index + 1,
+                        'total' => count($userDbs),
+                        'message' => 'Dumping database ' . $dbName . ' (' . ($index + 1) . '/' . count($userDbs) . ')'
+                    ]);
+                }
 
                 if ($ext === 'sql.gz') {
                     $cmd = sprintf(
@@ -712,8 +729,14 @@ class BackupService
                     ];
                     if ($this->isGoogleDriveConfigured()) {
                         try {
+                            if ($progress !== null) {
+                                $progress(['stage' => 'uploading', 'database' => $dbName, 'message' => 'Uploading ' . $filename . ' to Google Drive']);
+                            }
                             $driveFile = $this->uploadFileToGoogleDrive($targetFile, $filename);
                             $successful[$dbName]['google_drive_file_id'] = $driveFile['id'];
+                            if ($progress !== null) {
+                                $progress(['stage' => 'uploaded', 'database' => $dbName, 'message' => 'Uploaded ' . $filename . ' to Google Drive']);
+                            }
                         } catch (\Throwable $e) {
                             unset($successful[$dbName]);
                             $errors[$dbName] = 'Local dump created, but Google Drive upload failed: ' . $e->getMessage();
@@ -732,18 +755,34 @@ class BackupService
                         ? "mysqldump failed for database '{$dbName}': " . $details
                         : "mysqldump failed for database '{$dbName}' (exit code {$returnVar}) without diagnostic output.";
                 }
+
+                if (isset($errors[$dbName]) && $progress !== null) {
+                    $progress(['stage' => 'database_failed', 'database' => $dbName, 'message' => $errors[$dbName], 'level' => 'error']);
+                } elseif ($progress !== null) {
+                    $progress(['stage' => 'database_complete', 'database' => $dbName, 'message' => 'Finished database ' . $dbName]);
+                }
             }
         } finally {
             if (file_exists($tempCnf)) @unlink($tempCnf);
         }
 
-        return [
+        $summary = [
             'total' => count($userDbs),
             'successful' => count($successful),
             'failed' => count($errors),
             'details' => $successful,
             'errors' => $errors
         ];
+        if ($progress !== null) {
+            $progress([
+                'stage' => 'complete',
+                'current' => count($userDbs),
+                'total' => count($userDbs),
+                'message' => sprintf('Backup finished: %d succeeded, %d failed', count($successful), count($errors)),
+                'level' => count($errors) > 0 ? 'warning' : 'success'
+            ]);
+        }
+        return $summary;
     }
 
     public function getMasterBackupHistory(): array
