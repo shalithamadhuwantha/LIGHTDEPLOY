@@ -463,6 +463,7 @@ if ($method === 'POST') {
             $creds['has_google_drive_credentials'] = $backupService->isGoogleDriveConfigured();
             $creds['has_service_account_credentials'] = is_array($serviceAccount) && !empty($serviceAccount['client_email']) && !empty($serviceAccount['private_key']);
             $creds['has_google_oauth_client'] = !empty($creds['google_oauth_client_id']) && !empty($creds['google_oauth_redirect_uri']);
+            $creds['has_google_oauth_client_secret'] = !empty($backupService->getMasterCredentials()['google_oauth_client_secret']);
             $creds['google_drive_connected'] = !empty($backupService->getMasterCredentials()['google_oauth_refresh_token']);
             jsonSuccess(['master_credentials' => $creds]);
             break;

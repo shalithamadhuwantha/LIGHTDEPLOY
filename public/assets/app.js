@@ -2849,12 +2849,13 @@ ${escapeHtml(message)}
             if (document.getElementById('localBackupFolderInput')) document.getElementById('localBackupFolderInput').value = creds.local_backup_folder || '';
             if (document.getElementById('googleOAuthClientIdInput')) document.getElementById('googleOAuthClientIdInput').value = creds.google_oauth_client_id || '';
             if (document.getElementById('googleOAuthRedirectInput')) {
-                document.getElementById('googleOAuthRedirectInput').value = creds.google_oauth_redirect_uri || `${window.location.origin}/api/backups.php?action=google_oauth_callback`;
+                document.getElementById('googleOAuthRedirectInput').value = creds.google_oauth_redirect_uri || '';
             }
             const oauthSecretInput = document.getElementById('googleOAuthClientSecretInput');
             if (oauthSecretInput) {
                 oauthSecretInput.value = '';
-                oauthSecretInput.placeholder = creds.has_google_oauth_client ? 'Saved secret; leave blank to preserve' : 'Google OAuth client secret';
+                oauthSecretInput.dataset.hasSavedSecret = creds.has_google_oauth_client_secret ? 'true' : 'false';
+                oauthSecretInput.placeholder = creds.has_google_oauth_client_secret ? 'Saved secret; leave blank to preserve' : 'Google OAuth client secret';
             }
             const driveConnectionStatus = document.getElementById('googleDriveConnectionStatus');
             if (driveConnectionStatus) {
@@ -3042,13 +3043,29 @@ ${escapeHtml(message)}
     });
 
     document.getElementById('connectGoogleDriveBtn')?.addEventListener('click', async () => {
+        const formData = masterCredsForm ? new FormData(masterCredsForm) : new FormData();
+        const clientId = (formData.get('google_oauth_client_id') || '').trim();
+        const clientSecret = (formData.get('google_oauth_client_secret') || '').trim();
+        const secretInput = document.getElementById('googleOAuthClientSecretInput');
+        const hasSavedSecret = secretInput?.dataset.hasSavedSecret === 'true';
+        const missingFields = [];
+        if (!clientId) missingFields.push('Client ID');
+        if (!clientSecret && !hasSavedSecret) missingFields.push('Client Secret');
+        if (missingFields.length > 0) {
+            showToast(`Enter your Google OAuth ${missingFields.join(' and ')} before connecting.`, 'error');
+            return;
+        }
+
         googleOAuthPopup = window.open('about:blank', 'lightdeploy-google-drive', 'popup,width=600,height=720');
         if (!googleOAuthPopup) {
             showToast('Allow popups for this site to connect Google Drive.', 'error');
             return;
         }
 
-        const formData = masterCredsForm ? new FormData(masterCredsForm) : new FormData();
+        const redirectInput = document.getElementById('googleOAuthRedirectInput');
+        const redirectUri = (formData.get('google_oauth_redirect_uri') || '').trim()
+            || `${window.location.origin}/api/backups.php?action=google_oauth_callback`;
+        if (redirectInput && !redirectInput.value) redirectInput.value = redirectUri;
         const payload = {
             action: 'google_oauth_start',
             enabled: true,
@@ -3058,9 +3075,9 @@ ${escapeHtml(message)}
             db_pass: formData.get('db_pass') || '',
             google_service_account_json: formData.get('google_service_account_json') || '',
             google_drive_folder_id: formData.get('google_drive_folder_id') || '',
-            google_oauth_client_id: formData.get('google_oauth_client_id') || '',
-            google_oauth_client_secret: formData.get('google_oauth_client_secret') || '',
-            google_oauth_redirect_uri: formData.get('google_oauth_redirect_uri') || '',
+            google_oauth_client_id: clientId,
+            google_oauth_client_secret: clientSecret,
+            google_oauth_redirect_uri: redirectUri,
             local_backup_folder: formData.get('local_backup_folder') || ''
         };
         const button = document.getElementById('connectGoogleDriveBtn');

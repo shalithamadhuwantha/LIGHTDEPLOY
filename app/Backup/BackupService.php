@@ -440,8 +440,14 @@ class BackupService
             $updated['google_oauth_client_secret'],
             $updated['google_oauth_redirect_uri']
         ];
-        if (array_filter($oauthValues, static fn($value) => $value !== '') && in_array('', $oauthValues, true)) {
-            throw new \InvalidArgumentException('Google OAuth requires a client ID, client secret, and redirect URI.');
+        if (array_filter($oauthValues, static fn($value) => $value !== '')) {
+            $missingOAuthFields = [];
+            if ($updated['google_oauth_client_id'] === '') $missingOAuthFields[] = 'Client ID';
+            if ($updated['google_oauth_client_secret'] === '') $missingOAuthFields[] = 'Client Secret';
+            if ($updated['google_oauth_redirect_uri'] === '') $missingOAuthFields[] = 'Redirect URI';
+            if ($missingOAuthFields !== []) {
+                throw new \InvalidArgumentException('Google OAuth setup is incomplete. Missing: ' . implode(', ', $missingOAuthFields) . '.');
+            }
         }
         if ($updated['google_oauth_redirect_uri'] !== '') {
             $redirect = parse_url($updated['google_oauth_redirect_uri']);
