@@ -334,7 +334,7 @@ $csrfToken = Csrf::getToken();
         </section>
 
         <div id="remoteServerReadOnlyNotice" class="alert-box managed-remote-notice hidden" role="status">
-            Viewing <strong id="remoteServerReadOnlyName"></strong>. Site and system data below is read-only; management actions remain on this server.
+            Managing <strong id="remoteServerReadOnlyName"></strong>. Site and system actions below run on that server; its data remains stored there.
         </div>
 
         <div class="section-header">

@@ -38,7 +38,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentDeploymentId = null;
     let currentSiteId = null;
     let cachedSites = {};
-    let remoteSitesReadOnly = false;
     let metricRequestSequence = 0;
     let siteRequestSequence = 0;
 
@@ -344,7 +343,38 @@ ${escapeHtml(message)}
     window.showHighPriorityAlert = showHighPriorityAlert;
 
     // Helper: Standard Fetch Wrapper with CSRF header
+    function routeApiUrlForSelectedServer(url) {
+        const serverId = getSelectedManagedServerId();
+        if (serverId === 'local') return url;
+
+        let parsedUrl;
+        try {
+            parsedUrl = new URL(url, window.location.origin);
+        } catch (error) {
+            return url;
+        }
+        if (parsedUrl.origin !== window.location.origin || !parsedUrl.pathname.startsWith('/api/')) return url;
+
+        const endpoint = parsedUrl.pathname.split('/').pop();
+        const localOnlyEndpoints = new Set([
+            'managed_servers.php', 'managed_proxy.php', 'managed_stream.php', 'managed_node.php',
+            'login.php', 'logout.php', 'profile.php', 'users.php'
+        ]);
+        if (localOnlyEndpoints.has(endpoint)) return url;
+
+        if (endpoint === 'stream.php') {
+            return `/api/managed_stream.php?server_id=${encodeURIComponent(serverId)}&${parsedUrl.searchParams.toString()}`;
+        }
+
+        return `/api/managed_proxy.php?server_id=${encodeURIComponent(serverId)}&endpoint=${encodeURIComponent(endpoint)}&query=${encodeURIComponent(parsedUrl.search.slice(1))}`;
+    }
+
+    function routeApiHrefForSelectedServer(url) {
+        return routeApiUrlForSelectedServer(url);
+    }
+
     async function apiFetch(url, options = {}) {
+        url = routeApiUrlForSelectedServer(url);
         options.credentials = 'same-origin';
         options.headers = options.headers || {};
         const activeCsrfToken = document.body?.getAttribute('data-csrf-token') || document.body?.dataset?.csrfToken || csrfToken || '';
@@ -363,7 +393,13 @@ ${escapeHtml(message)}
         return { ok: res.ok, status: res.status, data };
     }
 
-    const getSelectedManagedServerId = () => document.getElementById('managedServerSelect')?.value || 'local';
+    const getSelectedManagedServerId = () => {
+        const selector = document.getElementById('managedServerSelect');
+        if (selector) return selector.value || 'local';
+        if (userRole !== 'admin') return 'local';
+        try { return localStorage.getItem('lightdeploy-active-server-id') || 'local'; }
+        catch (error) { return 'local'; }
+    };
     let managedOverviewCache = null;
     let managedOverviewRequest = null;
 
@@ -393,7 +429,7 @@ ${escapeHtml(message)}
         const headerName = document.getElementById('activeServerHeaderName');
         const context = document.getElementById('activeServerContext');
         if (headerName) headerName.textContent = displayName;
-        if (context) context.textContent = remote ? `${displayName} · read-only` : `${displayName} · local`;
+        if (context) context.textContent = remote ? `${displayName} · remote` : `${displayName} · local`;
     }
 
     async function loadManagedServerSelector() {
@@ -660,22 +696,7 @@ ${escapeHtml(message)}
     async function loadSites() {
         const requestSequence = ++siteRequestSequence;
         const selectedServerId = getSelectedManagedServerId();
-        remoteSitesReadOnly = selectedServerId !== 'local';
-        setRemoteDashboardMode(remoteSitesReadOnly);
-
-        if (remoteSitesReadOnly) {
-            const { ok, data } = await fetchManagedOverview(selectedServerId);
-            if (requestSequence !== siteRequestSequence || selectedServerId !== getSelectedManagedServerId()) return;
-            if (!ok || !data.success) {
-                cachedSites = {};
-                sitesGrid.innerHTML = `<div class="alert-box alert-danger">Could not load sites from this server. ${escapeHtml(data.error?.message || data.message || '')}</div>`;
-                if (sitesCountLabel) sitesCountLabel.textContent = '0 sites';
-                return;
-            }
-            cachedSites = data.sites || {};
-            renderSites();
-            return;
-        }
+        setRemoteDashboardMode(selectedServerId !== 'local');
 
         const { ok, data } = await apiFetch('/api/sites.php');
         if (requestSequence !== siteRequestSequence || selectedServerId !== getSelectedManagedServerId()) return;
@@ -695,16 +716,6 @@ ${escapeHtml(message)}
         const totalCount = Object.keys(sites).length;
 
         if (sitesCountLabel) sitesCountLabel.textContent = `${totalCount} site${totalCount !== 1 ? 's' : ''}`;
-
-        if (remoteSitesReadOnly) {
-            renderManagedRemoteSites(Object.entries(sites).filter(([siteId, site]) => {
-                if (!searchTerm) return true;
-                return siteId.toLowerCase().includes(searchTerm)
-                    || (site.name || '').toLowerCase().includes(searchTerm)
-                    || (site.domain || '').toLowerCase().includes(searchTerm);
-            }));
-            return;
-        }
 
         if (totalCount === 0) {
             sitesGrid.innerHTML = `<div class="alert-box alert-danger">No websites configured in config/sites.json.</div>`;
@@ -750,14 +761,6 @@ ${escapeHtml(message)}
     }
 
     function setRemoteDashboardMode(isRemote) {
-        [
-            'addSiteBtn', 'viewHistoryBtn', 'viewPortsBtn',
-            'headerDbBackupsBtn', 'headerViewPortsBtn', 'headerScriptGenBtn',
-            'headerUpdateSystemBtn', 'headerUserMgmtBtn', 'headerTerminalCommandsBtn',
-            'localPm2Header', 'pm2Card'
-        ].forEach(id => document.getElementById(id)?.classList.toggle('hidden', isRemote));
-        if (isRemote) document.getElementById('bulkActionsBar')?.classList.add('hidden');
-
         const notice = document.getElementById('remoteServerReadOnlyNotice');
         const noticeName = document.getElementById('remoteServerReadOnlyName');
         const selector = document.getElementById('managedServerSelect');
@@ -765,42 +768,6 @@ ${escapeHtml(message)}
         if (noticeName && isRemote) {
             noticeName.textContent = selector?.selectedOptions[0]?.textContent || 'Remote server';
         }
-        if (isRemote) {
-            selectedSiteIds.clear();
-        }
-    }
-
-    function renderManagedRemoteSites(entries) {
-        sitesGrid.className = 'sites-grid managed-remote-sites';
-        if (sitesSearchCount) sitesSearchCount.classList.add('hidden');
-        if (entries.length === 0) {
-            sitesGrid.innerHTML = '<div class="managed-empty-state">No remote sites match this search.</div>';
-            return;
-        }
-
-        sitesGrid.innerHTML = entries.map(([siteId, site]) => {
-            const status = site.is_locked ? 'running' : (site.last_deployment?.status || 'idle');
-            const safeStatus = String(status).toLowerCase().replace(/[^a-z0-9_-]/g, '');
-            const statusLabel = site.is_locked ? 'RUNNING' : String(status).toUpperCase();
-            return `
-                <article class="managed-remote-site-card">
-                    <div class="managed-remote-site-header">
-                        <div>
-                            <h3>${escapeHtml(site.name || siteId)}</h3>
-                            <div class="managed-remote-site-domain">${escapeHtml(site.domain || siteId)}</div>
-                        </div>
-                        <span class="badge badge-status badge-status-${safeStatus}">${escapeHtml(statusLabel)}</span>
-                    </div>
-                    <div class="managed-remote-site-meta">
-                        <span>${site.enabled ? 'Enabled' : 'Disabled'}</span>
-                        <span>Health check ${site.health_check_enabled ? 'on' : 'off'}</span>
-                        <span>PM2 ${site.pm2_enabled ? 'managed' : 'not managed'}</span>
-                        <span>Rollback ${site.has_rollback ? 'available' : 'not configured'}</span>
-                        <span>Last deploy ${site.last_deployment?.start_time ? escapeHtml(site.last_deployment.start_time) : 'never'}</span>
-                    </div>
-                </article>
-            `;
-        }).join('');
     }
 
     // ── Card View Renderer ──────────────────────────────────────────────────
@@ -1187,7 +1154,7 @@ ${escapeHtml(message)}
 
         terminalOutput.textContent = `[${formatSriLankaTime()}] [SYSTEM] Opening SSE real-time stream connection for ${depId}...\n`;
 
-        activeEventSource = new EventSource(`/api/stream.php?deployment_id=${encodeURIComponent(depId)}`);
+        activeEventSource = new EventSource(routeApiUrlForSelectedServer(`/api/stream.php?deployment_id=${encodeURIComponent(depId)}`));
 
         activeEventSource.addEventListener('log', (e) => {
             try {
@@ -2686,7 +2653,7 @@ ${escapeHtml(message)}
                                 <span class="badge badge-version" style="background: rgba(52, 211, 153, 0.1); color: #34d399;">Active (${escapeHtml(b.age_days)} days old)</span>
                             </td>
                             <td style="text-align: right;">
-                                <a href="/api/backups.php?action=download&filename=${encodeURIComponent(b.filename)}" class="btn btn-secondary btn-sm" style="padding: 4px 10px; font-size: 0.8rem; text-decoration: none;" title="Download file">📥 Download</a>
+                                <a href="${escapeHtml(routeApiHrefForSelectedServer(`/api/backups.php?action=download&filename=${encodeURIComponent(b.filename)}`))}" class="btn btn-secondary btn-sm" style="padding: 4px 10px; font-size: 0.8rem; text-decoration: none;" title="Download file">📥 Download</a>
                                 ${userRole === 'admin' || userRole === 'deployer' ? `
                                     <button class="btn btn-outline-danger btn-sm btn-delete-backup-modal" data-filename="${escapeHtml(b.filename)}" data-db-id="${db.id}" style="padding: 4px 10px; font-size: 0.8rem;" title="Delete backup archive">🗑️ Delete</button>
                                 ` : ''}
@@ -3245,6 +3212,19 @@ ${escapeHtml(message)}
             return;
         }
 
+        const selectedServerId = getSelectedManagedServerId();
+        let selectedServer = null;
+        if (selectedServerId !== 'local') {
+            const { ok, data } = await apiFetch('/api/managed_servers.php');
+            selectedServer = ok && data.success
+                ? (data.servers || []).find(server => server.id === selectedServerId && server.enabled)
+                : null;
+            if (!selectedServer) {
+                showToast('The selected remote server is unavailable. Switch back to This server and check Managed Servers.', 'error');
+                return;
+            }
+        }
+
         googleOAuthPopup = window.open('about:blank', 'lightdeploy-google-drive', 'popup,width=600,height=720');
         if (!googleOAuthPopup) {
             showToast('Allow popups for this site to connect Google Drive.', 'error');
@@ -3253,7 +3233,7 @@ ${escapeHtml(message)}
 
         const redirectInput = document.getElementById('googleOAuthRedirectInput');
         const redirectUri = (formData.get('google_oauth_redirect_uri') || '').trim()
-            || `${window.location.origin}/api/backups.php?action=google_oauth_callback`;
+            || `${selectedServer?.url || window.location.origin}/api/backups.php?action=google_oauth_callback`;
         if (redirectInput && !redirectInput.value) redirectInput.value = redirectUri;
         const payload = {
             action: 'google_oauth_start',
@@ -3267,6 +3247,7 @@ ${escapeHtml(message)}
             google_oauth_client_id: clientId,
             google_oauth_client_secret: clientSecret,
             google_oauth_redirect_uri: redirectUri,
+            google_oauth_parent_origin: window.location.origin,
             local_backup_folder: formData.get('local_backup_folder') || ''
         };
         const button = document.getElementById('connectGoogleDriveBtn');
@@ -3452,7 +3433,7 @@ ${escapeHtml(message)}
                     <td><code style="font-size: 0.8rem;">${escapeHtml(f.filename)}</code></td>
                     <td><span class="badge badge-version">${escapeHtml(f.filesize_formatted)}</span></td>
                     <td style="text-align: right;">
-                        <a href="/api/backups.php?action=download&filename=${encodeURIComponent(f.filename)}" class="btn btn-secondary btn-sm" style="margin-right: 4px; text-decoration: none; padding: 3px 8px; font-size: 0.78rem;">📥 Download</a>
+                        <a href="${escapeHtml(routeApiHrefForSelectedServer(`/api/backups.php?action=download&filename=${encodeURIComponent(f.filename)}`))}" class="btn btn-secondary btn-sm" style="margin-right: 4px; text-decoration: none; padding: 3px 8px; font-size: 0.78rem;">📥 Download</a>
                         <button class="btn btn-outline-danger btn-sm btn-delete-master-file" data-filename="${escapeHtml(f.filename)}" style="padding: 3px 8px; font-size: 0.78rem;">🗑️</button>
                     </td>
                 </tr>

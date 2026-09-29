@@ -23,6 +23,11 @@ class AuthService
 
     public function authenticate(string $username, string $password): ?array
     {
+        $managedUser = $this->getManagedNodeUser();
+        if ($managedUser !== null) {
+            return $managedUser;
+        }
+
         $data = $this->getUsers();
         $users = $data['users'] ?? [];
 
@@ -140,6 +145,10 @@ class AuthService
 
     public function isAuthenticated(): bool
     {
+        if ($this->getManagedNodeUser() !== null) {
+            return true;
+        }
+
         if (empty($_SESSION['authenticated']) || $_SESSION['authenticated'] !== true) {
             return false;
         }
@@ -167,6 +176,11 @@ class AuthService
 
     public function getCurrentUser(): ?array
     {
+        $managedUser = $this->getManagedNodeUser();
+        if ($managedUser !== null) {
+            return $managedUser;
+        }
+
         if (!$this->isAuthenticated()) {
             return null;
         }
@@ -199,17 +213,53 @@ class AuthService
 
     public function hasRole($roles): bool
     {
-        if (!$this->isAuthenticated()) {
+        $user = $this->getCurrentUser();
+        if (!$user) {
             return false;
         }
 
-        $userRole = $_SESSION['role'] ?? 'viewer';
+        $userRole = $user['role'] ?? 'viewer';
 
         if (is_array($roles)) {
             return in_array($userRole, $roles, true);
         }
 
         return $userRole === $roles;
+    }
+
+    public function isManagedNodeRequest(): bool
+    {
+        return $this->getManagedNodeUser() !== null;
+    }
+
+    private function getManagedNodeUser(): ?array
+    {
+        $authorization = (string)($_SERVER['HTTP_X_LIGHTDEPLOY_NODE_TOKEN'] ?? $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '');
+        if ($authorization === '' && function_exists('getallheaders')) {
+            foreach (getallheaders() as $name => $value) {
+                if (strtolower((string)$name) === 'authorization') {
+                    $authorization = (string)$value;
+                    break;
+                }
+            }
+        }
+        if (!preg_match('/^Bearer\\s+([A-Za-z0-9_-]{48,})$/', $authorization, $matches)) {
+            return null;
+        }
+
+        $nodeConfig = safeReadJson(dirname($this->usersConfigFile) . '/node_control.json', []);
+        $storedHash = (string)($nodeConfig['token_hash'] ?? '');
+        if ($storedHash === '' || !hash_equals($storedHash, hash('sha256', $matches[1]))) {
+            return null;
+        }
+
+        return [
+            'username' => 'managed-central',
+            'role' => 'admin',
+            'name' => 'Managed central dashboard',
+            'allowed_functions' => ['*'],
+            'allowed_systems' => ['*']
+        ];
     }
 
     public function hasPermission(string $functionKey): bool

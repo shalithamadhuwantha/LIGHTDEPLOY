@@ -8,7 +8,10 @@ use LightDeploy\Deployment\DeploymentLog;
 
 $tokenData = safeReadJson($config['config_dir'] . '/node_control.json', []);
 $storedHash = (string)($tokenData['token_hash'] ?? '');
-$authorization = (string)($_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '');
+$authorization = (string)($_SERVER['HTTP_X_LIGHTDEPLOY_NODE_TOKEN'] ?? $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '');
+if ($authorization !== '' && !str_starts_with($authorization, 'Bearer ')) {
+    $authorization = 'Bearer ' . $authorization;
+}
 if ($authorization === '' && function_exists('getallheaders')) {
     foreach (getallheaders() as $headerName => $headerValue) {
         if (strtolower((string)$headerName) === 'authorization') {

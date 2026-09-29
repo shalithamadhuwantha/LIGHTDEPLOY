@@ -190,14 +190,15 @@ if ($method === 'GET' && $action === 'google_oauth_callback') {
     $origin = is_array($redirectParts) && !empty($redirectParts['scheme']) && !empty($redirectParts['host'])
         ? $redirectParts['scheme'] . '://' . $redirectParts['host'] . (isset($redirectParts['port']) ? ':' . $redirectParts['port'] : '')
         : '';
-    $sendOAuthResult = static function (bool $success, string $message, array $extra = []) use ($origin): never {
+    $callbackTargetOrigin = $origin;
+    $sendOAuthResult = static function (bool $success, string $message, array $extra = []) use (&$callbackTargetOrigin): never {
         if (!headers_sent()) {
             header('Content-Type: text/html; charset=utf-8');
             header('Cache-Control: no-store');
         }
         $event = json_encode(array_merge(['type' => 'lightdeploy-google-drive-oauth', 'success' => $success, 'message' => $message], $extra), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT);
         $safeMessage = htmlspecialchars($message, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-        $targetOrigin = json_encode($origin, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT);
+        $targetOrigin = json_encode($callbackTargetOrigin, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT);
         echo '<!doctype html><html lang="en"><meta charset="utf-8"><title>Google Drive connection</title><body><p>' . $safeMessage . '</p><script>if(window.opener){window.opener.postMessage(' . $event . ',' . $targetOrigin . ');window.close();}</script></body></html>';
         exit;
     };
@@ -210,6 +211,14 @@ if ($method === 'GET' && $action === 'google_oauth_callback') {
     }
     if (!is_array($oauthState) || empty($oauthState['state']) || (int)($oauthState['created_at'] ?? 0) < time() - 600 || !hash_equals((string)$oauthState['state'], $returnedState)) {
         $sendOAuthResult(false, 'Google authorization state was invalid or expired. Start the connection again.');
+    }
+    $parentOrigin = (string)($oauthState['parent_origin'] ?? '');
+    $parentParts = $parentOrigin !== '' ? parse_url($parentOrigin) : false;
+    $isLocalParent = is_array($parentParts)
+        && ($parentParts['scheme'] ?? '') === 'http'
+        && in_array($parentParts['host'] ?? '', ['localhost', '127.0.0.1'], true);
+    if (is_array($parentParts) && !empty($parentParts['host']) && !isset($parentParts['path']) && !isset($parentParts['query']) && !isset($parentParts['fragment']) && (($parentParts['scheme'] ?? '') === 'https' || $isLocalParent)) {
+        $callbackTargetOrigin = $parentOrigin;
     }
     if (!empty($_GET['error'])) {
         $sendOAuthResult(false, 'Google authorization was not completed: ' . (string)$_GET['error']);
@@ -322,13 +331,22 @@ if ($method === 'POST') {
                 }
 
                 $state = bin2hex(random_bytes(32));
+                $parentOrigin = trim((string)($input['google_oauth_parent_origin'] ?? ''));
+                $parentParts = $parentOrigin !== '' ? parse_url($parentOrigin) : false;
+                $isLocalParent = is_array($parentParts)
+                    && ($parentParts['scheme'] ?? '') === 'http'
+                    && in_array($parentParts['host'] ?? '', ['localhost', '127.0.0.1'], true);
+                if (!is_array($parentParts) || empty($parentParts['host']) || isset($parentParts['path']) || isset($parentParts['query']) || isset($parentParts['fragment']) || (($parentParts['scheme'] ?? '') !== 'https' && !$isLocalParent)) {
+                    throw new InvalidArgumentException('OAuth parent origin must be a valid HTTPS site origin.');
+                }
                 $stateDir = $config['runtime_dir'] . '/google_oauth_states';
                 ensureDirExists($stateDir, 0700);
                 $statePath = $stateDir . '/' . hash('sha256', $state) . '.json';
                 if (!safeWriteJson($statePath, [
                     'state' => $state,
                     'created_at' => time(),
-                    'triggered_by' => $currentUser['username'] ?? 'admin'
+                    'triggered_by' => $currentUser['username'] ?? 'admin',
+                    'parent_origin' => $parentOrigin
                 ])) {
                     throw new RuntimeException('Could not create Google OAuth state record.');
                 }

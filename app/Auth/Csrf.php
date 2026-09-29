@@ -24,6 +24,10 @@ class Csrf
 
     public static function validateHeaderOrPost(): bool
     {
+        if (self::isValidManagedNodeBearer()) {
+            return true;
+        }
+
         $token = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? null;
 
         if (!$token && function_exists('getallheaders')) {
@@ -49,5 +53,29 @@ class Csrf
         }
 
         return self::validateToken($token);
+    }
+
+    private static function isValidManagedNodeBearer(): bool
+    {
+        $authorization = (string)($_SERVER['HTTP_X_LIGHTDEPLOY_NODE_TOKEN'] ?? $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '');
+        if ($authorization !== '' && !str_starts_with($authorization, 'Bearer ')) {
+            $authorization = 'Bearer ' . $authorization;
+        }
+        if ($authorization === '' && function_exists('getallheaders')) {
+            foreach (getallheaders() as $name => $value) {
+                if (strtolower((string)$name) === 'authorization') {
+                    $authorization = (string)$value;
+                    break;
+                }
+            }
+        }
+        if (!preg_match('/^Bearer\\s+([A-Za-z0-9_-]{48,})$/', $authorization, $matches)) {
+            return false;
+        }
+
+        $configFile = dirname(__DIR__, 2) . '/config/node_control.json';
+        $nodeConfig = safeReadJson($configFile, []);
+        $storedHash = (string)($nodeConfig['token_hash'] ?? '');
+        return $storedHash !== '' && hash_equals($storedHash, hash('sha256', $matches[1]));
     }
 }

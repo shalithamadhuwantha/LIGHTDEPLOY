@@ -210,6 +210,9 @@ $csrfToken = Csrf::getToken();
 
         <div class="header-right">
             <a href="/" class="btn btn-secondary btn-sm" style="margin-right: 6px; text-decoration: none;">← Back to Dashboard</a>
+            <?php if (($user['role'] ?? '') === 'admin'): ?>
+                <div id="activeServerHeaderName" class="active-server-header-name">THIS SERVER</div>
+            <?php endif; ?>
             <button id="headerViewPortsBtn" class="btn btn-secondary btn-sm btn-view-ports" style="margin-right: 6px;" onclick="openVpsPortsModal()">🌐 VPS Ports</button>
             <?php if (($user['role'] ?? '') === 'admin'): ?>
                 <button id="headerUpdateSystemBtn" class="btn btn-primary btn-sm" style="margin-right: 6px; background: linear-gradient(135deg, #059669, #10b981);" onclick="openUpdateSystemModal()">🔄 Update System</button>
