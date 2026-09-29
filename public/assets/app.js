@@ -2980,10 +2980,11 @@ ${escapeHtml(message)}
                     if (summary) {
                         const uploadedCount = Object.values(summary.details || {}).filter(item => item.google_drive_file_id).length;
                         const driveConfigured = (job.logs || []).some(entry => entry.message?.startsWith('Destination: Google Drive'));
+                        const driveFolderLog = (job.logs || []).find(entry => entry.message?.startsWith('Created Google Drive backup folder: '));
                         const localCopyCount = Object.values(summary.details || {}).filter(item => item.local_copy_path).length;
                         const folderLog = (job.logs || []).find(entry => entry.message?.startsWith('Destination: local folder '));
                         const destinations = [
-                            driveConfigured ? `${uploadedCount} file(s) uploaded to Google Drive` : 'Google Drive not configured',
+                            driveConfigured ? `${uploadedCount} file(s) uploaded to Google Drive${driveFolderLog ? ` in ${driveFolderLog.message.replace('Created Google Drive backup folder: ', '')}` : ''}` : 'Google Drive not configured',
                             folderLog ? `${localCopyCount} file(s) copied to ${folderLog.message.replace('Destination: local folder ', '')}` : 'no extra local folder configured'
                         ];
                         resultBox.textContent = `${summary.successful}/${summary.total} databases backed up; ${summary.failed} failed. ${destinations.join('; ')}.`;

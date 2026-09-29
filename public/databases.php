@@ -661,7 +661,7 @@ $csrfToken = Csrf::getToken();
                     <div class="form-group" style="margin-top: 10px;">
                         <label for="googleDriveFolderInput" class="form-label">Google Drive Folder ID (optional)</label>
                         <input type="text" id="googleDriveFolderInput" name="google_drive_folder_id" class="form-input" placeholder="Folder ID from the Google Drive URL">
-                        <small class="form-help">For personal OAuth, leave blank to upload to My Drive root, or enter a folder ID from your Drive URL.</small>
+                        <small class="form-help">Each run creates a date_time folder here. Leave blank to use My Drive root, or enter a parent folder ID from your Drive URL.</small>
                     </div>
                     <div class="form-group" style="margin-top: 10px;">
                         <label for="localBackupFolderInput" class="form-label">Local Backup Folder (optional)</label>

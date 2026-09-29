@@ -582,7 +582,52 @@ class BackupService
         return $tokenData['access_token'];
     }
 
-    private function uploadFileToGoogleDrive(string $filePath, string $filename): array
+    private function createGoogleDriveBackupFolder(string $folderName): array
+    {
+        $settings = $this->getMasterCredentials();
+        $serviceAccount = json_decode($settings['google_service_account_json'] ?? '', true);
+        $oauthConfigured = !empty($settings['google_oauth_client_id'])
+            && !empty($settings['google_oauth_client_secret'])
+            && !empty($settings['google_oauth_refresh_token']);
+        if (!$oauthConfigured && (!is_array($serviceAccount) || empty($serviceAccount['client_email']) || empty($serviceAccount['private_key']))) {
+            throw new \RuntimeException('Google Drive credentials are not configured.');
+        }
+
+        $accessToken = $this->getGoogleDriveAccessToken(is_array($serviceAccount) ? $serviceAccount : []);
+        $metadata = [
+            'name' => $folderName,
+            'mimeType' => 'application/vnd.google-apps.folder'
+        ];
+        if (!empty($settings['google_drive_folder_id'])) {
+            $metadata['parents'] = [$settings['google_drive_folder_id']];
+        }
+
+        $curl = curl_init('https://www.googleapis.com/drive/v3/files?supportsAllDrives=true&fields=id,name');
+        curl_setopt_array($curl, [
+            CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => json_encode($metadata),
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT => 30,
+            CURLOPT_HTTPHEADER => [
+                'Authorization: Bearer ' . $accessToken,
+                'Content-Type: application/json; charset=UTF-8'
+            ]
+        ]);
+        $response = curl_exec($curl);
+        $status = (int)curl_getinfo($curl, CURLINFO_HTTP_CODE);
+        $error = curl_error($curl);
+        curl_close($curl);
+
+        $folder = is_string($response) ? json_decode($response, true) : null;
+        if (!in_array($status, [200, 201], true) || empty($folder['id'])) {
+            $reason = $folder['error']['message'] ?? $error ?: 'HTTP ' . $status;
+            throw new \RuntimeException('Could not create Google Drive backup folder: ' . $reason);
+        }
+
+        return ['id' => $folder['id'], 'name' => $folder['name'] ?? $folderName];
+    }
+
+    private function uploadFileToGoogleDrive(string $filePath, string $filename, ?string $parentFolderId = null): array
     {
         $settings = $this->getMasterCredentials();
         $serviceAccount = json_decode($settings['google_service_account_json'] ?? '', true);
@@ -595,7 +640,9 @@ class BackupService
 
         $accessToken = $this->getGoogleDriveAccessToken(is_array($serviceAccount) ? $serviceAccount : []);
         $metadata = ['name' => $filename];
-        if (!empty($settings['google_drive_folder_id'])) {
+        if ($parentFolderId !== null && $parentFolderId !== '') {
+            $metadata['parents'] = [$parentFolderId];
+        } elseif (!empty($settings['google_drive_folder_id'])) {
             $metadata['parents'] = [$settings['google_drive_folder_id']];
         }
 
@@ -746,6 +793,24 @@ class BackupService
         $mysqldumpBin = $this->findMysqldumpBinary();
         $timestamp = date('Ymd_His');
         $ext = ($format === 'sql.gz') ? 'sql.gz' : 'sql';
+        $driveFolder = null;
+        $driveFolderError = null;
+        if ($this->isGoogleDriveConfigured()) {
+            if ($progress !== null) {
+                $progress(['stage' => 'creating_drive_folder', 'message' => 'Creating dated Google Drive backup folder']);
+            }
+            try {
+                $driveFolder = $this->createGoogleDriveBackupFolder(date('Y-m-d_H-i-s'));
+                if ($progress !== null) {
+                    $progress(['stage' => 'drive_folder_created', 'message' => 'Created Google Drive backup folder: ' . $driveFolder['name']]);
+                }
+            } catch (\Throwable $e) {
+                $driveFolderError = $e->getMessage();
+                if ($progress !== null) {
+                    $progress(['stage' => 'drive_folder_failed', 'message' => 'Could not create dated Google Drive folder: ' . $driveFolderError, 'level' => 'error']);
+                }
+            }
+        }
 
         $tempCnf = sys_get_temp_dir() . '/mysqldump_master_' . bin2hex(random_bytes(8)) . '.cnf';
         $cnfContent = "[client]\n" .
@@ -846,13 +911,17 @@ class BackupService
                         $errors[$dbName] = 'Local backup folder copy failed: ' . $e->getMessage();
                     }
                     if ($this->isGoogleDriveConfigured()) {
-                        try {
+                        if ($driveFolderError !== null) {
+                            unset($successful[$dbName]);
+                            $errors[$dbName] = 'Local dump created, but Google Drive folder creation failed: ' . $driveFolderError;
+                        } else try {
                             if ($progress !== null) {
                                 $progress(['stage' => 'uploading', 'database' => $dbName, 'message' => 'Uploading ' . $filename . ' to Google Drive']);
                             }
-                            $driveFile = $this->uploadFileToGoogleDrive($targetFile, $filename);
+                            $driveFile = $this->uploadFileToGoogleDrive($targetFile, $filename, $driveFolder['id'] ?? null);
                             if (isset($successful[$dbName])) {
                                 $successful[$dbName]['google_drive_file_id'] = $driveFile['id'];
+                                $successful[$dbName]['google_drive_folder_id'] = $driveFolder['id'] ?? null;
                             }
                             if ($progress !== null) {
                                 $progress(['stage' => 'uploaded', 'database' => $dbName, 'message' => 'Uploaded ' . $filename . ' to Google Drive']);
