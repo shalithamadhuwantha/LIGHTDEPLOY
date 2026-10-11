@@ -269,11 +269,15 @@ class AuthService
             return false;
         }
 
+        $funcs = $user['allowed_functions'] ?? [];
+        if ($functionKey === 'license_mgmt') {
+            return in_array('license_mgmt', $funcs, true);
+        }
+
         if ($user['role'] === 'admin') {
             return true;
         }
 
-        $funcs = $user['allowed_functions'] ?? [];
         return in_array('*', $funcs, true) || in_array($functionKey, $funcs, true);
     }
 

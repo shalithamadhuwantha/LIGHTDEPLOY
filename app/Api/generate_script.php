@@ -14,6 +14,7 @@ declare(strict_types=1);
 $config = require_once dirname(__DIR__) . '/bootstrap.php';
 
 use LightDeploy\Security\SecurityLogger;
+use LightDeploy\Auth\ActivationService;
 use LightDeploy\Auth\AuthService;
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -37,6 +38,9 @@ $scriptType = trim((string)($input['script_type'] ?? 'bash'));
 // ── Extract and sanitize inputs ──────────────────────────────────────────────
 
 $action = trim((string)($input['action'] ?? 'generate'));
+if (in_array($action, ['save', 'save_env'], true) && !(new ActivationService($config['config_dir']))->isActivated()) {
+    jsonError('ACTIVATION_REQUIRED', 'Activate the application before saving site files.', 403);
+}
 $outputPath = trim((string)($input['output_path'] ?? $input['file_path'] ?? ''));
 $appDir = trim((string)($input['app_dir'] ?? ''));
 $repoUrl = trim((string)($input['repo_url'] ?? ''));

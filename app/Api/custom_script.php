@@ -9,6 +9,7 @@ declare(strict_types=1);
 $config = require_once dirname(__DIR__) . '/bootstrap.php';
 
 use LightDeploy\Auth\AuthService;
+use LightDeploy\Auth\ActivationService;
 use LightDeploy\Auth\Csrf;
 use LightDeploy\Deployment\DeploymentLock;
 use LightDeploy\Deployment\DeploymentLog;
@@ -25,6 +26,10 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 $securityLogger = new SecurityLogger($config['logs_dir'] . '/security');
 $authService = new AuthService($config['config_dir'] . '/users.json', $securityLogger);
 $user = $authService->requirePermission('add_edit_sites');
+
+if (!(new ActivationService($config['config_dir']))->isActivated()) {
+    jsonError('ACTIVATION_REQUIRED', 'Activate the application before modifying site scripts.', 403);
+}
 
 if (!Csrf::validateHeaderOrPost()) {
     $securityLogger->log('CSRF_FAILURE', ['endpoint' => 'custom_script'], $user['username']);

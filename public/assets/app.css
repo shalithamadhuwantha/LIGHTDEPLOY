@@ -556,6 +556,76 @@ body {
     flex-shrink: 0;
 }
 
+.activation-nav-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 6px 9px;
+    border: 1px solid rgba(245, 158, 11, 0.35);
+    border-radius: 6px;
+    background: rgba(245, 158, 11, 0.09);
+    color: #fcd34d;
+    font: inherit;
+    font-size: 0.7rem;
+    font-weight: 700;
+    line-height: 1;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.activation-nav-license {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    max-width: min(360px, 45vw);
+    padding: 6px 9px;
+    border: 1px solid rgba(16, 185, 129, 0.35);
+    border-radius: 6px;
+    background: rgba(16, 185, 129, 0.09);
+    color: #a7f3d0;
+    font-size: 0.7rem;
+    font-weight: 700;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+.activation-nav-company {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.activation-nav-status:hover {
+    background: rgba(245, 158, 11, 0.16);
+    border-color: rgba(245, 158, 11, 0.55);
+}
+
+.activation-nav-dot {
+    width: 7px;
+    height: 7px;
+    flex: 0 0 7px;
+    border-radius: 50%;
+    background: #f59e0b;
+}
+
+.activation-nav-license .activation-nav-dot {
+    background: #10b981;
+}
+
+.activation-nav-divider {
+    width: 1px;
+    height: 13px;
+    margin: 0 1px;
+    background: rgba(252, 211, 77, 0.3);
+}
+
+.activation-nav-license .activation-nav-divider {
+    background: rgba(167, 243, 208, 0.3);
+}
+
+.activation-nav-action {
+    color: #fde68a;
+}
+
 .brand-title {
     font-weight: 800;
     font-size: 1.15rem;
@@ -2531,6 +2601,13 @@ html {
         display: flex;
         align-items: center;
         justify-content: space-between;
+    }
+
+    .brand {
+        max-width: 100%;
+        flex-shrink: 1;
+        flex-wrap: wrap;
+        row-gap: 7px;
     }
 
     .header-center {

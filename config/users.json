@@ -1,11 +1,12 @@
 {
     "users": {
         "admin": {
-            "name": "System Administrator",
+            "name": "admin",
             "password_hash": "$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi",
             "role": "admin",
             "allowed_functions": [
-                "*"
+                "*",
+                "license_mgmt"
             ],
             "allowed_systems": [
                 "*"

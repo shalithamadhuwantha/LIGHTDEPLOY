@@ -60,6 +60,7 @@ echo "Starting LightDeploy Automated Test Suite...\n\n";
 
 // Require test modules
 require_once __DIR__ . '/AuthTest.php';
+require_once __DIR__ . '/ActivationTest.php';
 require_once __DIR__ . '/SecurityTest.php';
 require_once __DIR__ . '/SiteValidationTest.php';
 require_once __DIR__ . '/CommandInjectionTest.php';
@@ -67,6 +68,7 @@ require_once __DIR__ . '/DeploymentTest.php';
 
 // Execute tests
 runAuthTests($config);
+runActivationTests();
 runSecurityTests($config);
 runSiteValidationTests($config);
 runCommandInjectionTests($config);

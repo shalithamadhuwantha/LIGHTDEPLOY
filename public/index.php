@@ -8,6 +8,7 @@ declare(strict_types=1);
 $config = require_once dirname(__DIR__) . '/app/bootstrap.php';
 
 use LightDeploy\Auth\AuthService;
+use LightDeploy\Auth\ActivationService;
 use LightDeploy\Auth\Csrf;
 
 $authService = new AuthService($config['config_dir'] . '/users.json');
@@ -17,6 +18,8 @@ if (!$authService->isAuthenticated()) {
 }
 
 $user = $authService->getCurrentUser();
+$licenseState = (new ActivationService($config['config_dir']))->getLicenseStatus();
+$isActivated = $licenseState['activated'];
 $csrfToken = Csrf::getToken();
 ?>
 <!DOCTYPE html>
@@ -184,7 +187,7 @@ $csrfToken = Csrf::getToken();
         }
     </script>
 </head>
-<body class="dashboard-body" data-user-role="<?= htmlspecialchars($user['role']) ?>" data-username="<?= htmlspecialchars($user['username']) ?>" data-csrf-token="<?= htmlspecialchars($csrfToken) ?>" data-allowed-functions='<?= json_encode($user['allowed_functions'] ?? ['*']) ?>' data-allowed-systems='<?= json_encode($user['allowed_systems'] ?? ['*']) ?>'>
+<body class="dashboard-body" data-user-role="<?= htmlspecialchars($user['role']) ?>" data-username="<?= htmlspecialchars($user['username']) ?>" data-csrf-token="<?= htmlspecialchars($csrfToken) ?>" data-activated="<?= $isActivated ? 'true' : 'false' ?>" data-allowed-functions='<?= json_encode($user['allowed_functions'] ?? ['*']) ?>' data-allowed-systems='<?= json_encode($user['allowed_systems'] ?? ['*']) ?>'>
     <!-- Top Navigation Bar -->
     <header class="app-header">
         <div class="header-left">
@@ -194,6 +197,24 @@ $csrfToken = Csrf::getToken();
                 </svg>
                 <span class="brand-title">LIGHTDEPLOY <span style="font-size: 0.62rem; color: #a855f7; font-weight: 600; letter-spacing: 0.5px; background: rgba(168, 85, 247, 0.15); padding: 2px 7px; border-radius: 4px; margin-left: 4px; border: 1px solid rgba(168, 85, 247, 0.3); text-transform: uppercase;">BY BLUE OCTOPUS</span></span>
                 <span class="badge badge-version">v1.2.5</span>
+                <?php if ($isActivated): ?>
+                    <span class="activation-nav-license" title="License for <?= htmlspecialchars($licenseState['company'], ENT_QUOTES, 'UTF-8') ?>">
+                        <span class="activation-nav-dot" aria-hidden="true"></span>
+                        <span class="activation-nav-company"><?= htmlspecialchars($licenseState['company'], ENT_QUOTES, 'UTF-8') ?></span>
+                        <span class="activation-nav-divider" aria-hidden="true"></span>
+                        <span><?= $licenseState['lifetime'] ? 'Lifetime' : 'Valid until ' . htmlspecialchars($licenseState['valid_until'], ENT_QUOTES, 'UTF-8') ?></span>
+                    </span>
+                <?php else: ?>
+                    <button id="openActivationBtn" class="activation-nav-status" type="button" aria-label="Application not activated. Activate now.">
+                        <span class="activation-nav-dot" aria-hidden="true"></span>
+                        <span class="activation-nav-label"><?= $licenseState['status'] === 'expired' ? 'License expired' : ($licenseState['status'] === 'server_mismatch' ? 'Server mismatch' : 'Not activated') ?></span>
+                        <span class="activation-nav-divider" aria-hidden="true"></span>
+                        <span class="activation-nav-action"><?= $licenseState['status'] === 'expired' ? 'Renew' : 'Activate' ?></span>
+                    </button>
+                <?php endif; ?>
+                <?php if ($licenseState['has_license'] && $authService->hasPermission('license_mgmt')): ?>
+                    <button id="removeLicenseBtn" class="btn btn-outline-danger btn-sm" type="button" title="Remove saved license">Remove license</button>
+                <?php endif; ?>
             </div>
         </div>
 
@@ -343,7 +364,7 @@ $csrfToken = Csrf::getToken();
                 <p class="section-desc"><span id="activeServerContext">This server</span> · <span id="sitesCountLabel">0 sites</span></p>
             </div>
             <div class="section-actions">
-                <?php if ($authService->hasPermission('add_edit_sites')): ?>
+                <?php if ($isActivated && $authService->hasPermission('add_edit_sites')): ?>
                     <button id="addSiteBtn" class="btn btn-primary btn-sm">+ Add New Site</button>
                 <?php endif; ?>
                 <button id="refreshSitesBtn" class="btn btn-secondary btn-sm">Refresh List</button>
@@ -1398,7 +1419,6 @@ $csrfToken = Csrf::getToken();
                                     <label for="sgPm2ExecModeInput" class="form-label">Exec Mode</label>
                                     <select id="sgPm2ExecModeInput" class="form-input">
                                         <option value="fork" selected>fork</option>
-                                        <option value="cluster">cluster</option>
                                     </select>
                                 </div>
                                 <div class="form-group">
@@ -1814,6 +1834,13 @@ $csrfToken = Csrf::getToken();
                                     <div class="perm-card-desc">Admin tool: Manage user accounts & permissions</div>
                                 </div>
                             </label>
+                            <label class="perm-card">
+                                <input type="checkbox" name="um_func" value="license_mgmt">
+                                <div class="perm-card-content">
+                                    <div class="perm-card-title">🔑 Remove Application License</div>
+                                    <div class="perm-card-desc">Remove the saved license after confirming the user's profile password</div>
+                                </div>
+                            </label>
                         </div>
                     </div>
 
@@ -1837,6 +1864,60 @@ $csrfToken = Csrf::getToken();
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" onclick="closeUserEditModal()">Cancel</button>
                     <button type="submit" id="umSaveSubmitBtn" class="btn btn-primary">Save User Account</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="activationModal" class="modal-overlay <?= $isActivated ? 'hidden' : '' ?>" role="dialog" aria-modal="true" aria-labelledby="activationTitle">
+        <div class="modal-card" style="max-width: 460px;">
+            <div class="modal-header">
+                <div>
+                    <h3 id="activationTitle">Activate LightDeploy</h3>
+                    <div class="modal-sub-info">Enter your activation key to activate this installation.</div>
+                </div>
+                <button id="closeActivationBtn" class="modal-close-btn" type="button" aria-label="Close activation dialog">&times;</button>
+            </div>
+            <form id="activationForm">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="activationServerIpInput" class="form-label">Server IP</label>
+                        <input type="text" id="activationServerIpInput" class="form-input" value="<?= htmlspecialchars($licenseState['server_ip'] !== '' ? $licenseState['server_ip'] : 'Unavailable', ENT_QUOTES, 'UTF-8') ?>" readonly>
+                    </div>
+                    <div class="form-group">
+                        <label for="activationKeyInput" class="form-label">Activation key</label>
+                        <input type="text" id="activationKeyInput" class="form-input" autocomplete="off" autocapitalize="off" spellcheck="false" required>
+                    </div>
+                    <div id="activationError" class="alert-box alert-danger hidden" role="alert"></div>
+                </div>
+                <div class="modal-footer">
+                    <button id="dismissActivationBtn" type="button" class="btn btn-secondary">Continue without activating</button>
+                    <button id="activateSubmitBtn" type="submit" class="btn btn-primary">Activate now</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="removeLicenseModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="removeLicenseTitle">
+        <div class="modal-card" style="max-width: 460px;">
+            <div class="modal-header">
+                <div>
+                    <h3 id="removeLicenseTitle">Remove License</h3>
+                    <div class="modal-sub-info">Confirm with your profile password to remove this installation's license.</div>
+                </div>
+                <button id="removeLicenseCloseBtn" class="modal-close-btn" type="button" aria-label="Close remove license dialog">&times;</button>
+            </div>
+            <form id="removeLicenseForm">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="removeLicensePasswordInput" class="form-label">Profile password</label>
+                        <input type="password" id="removeLicensePasswordInput" class="form-input" autocomplete="current-password" required>
+                    </div>
+                    <div id="removeLicenseError" class="alert-box alert-danger hidden" role="alert"></div>
+                </div>
+                <div class="modal-footer">
+                    <button id="removeLicenseCancelBtn" type="button" class="btn btn-secondary">Cancel</button>
+                    <button id="removeLicenseSubmitBtn" type="submit" class="btn btn-danger">Remove license</button>
                 </div>
             </form>
         </div>

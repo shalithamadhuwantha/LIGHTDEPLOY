@@ -118,3 +118,11 @@ Managed servers are configured from the dashboard; server URLs and credentials a
 Use a valid HTTPS URL for remote servers. HTTP is accepted only for localhost testing. The dashboard's server selector loads the selected node's site inventory, deployment status, resource metrics, and routes supported dashboard actions (deploy, rollback, PM2, ports, terminal, history, and backups) to that node. Central account/profile settings remain on the central server; application data stays on each node. A node token grants admin-equivalent API access when used by the central proxy: keep it private, do not paste it into source code, and rotate it immediately if exposed. Rotating a token invalidates the previous token, so update the matching central entry afterward. Removing a server only removes its entry from the central dashboard; it does not delete anything from that server.
 
 The central registry is saved in `config/managed_servers.json`; each node stores only a hash of its token in `config/node_control.json`. Both files are written with restrictive `0600` permissions. The managed-node endpoint must be available on each remote installation for connection tests to succeed.
+
+---
+
+## 5. License Activation
+
+Enter the activation key issued for this server. The dashboard displays the licensed company and validity period; expiry or a server mismatch disables site configuration changes.
+
+If PHP runs behind a proxy or reports a private interface address, set `LIGHTDEPLOY_LICENSE_SERVER_IP` in the PHP process environment to the licensed server IP.

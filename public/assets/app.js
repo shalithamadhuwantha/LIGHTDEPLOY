@@ -7,6 +7,82 @@ document.addEventListener('DOMContentLoaded', () => {
     const userRole = document.body.dataset.userRole || 'viewer';
      const currentUsername = document.body.dataset.username || 'admin';
     const csrfToken = document.body.dataset.CsrfToken || document.body.dataset.csrfToken || '';
+    const isAppActivated = document.body.dataset.activated === 'true';
+    const activationModal = document.getElementById('activationModal');
+    const activationForm = document.getElementById('activationForm');
+    const activationError = document.getElementById('activationError');
+
+    const closeActivationPrompt = () => activationModal?.classList.add('hidden');
+    document.getElementById('closeActivationBtn')?.addEventListener('click', closeActivationPrompt);
+    document.getElementById('dismissActivationBtn')?.addEventListener('click', closeActivationPrompt);
+    document.getElementById('openActivationBtn')?.addEventListener('click', () => activationModal?.classList.remove('hidden'));
+    activationForm?.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const submitButton = document.getElementById('activateSubmitBtn');
+        const activationKey = document.getElementById('activationKeyInput')?.value || '';
+        if (submitButton) submitButton.disabled = true;
+        activationError?.classList.add('hidden');
+
+        const { ok, data } = await apiFetch('/api/activation.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ activation_key: activationKey })
+        });
+
+        if (submitButton) submitButton.disabled = false;
+        if (!ok || !data.success) {
+            if (activationError) {
+                activationError.textContent = data.error?.message || 'Activation failed.';
+                activationError.classList.remove('hidden');
+            }
+            return;
+        }
+        window.location.reload();
+    });
+    const removeLicenseModal = document.getElementById('removeLicenseModal');
+    const removeLicenseForm = document.getElementById('removeLicenseForm');
+    const removeLicensePasswordInput = document.getElementById('removeLicensePasswordInput');
+    const removeLicenseError = document.getElementById('removeLicenseError');
+    const closeRemoveLicenseModal = () => removeLicenseModal?.classList.add('hidden');
+
+    document.getElementById('removeLicenseBtn')?.addEventListener('click', () => {
+        if (removeLicensePasswordInput) removeLicensePasswordInput.value = '';
+        removeLicenseError?.classList.add('hidden');
+        removeLicenseModal?.classList.remove('hidden');
+        removeLicensePasswordInput?.focus();
+    });
+    document.getElementById('removeLicenseCloseBtn')?.addEventListener('click', closeRemoveLicenseModal);
+    document.getElementById('removeLicenseCancelBtn')?.addEventListener('click', closeRemoveLicenseModal);
+
+    removeLicenseForm?.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const submitButton = document.getElementById('removeLicenseSubmitBtn');
+        if (submitButton) submitButton.disabled = true;
+        removeLicenseError?.classList.add('hidden');
+
+        try {
+            const { ok, data } = await apiFetch('/api/activation.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'remove', password: removeLicensePasswordInput?.value || '' })
+            });
+            if (!ok || !data.success) {
+                if (removeLicenseError) {
+                    removeLicenseError.textContent = data.error?.message || 'Could not remove the license.';
+                    removeLicenseError.classList.remove('hidden');
+                }
+                return;
+            }
+            window.location.reload();
+        } catch (error) {
+            if (removeLicenseError) {
+                removeLicenseError.textContent = 'Could not connect to the server. Try again.';
+                removeLicenseError.classList.remove('hidden');
+            }
+        } finally {
+            if (submitButton) submitButton.disabled = false;
+        }
+    });
 
     let allowedFunctions = ['*'];
     let allowedSystems = ['*'];
@@ -358,7 +434,7 @@ ${escapeHtml(message)}
         const endpoint = parsedUrl.pathname.split('/').pop();
         const localOnlyEndpoints = new Set([
             'managed_servers.php', 'managed_proxy.php', 'managed_stream.php', 'managed_node.php',
-            'login.php', 'logout.php', 'profile.php', 'users.php'
+            'login.php', 'logout.php', 'profile.php', 'users.php', 'activation.php'
         ]);
         if (localOnlyEndpoints.has(endpoint)) return url;
 
@@ -784,7 +860,7 @@ ${escapeHtml(message)}
 
             const canDeploy = hasPermission('sites') && hasSystemAccess(siteId) && !site.is_locked && site.enabled;
             const canRollback = hasPermission('sites') && hasPermission('add_edit_sites') && hasSystemAccess(siteId) && !site.is_locked && site.has_rollback && site.enabled;
-            const canEdit = hasPermission('add_edit_sites') && hasSystemAccess(siteId);
+            const canEdit = isAppActivated && hasPermission('add_edit_sites') && hasSystemAccess(siteId);
 
             card.innerHTML = `
                 <input type="checkbox" class="site-card-checkbox" data-site-id="${siteId}" ${selectedSiteIds.has(siteId) ? 'checked' : ''}>
@@ -877,7 +953,7 @@ ${escapeHtml(message)}
             const statusLabel = site.is_locked ? 'RUNNING' : (site.last_deployment ? site.last_deployment.status.toUpperCase() : 'IDLE');
             const canDeploy = hasPermission('sites') && hasSystemAccess(siteId) && !site.is_locked && site.enabled;
             const canRollback = hasPermission('sites') && hasPermission('add_edit_sites') && hasSystemAccess(siteId) && !site.is_locked && site.has_rollback && site.enabled;
-            const canEdit = hasPermission('add_edit_sites') && hasSystemAccess(siteId);
+            const canEdit = isAppActivated && hasPermission('add_edit_sites') && hasSystemAccess(siteId);
             const isSelected = selectedSiteIds.has(siteId);
 
             const checkboxTd = hasPermission('sites')
@@ -4914,7 +4990,9 @@ exit 0`;
                 const funcCheckboxes = document.querySelectorAll('input[name="um_func"]');
                 const isAllFuncs = u.allowed_functions.includes('*');
                 funcCheckboxes.forEach(cb => {
-                    cb.checked = isAllFuncs || u.allowed_functions.includes(cb.value);
+                    cb.checked = cb.value === 'license_mgmt'
+                        ? u.allowed_functions.includes('license_mgmt')
+                        : isAllFuncs || u.allowed_functions.includes(cb.value);
                 });
 
                 // Set systems checkboxes
@@ -5049,7 +5127,7 @@ exit 0`;
         const specificSystemsContainer = document.getElementById('umSpecificSystemsContainer');
 
         if (role === 'admin') {
-            funcCheckboxes.forEach(cb => cb.checked = true);
+            funcCheckboxes.forEach(cb => cb.checked = cb.value !== 'license_mgmt');
             if (allSystemsCheck) allSystemsCheck.checked = true;
             if (specificSystemsContainer) specificSystemsContainer.classList.add('hidden');
         } else if (role === 'deployer') {
@@ -5114,7 +5192,9 @@ exit 0`;
                 username,
                 name,
                 role,
-                allowed_functions: role === 'admin' ? ['*'] : allowedFunctions,
+                allowed_functions: role === 'admin'
+                    ? ['*', ...(allowedFunctions.includes('license_mgmt') ? ['license_mgmt'] : [])]
+                    : allowedFunctions,
                 allowed_systems: role === 'admin' ? ['*'] : allowedSystems
             };
 

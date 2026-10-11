@@ -10,6 +10,7 @@ $config = require_once dirname(__DIR__) . '/bootstrap.php';
 
 use LightDeploy\Security\InputValidator;
 use LightDeploy\Security\SecurityLogger;
+use LightDeploy\Auth\ActivationService;
 use LightDeploy\Auth\AuthService;
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -21,6 +22,9 @@ $authService = new AuthService($config['config_dir'] . '/users.json', $securityL
 
 // Permission Required
 $user = $authService->requirePermission('add_edit_sites');
+if (!(new ActivationService($config['config_dir']))->isActivated()) {
+    jsonError('ACTIVATION_REQUIRED', 'Activate the application before deleting sites.', 403);
+}
 session_write_close();
 
 $rawInput = file_get_contents('php://input');
