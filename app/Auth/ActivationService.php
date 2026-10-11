@@ -163,15 +163,81 @@ class ActivationService
     {
         $configuredIp = getenv('LIGHTDEPLOY_LICENSE_SERVER_IP');
         if ($configuredIp !== false && $configuredIp !== '') {
+            $configuredIp = trim($configuredIp);
             return filter_var($configuredIp, FILTER_VALIDATE_IP) !== false ? $configuredIp : '';
         }
 
         $serverAddress = trim((string)($_SERVER['SERVER_ADDR'] ?? ''));
-        if (filter_var($serverAddress, FILTER_VALIDATE_IP) !== false && !in_array($serverAddress, ['0.0.0.0', '::'], true)) {
+        if ($this->isPublicIp($serverAddress)) {
             return $serverAddress;
         }
 
-        $hostAddress = gethostbyname(gethostname());
-        return filter_var($hostAddress, FILTER_VALIDATE_IP) !== false ? $hostAddress : '';
+        $interfaceAddresses = $this->getInterfaceAddresses();
+        foreach ($interfaceAddresses as $address) {
+            if ($this->isPublicIp($address)) {
+                return $address;
+            }
+        }
+
+        if ($this->isUsableIp($serverAddress)) {
+            return $serverAddress;
+        }
+
+        foreach ($interfaceAddresses as $address) {
+            if ($this->isUsableIp($address)) {
+                return $address;
+            }
+        }
+
+        return '';
+    }
+
+    private function getInterfaceAddresses(): array
+    {
+        if (!function_exists('isFunctionAvailable') || !isFunctionAvailable('shell_exec')) {
+            return [];
+        }
+
+        $output = @shell_exec('hostname -I 2>/dev/null');
+        if (!is_string($output) || trim($output) === '') {
+            return [];
+        }
+
+        $addresses = preg_split('/\s+/', trim($output)) ?: [];
+        return array_values(array_unique(array_filter($addresses, static function (string $address): bool {
+            return filter_var($address, FILTER_VALIDATE_IP) !== false;
+        })));
+    }
+
+    private function isPublicIp(string $address): bool
+    {
+        if (!$this->isUsableIp($address)) {
+            return false;
+        }
+
+        $packedAddress = @inet_pton($address);
+        if (is_string($packedAddress) && strlen($packedAddress) === 4) {
+            $firstOctet = ord($packedAddress[0]);
+            $secondOctet = ord($packedAddress[1]);
+            if ($firstOctet === 100 && $secondOctet >= 64 && $secondOctet <= 127) {
+                return false;
+            }
+        }
+
+        return filter_var($address, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) !== false;
+    }
+
+    private function isUsableIp(string $address): bool
+    {
+        $packedAddress = @inet_pton($address);
+        if (!is_string($packedAddress)) {
+            return false;
+        }
+
+        if (strlen($packedAddress) === 4) {
+            return ord($packedAddress[0]) !== 127 && $packedAddress !== "\0\0\0\0";
+        }
+
+        return $packedAddress !== str_repeat("\0", 15) . "\1" && $packedAddress !== str_repeat("\0", 16);
     }
 }

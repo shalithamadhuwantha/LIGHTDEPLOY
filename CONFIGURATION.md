@@ -125,4 +125,4 @@ The central registry is saved in `config/managed_servers.json`; each node stores
 
 Enter the activation key issued for this server. The dashboard displays the licensed company and validity period; expiry or a server mismatch disables site configuration changes.
 
-If PHP runs behind a proxy or reports a private interface address, set `LIGHTDEPLOY_LICENSE_SERVER_IP` in the PHP process environment to the licensed server IP.
+The app prefers a public interface address and ignores loopback addresses. If the server is behind NAT or a proxy and has no public IP on its interfaces, set `LIGHTDEPLOY_LICENSE_SERVER_IP` in the PHP process environment to the licensed public IP.
