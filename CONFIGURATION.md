@@ -71,6 +71,16 @@ return [
 ];
 ```
 
+### Daily Deployment Count Limitation
+
+Administrators can configure the system-wide daily deployment limit from **Deployment Limits** in the dashboard. The limit applies to deployments, rollbacks, and saved custom-script runs, and resets at midnight in the configured system timezone (`Asia/Colombo` by default).
+
+- Set the daily maximum and choose either **Block** or **Warn** when the count is reached.
+- In **Warn** mode, only selected pre-authorized user accounts can confirm and continue. Administrators do not bypass the limit unless explicitly selected.
+- Failed deployment starts release their reserved count; successfully started jobs remain counted for that day.
+- Settings are stored in `config/system_settings.json`; the active daily counter is stored under `runtime/deployment_limits/`.
+- Only administrators can view or change these settings. The API also enforces this authorization independently of the dashboard.
+
 ---
 
 ## 3. Users & Roles (`config/users.json`)

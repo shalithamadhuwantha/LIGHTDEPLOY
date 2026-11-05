@@ -23,6 +23,7 @@ sudo ./install.sh --update
    - `config/users.json` (User accounts and passwords intact)
    - `config/sites.json` (Configured websites and PM2 settings intact)
    - `config/databases.json` (MySQL backup credentials intact)
+   - `config/system_settings.json` (Daily deployment-limit settings intact)
    - `config/vps_ports.json` (Saved port notes intact)
    - `config/ecosystem.*.config.js` (Custom PM2 ecosystem scripts intact)
    - `scripts/*` (All custom deployment bash scripts intact)

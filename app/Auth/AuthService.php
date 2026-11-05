@@ -253,8 +253,13 @@ class AuthService
             return null;
         }
 
+        $operator = trim((string)($_SERVER['HTTP_X_LIGHTDEPLOY_OPERATOR'] ?? ''));
+        if (!preg_match('/^[a-zA-Z0-9_.-]{3,32}$/', $operator)) {
+            $operator = 'managed-central';
+        }
+
         return [
-            'username' => 'managed-central',
+            'username' => $operator,
             'role' => 'admin',
             'name' => 'Managed central dashboard',
             'allowed_functions' => ['*'],
@@ -498,5 +503,4 @@ class AuthService
         return false;
     }
 }
-
 

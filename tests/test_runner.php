@@ -65,6 +65,7 @@ require_once __DIR__ . '/SecurityTest.php';
 require_once __DIR__ . '/SiteValidationTest.php';
 require_once __DIR__ . '/CommandInjectionTest.php';
 require_once __DIR__ . '/DeploymentTest.php';
+require_once __DIR__ . '/DeploymentLimitTest.php';
 
 // Execute tests
 runAuthTests($config);
@@ -73,5 +74,6 @@ runSecurityTests($config);
 runSiteValidationTests($config);
 runCommandInjectionTests($config);
 runDeploymentTests($config);
+runDeploymentLimitTests();
 
 TestRunner::printSummary();

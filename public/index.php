@@ -245,6 +245,7 @@ $csrfToken = Csrf::getToken();
                 <button id="headerUserMgmtBtn" class="btn btn-secondary btn-sm" style="margin-right: 6px; background: linear-gradient(135deg, #4f46e5, #6366f1); color: #fff; border: none;" onclick="openUserMgmtModal()">👥 Manage Users</button>
             <?php endif; ?>
             <?php if ($authService->hasRole('admin')): ?>
+                <button id="headerDeploymentLimitsBtn" class="btn btn-secondary btn-sm" style="margin-right: 6px; background: linear-gradient(135deg, #b45309, #f59e0b); color: #fff; border: none;">📊 Deployment Limits</button>
                 <button id="headerManagedServersBtn" class="btn btn-secondary btn-sm" style="margin-right: 6px; border-color: rgba(59, 130, 246, 0.5); color: #bfdbfe;">🖥️ Managed Servers</button>
                 <button id="headerTerminalCommandsBtn" class="btn btn-secondary btn-sm" style="margin-right: 6px; background: rgba(16, 185, 129, 0.14); color: #a7f3d0; border-color: rgba(52, 211, 153, 0.38);" onclick="openTerminalCommandsModal()">&gt;_ Terminal Commands</button>
             <?php endif; ?>
@@ -1922,6 +1923,52 @@ $csrfToken = Csrf::getToken();
             </form>
         </div>
     </div>
+
+    <?php if ($authService->hasRole('admin')): ?>
+        <div id="deploymentLimitModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="deploymentLimitTitle">
+            <div class="modal-card" style="max-width: 640px;">
+                <div class="modal-header">
+                    <div>
+                        <h3 id="deploymentLimitTitle">📊 Daily Deployment Count Limitation</h3>
+                        <div class="modal-sub-info">System-wide deployment cap; automatically resets at midnight (<?= htmlspecialchars($config['timezone'], ENT_QUOTES, 'UTF-8') ?>).</div>
+                    </div>
+                    <button id="deploymentLimitCloseBtn" class="modal-close-btn" type="button" aria-label="Close deployment limit settings">&times;</button>
+                </div>
+                <form id="deploymentLimitForm">
+                    <div class="modal-body">
+                        <div id="deploymentLimitStatus" class="alert-box alert-success" role="status">Loading today's deployment count...</div>
+                        <label style="display: flex; align-items: center; gap: 10px; margin: 14px 0;">
+                            <input type="checkbox" id="deploymentLimitEnabledInput">
+                            <span class="form-label" style="margin: 0;">Enable daily deployment limit</span>
+                        </label>
+                        <div class="form-group">
+                            <label for="deploymentLimitCountInput" class="form-label">Maximum deployments per day</label>
+                            <input type="number" id="deploymentLimitCountInput" class="form-input" min="1" max="1000000" step="1" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="deploymentLimitBehaviorInput" class="form-label">When the limit is reached</label>
+                            <select id="deploymentLimitBehaviorInput" class="form-input">
+                                <option value="block">Block all further deployments until reset</option>
+                                <option value="warn">Warn; only authorized users may confirm and continue</option>
+                            </select>
+                        </div>
+                        <div id="deploymentLimitAuthorizedUsersGroup" class="form-group hidden">
+                            <div class="form-label">Pre-authorized users allowed to continue</div>
+                            <small class="form-help">Only selected accounts can confirm a deployment beyond the limit. Administrators do not bypass it unless selected here.</small>
+                            <div id="deploymentLimitUsers" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; max-height: 180px; overflow-y: auto; margin-top: 10px;"></div>
+                        </div>
+                        <div class="alert-box alert-warning" style="margin-top: 12px;">
+                            The daily count includes deployments, rollbacks, and saved custom-script runs. Failed starts do not consume the count.
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button id="deploymentLimitCancelBtn" type="button" class="btn btn-secondary">Cancel</button>
+                        <button id="deploymentLimitSaveBtn" type="submit" class="btn btn-primary">Save Deployment Limits</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    <?php endif; ?>
 
     <script src="/assets/app.js?v=<?= time() ?>"></script>
 </body>

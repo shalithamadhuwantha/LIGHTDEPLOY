@@ -1,0 +1,6 @@
+{
+    "enabled": true,
+    "daily_limit": 15,
+    "behavior": "block",
+    "authorized_users": []
+}

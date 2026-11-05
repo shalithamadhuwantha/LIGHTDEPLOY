@@ -18,6 +18,7 @@ $query = (string)($_GET['query'] ?? '');
 $permissionByEndpoint = [
     'server_status.php' => null,
     'sites.php' => 'sites',
+    'system_settings.php' => null,
     'deploy.php' => 'sites',
     'rollback.php' => 'sites',
     'cancel.php' => null,
@@ -100,6 +101,7 @@ curl_setopt_array($curl, [
     CURLOPT_TIMEOUT => 180,
     CURLOPT_HTTPHEADER => [
         'X-LightDeploy-Node-Token: ' . $server['token'],
+        'X-LightDeploy-Operator: ' . $user['username'],
         'Accept: ' . ($_SERVER['HTTP_ACCEPT'] ?? 'application/json'),
         'X-Forwarded-By: LightDeploy-Control-Plane'
     ],
@@ -135,6 +137,7 @@ if ($isDownload) {
 if ($method !== 'GET') {
     $headers = [
         'X-LightDeploy-Node-Token: ' . $server['token'],
+        'X-LightDeploy-Operator: ' . $user['username'],
         'Accept: ' . ($_SERVER['HTTP_ACCEPT'] ?? 'application/json'),
         'X-Forwarded-By: LightDeploy-Control-Plane'
     ];

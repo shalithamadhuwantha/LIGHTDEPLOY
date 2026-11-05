@@ -1110,16 +1110,54 @@ ${escapeHtml(message)}
     const closeTriggerDeployBtn = document.getElementById('closeTriggerDeployBtn');
     const closeTriggerDeployFooterBtn = document.getElementById('closeTriggerDeployFooterBtn');
 
+    async function submitDeploymentRequest(endpoint, payload) {
+        let continueAfterLimit = false;
+        while (true) {
+            const requestPayload = continueAfterLimit
+                ? { ...payload, continue_after_limit: true }
+                : payload;
+            const response = await apiFetch(endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(requestPayload)
+            });
+
+            if (response.data?.error?.code !== 'DAILY_DEPLOYMENT_LIMIT_CONFIRMATION_REQUIRED') {
+                return response;
+            }
+
+            const details = response.data.error.details || {};
+            const resetAt = details.reset_at
+                ? new Date(details.reset_at).toLocaleString(undefined, { timeZone: details.timezone || undefined })
+                : 'midnight';
+            const confirmed = await showConfirm({
+                title: 'Daily deployment limit reached',
+                message: `Today's system limit of ${details.daily_limit} deployments has been reached (${details.count} used). This account is pre-authorized to continue once. The limit resets at ${resetAt}. Continue?`,
+                confirmText: 'Continue once',
+                type: 'warning'
+            });
+
+            if (!confirmed) {
+                return {
+                    ...response,
+                    ok: false,
+                    cancelled: true,
+                    data: {
+                        success: false,
+                        error: { message: 'Deployment was not started.' }
+                    }
+                };
+            }
+            continueAfterLimit = true;
+        }
+    }
+
     async function executeDeploymentDirect(siteId, mode, deployedBy) {
         const endpoint = mode === 'rollback' ? '/api/rollback.php' : '/api/deploy.php';
         const payload = { site_id: siteId };
         if (deployedBy) payload.deployed_by = deployedBy;
 
-        const { ok, data } = await apiFetch(endpoint, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
+        const { ok, data, cancelled } = await submitDeploymentRequest(endpoint, payload);
 
         if (ok && data.success) {
             if (triggerDeployModal) triggerDeployModal.classList.add('hidden');
@@ -1130,7 +1168,10 @@ ${escapeHtml(message)}
             connectSSEStream(data.deployment_id);
             loadSites();
         } else {
-            showToast(data.error?.message || `${mode === 'rollback' ? 'Rollback' : 'Deployment'} failed.`, 'danger');
+            showToast(
+                cancelled ? 'Deployment was not started.' : (data.error?.message || `${mode === 'rollback' ? 'Rollback' : 'Deployment'} failed.`),
+                cancelled ? 'info' : 'danger'
+            );
         }
     }
 
@@ -1911,16 +1952,15 @@ ${escapeHtml(message)}
                 return;
             }
 
-            const runResult = await apiFetch('/api/custom_script.php', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ site_id: siteId })
-            });
+            const runResult = await submitDeploymentRequest('/api/custom_script.php', { site_id: siteId });
 
             runCustomScriptBtn.disabled = false;
             runCustomScriptBtn.textContent = '▶ Run Custom Script';
             if (!runResult.ok || !runResult.data.success) {
-                showToast(runResult.data.error?.message || 'Failed to run custom script.', 'danger');
+                showToast(
+                    runResult.cancelled ? 'Custom script was not started.' : (runResult.data.error?.message || 'Failed to run custom script.'),
+                    runResult.cancelled ? 'info' : 'danger'
+                );
                 return;
             }
 
@@ -5492,6 +5532,101 @@ exit 0`;
         document.getElementById('managedServerCancelEditBtn').classList.add('hidden');
         await loadManagedServers();
         await loadManagedServerSelector();
+    });
+
+    const deploymentLimitModal = document.getElementById('deploymentLimitModal');
+    const deploymentLimitForm = document.getElementById('deploymentLimitForm');
+    const deploymentLimitBehaviorInput = document.getElementById('deploymentLimitBehaviorInput');
+    const deploymentLimitUsers = document.getElementById('deploymentLimitUsers');
+    let deploymentLimitUsernames = [];
+
+    function closeDeploymentLimitModal() {
+        deploymentLimitModal?.classList.add('hidden');
+    }
+
+    function updateDeploymentLimitOverrideVisibility() {
+        document.getElementById('deploymentLimitAuthorizedUsersGroup')?.classList.toggle(
+            'hidden',
+            deploymentLimitBehaviorInput?.value !== 'warn'
+        );
+    }
+
+    function renderDeploymentLimitStatus(status) {
+        const statusElement = document.getElementById('deploymentLimitStatus');
+        if (!statusElement || !status) return;
+
+        const resetAt = status.reset_at
+            ? new Date(status.reset_at).toLocaleString(undefined, { timeZone: status.timezone || undefined })
+            : 'midnight';
+        statusElement.className = `alert-box ${status.enabled && status.remaining === 0 ? 'alert-warning' : 'alert-success'}`;
+        statusElement.textContent = status.enabled
+            ? `${status.count} of ${status.daily_limit} deployments used today; ${status.remaining} remaining. Resets at ${resetAt} (${status.timezone}).`
+            : `Daily limit is disabled. ${status.count} deployments recorded today. Counter resets at ${resetAt} (${status.timezone}).`;
+    }
+
+    async function loadDeploymentLimitSettings() {
+        if (!deploymentLimitModal) return;
+        deploymentLimitModal.classList.remove('hidden');
+        const statusElement = document.getElementById('deploymentLimitStatus');
+        statusElement.textContent = "Loading today's deployment count...";
+        const { ok, data } = await apiFetch('/api/system_settings.php');
+        if (!ok || !data.success) {
+            statusElement.className = 'alert-box alert-danger';
+            statusElement.textContent = data.error?.message || 'Could not load deployment-limit settings.';
+            showToast(statusElement.textContent, 'danger');
+            return;
+        }
+
+        const settings = data.settings;
+        document.getElementById('deploymentLimitEnabledInput').checked = Boolean(settings.enabled);
+        document.getElementById('deploymentLimitCountInput').value = settings.daily_limit;
+        deploymentLimitBehaviorInput.value = settings.behavior;
+        deploymentLimitUsernames = Array.isArray(data.users) ? data.users : [];
+        const authorized = new Set((settings.authorized_users || []).map(username => username.toLowerCase()));
+        deploymentLimitUsers.innerHTML = deploymentLimitUsernames.map(username => `
+            <label style="display: flex; align-items: center; gap: 8px; padding: 8px; background: rgba(255,255,255,0.04); border-radius: 6px;">
+                <input type="checkbox" class="deployment-limit-authorized-user" value="${escapeHtml(username)}" ${authorized.has(username.toLowerCase()) ? 'checked' : ''}>
+                <span>${escapeHtml(username)}</span>
+            </label>
+        `).join('') || '<small class="form-help">No user accounts are available.</small>';
+        updateDeploymentLimitOverrideVisibility();
+        renderDeploymentLimitStatus(data.status);
+    }
+
+    document.getElementById('headerDeploymentLimitsBtn')?.addEventListener('click', loadDeploymentLimitSettings);
+    document.getElementById('deploymentLimitCloseBtn')?.addEventListener('click', closeDeploymentLimitModal);
+    document.getElementById('deploymentLimitCancelBtn')?.addEventListener('click', closeDeploymentLimitModal);
+    deploymentLimitBehaviorInput?.addEventListener('change', updateDeploymentLimitOverrideVisibility);
+
+    deploymentLimitForm?.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const saveButton = document.getElementById('deploymentLimitSaveBtn');
+        const dailyLimit = Number(document.getElementById('deploymentLimitCountInput').value);
+        if (!Number.isInteger(dailyLimit) || dailyLimit < 1 || dailyLimit > 1000000) {
+            showToast('Daily deployment limit must be a whole number between 1 and 1,000,000.', 'warning');
+            return;
+        }
+
+        saveButton.disabled = true;
+        const payload = {
+            enabled: document.getElementById('deploymentLimitEnabledInput').checked,
+            daily_limit: dailyLimit,
+            behavior: deploymentLimitBehaviorInput.value,
+            authorized_users: Array.from(document.querySelectorAll('.deployment-limit-authorized-user:checked'))
+                .map(checkbox => checkbox.value)
+        };
+        const { ok, data } = await apiFetch('/api/system_settings.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        saveButton.disabled = false;
+        if (!ok || !data.success) {
+            showToast(data.error?.message || 'Could not save deployment-limit settings.', 'danger');
+            return;
+        }
+        renderDeploymentLimitStatus(data.status);
+        showToast(data.message || 'Deployment-limit settings saved.', 'success');
     });
 
     // Initial Execution

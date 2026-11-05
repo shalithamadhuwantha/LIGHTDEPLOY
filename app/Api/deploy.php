@@ -7,6 +7,7 @@ declare(strict_types=1);
  */
 
 $config = require_once dirname(__DIR__) . '/bootstrap.php';
+require_once dirname(__DIR__) . '/helpers/deployment_limit.php';
 
 use LightDeploy\Security\InputValidator;
 use LightDeploy\Security\RateLimiter;
@@ -14,6 +15,7 @@ use LightDeploy\Security\SecurityLogger;
 use LightDeploy\Auth\AuthService;
 use LightDeploy\Auth\Csrf;
 use LightDeploy\Deployment\DeploymentLock;
+use LightDeploy\Deployment\DailyDeploymentLimit;
 use LightDeploy\Deployment\DeploymentRunner;
 use LightDeploy\Deployment\DeploymentLog;
 use LightDeploy\Deployment\HealthChecker;
@@ -90,6 +92,19 @@ $deploymentService = new DeploymentService(
     $config
 );
 
+$dailyLimit = new DailyDeploymentLimit(
+    $config['config_dir'] . '/system_settings.json',
+    $config['runtime_dir'] . '/deployment_limits/daily_counter.json',
+    $config['timezone']
+);
+$reservation = reserveDailyDeployment(
+    $dailyLimit,
+    $user['username'],
+    !empty($input['continue_after_limit']),
+    $securityLogger,
+    $siteId,
+    'deployment'
+);
 $deployedBy = $user['username'];
 if (($user['role'] ?? '') === 'admin' && !empty($input['deployed_by'])) {
     $customUser = trim((string)$input['deployed_by']);
@@ -101,6 +116,7 @@ if (($user['role'] ?? '') === 'admin' && !empty($input['deployed_by'])) {
 $result = $deploymentService->startDeployment($siteId, $siteConfig, $deployedBy, false);
 
 if (!$result['success']) {
+    releaseDailyDeploymentReservation($dailyLimit, $reservation, $securityLogger, $user['username'], 'deployment');
     jsonError(
         $result['error_code'] ?? 'DEPLOYMENT_FAILED',
         $result['message'] ?? 'Failed to trigger deployment.',
@@ -108,6 +124,8 @@ if (!$result['success']) {
         $result['details'] ?? null
     );
 }
+
+logDailyDeploymentOverride($reservation, $securityLogger, $user['username'], $siteId, 'deployment');
 
 $rateLimiter->hit($rateKey, $window);
 

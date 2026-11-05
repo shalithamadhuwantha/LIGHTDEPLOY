@@ -7,10 +7,12 @@ declare(strict_types=1);
  */
 
 $config = require_once dirname(__DIR__) . '/bootstrap.php';
+require_once dirname(__DIR__) . '/helpers/deployment_limit.php';
 
 use LightDeploy\Auth\AuthService;
 use LightDeploy\Auth\ActivationService;
 use LightDeploy\Auth\Csrf;
+use LightDeploy\Deployment\DailyDeploymentLimit;
 use LightDeploy\Deployment\DeploymentLock;
 use LightDeploy\Deployment\DeploymentLog;
 use LightDeploy\Deployment\DeploymentRunner;
@@ -73,11 +75,27 @@ $service = new DeploymentService(
 $customSiteConfig = $siteConfig;
 $customSiteConfig['script'] = $scriptPath;
 $customSiteConfig['health_check_enabled'] = false;
+$dailyLimit = new DailyDeploymentLimit(
+    $config['config_dir'] . '/system_settings.json',
+    $config['runtime_dir'] . '/deployment_limits/daily_counter.json',
+    $config['timezone']
+);
+$reservation = reserveDailyDeployment(
+    $dailyLimit,
+    $user['username'],
+    !empty($input['continue_after_limit']),
+    $securityLogger,
+    $siteId,
+    'custom script'
+);
 $result = $service->startDeployment($siteId, $customSiteConfig, $user['username']);
 
 if (!$result['success']) {
+    releaseDailyDeploymentReservation($dailyLimit, $reservation, $securityLogger, $user['username'], 'custom script');
     jsonError($result['error_code'] ?? 'CUSTOM_SCRIPT_FAILED', $result['message'] ?? 'Failed to run custom script.', $result['status_code'] ?? 400, $result['details'] ?? null);
 }
+
+logDailyDeploymentOverride($reservation, $securityLogger, $user['username'], $siteId, 'custom_script');
 
 $securityLogger->log('CUSTOM_SCRIPT_STARTED', [
     'site_id' => $siteId,
